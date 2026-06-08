@@ -25,6 +25,13 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 - PC 및 핸드폰 브라우저 접속 확인
 - GitHub Pages 주소: https://aranmik.github.io/project-signal-personal/
 
+### Phase 1 — 화면 프레임 완료
+
+- `index.html`: game-frame 구조 확장 (top-hud / battle-field / battle-log / bottom-panel)
+- `src/ui/styles.css`: 390px 세로 프레임, 모바일 safe-area 대응, 좌우 넘침 방지
+- `src/core/main.js`: 초기화 로그 문구 유지
+- 로컬 브라우저 확인 후 GitHub push
+
 ---
 
-다음 목표: Phase 1 — 화면 프레임 만들기
+다음 목표: Phase 2 — 게임 상태 구조 만들기

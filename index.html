@@ -8,7 +8,27 @@
 </head>
 <body>
   <main id="app">
-    <p id="init-message">Project Signal Personal</p>
+    <section id="game-frame">
+
+      <header id="top-hud">
+        <div id="stage-label">Stage 1</div>
+        <div id="status-label">Ready</div>
+      </header>
+
+      <section id="battle-field">
+        <div id="enemy-side"></div>
+        <div id="party-side"></div>
+      </section>
+
+      <section id="battle-log">
+        <ul id="log-list"></ul>
+      </section>
+
+      <footer id="bottom-panel">
+        <button id="start-button">전투 시작</button>
+      </footer>
+
+    </section>
   </main>
   <script type="module" src="./src/core/main.js"></script>
 </body>
