@@ -1,1 +1,6 @@
-console.log('Project Signal Personal — Phase 1 화면 프레임 준비 완료');
+import { gameState } from "./state.js";
+
+console.log("Project Signal Personal — init", gameState);
+
+document.getElementById("stage-label").textContent = `Stage ${gameState.run.stage}`;
+document.getElementById("status-label").textContent = gameState.battle.status;

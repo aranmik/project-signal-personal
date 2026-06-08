@@ -32,6 +32,13 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 - `src/core/main.js`: 초기화 로그 문구 유지
 - 로컬 브라우저 확인 후 GitHub push
 
+### Phase 2 — 게임 상태 구조 완료
+
+- `src/core/state.js` 신규 생성: gameState 객체 export
+- `src/core/main.js`: gameState import, stage-label / status-label 화면 반영
+- 브라우저 콘솔에서 gameState 확인 가능
+- 화면 구조 Phase 1과 동일 유지
+
 ---
 
-다음 목표: Phase 2 — 게임 상태 구조 만들기
+다음 목표: Phase 2.5 — 임시 유닛 데이터 화면 출력
