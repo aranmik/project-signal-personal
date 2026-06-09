@@ -90,13 +90,68 @@ const AVATAR_PARTS = {
   wolf: ["shadow", "tail", "wolf-body", "leg one", "leg two", "wolf-head", "ear left", "ear right", "snout", "eye"],
 };
 
+// Tempo Smooth 01: 매 tick innerHTML 전체 교체 → instanceId 키 기반 reconcile.
+//   유닛 DOM(아바타/파츠)을 유지해 idle 애니메이션이 tick마다 리셋되지 않게 한다.
+//   변하는 값(HP/속도 게이지/사망 상태)만 기존 요소에 갱신 → 전투 흐름이 끊기지 않음.
+//   instanceId는 스테이지/재시작 간에도 안정(hero-warrior-1 / enemy-slime-1 …)이라
+//   요소가 그대로 재사용되고, FX/리액션 계산(getBoundingClientRect)도 영향 없음.
 function renderUnits(state) {
   const layer = document.getElementById("unit-layer");
   if (!layer) return;
-  layer.innerHTML = "";
 
-  state.party.forEach((unit) => layer.appendChild(createFieldUnit(unit)));
-  state.enemies.forEach((unit) => layer.appendChild(createFieldUnit(unit)));
+  const all = [...state.party, ...state.enemies];
+  const seen = new Set();
+
+  all.forEach((unit) => {
+    seen.add(unit.instanceId);
+    let el = layer.querySelector(
+      `[data-instance-id="${unit.instanceId}"]`
+    );
+    if (!el) {
+      layer.appendChild(createFieldUnit(unit));
+    } else {
+      updateFieldUnit(el, unit);
+    }
+  });
+
+  // 더 이상 없는 유닛만 제거 (현재 구조상 거의 발생하지 않음)
+  Array.from(layer.children).forEach((child) => {
+    const iid = child.dataset.instanceId;
+    if (iid && !seen.has(iid)) child.remove();
+  });
+}
+
+// 기존 요소의 변하는 값만 갱신 (DOM 재생성 없음 → idle 연속)
+function updateFieldUnit(el, unit) {
+  el.classList.toggle("dead", !!unit.isDead);
+
+  const hpFill = el.querySelector(".hp-bar-fill");
+  if (hpFill) {
+    const hpPct = unit.maxHp > 0
+      ? Math.max(0, Math.min(100, (unit.hp / unit.maxHp) * 100))
+      : 0;
+    hpFill.style.width = `${hpPct.toFixed(1)}%`;
+  }
+
+  const tempoBar = el.querySelector(".tempo-bar");
+  const tempoFill = el.querySelector(".tempo-bar-fill");
+  if (tempoFill) {
+    const gauge = Math.max(0, Math.min(100, unit.actionGauge ?? 0));
+    const prev = parseFloat(tempoFill.style.width) || 0;
+    if (gauge < prev - 0.5) {
+      // 행동 후 리셋(급강하)은 보간 없이 즉시 — 천천히 빠지는 어색함 방지
+      tempoFill.style.transition = "none";
+      tempoFill.style.width = `${gauge.toFixed(1)}%`;
+      void tempoFill.offsetWidth; // reflow로 snap 확정
+      tempoFill.style.transition = ""; // 다음 차오름은 다시 부드럽게(스타일시트 0.9s)
+    } else {
+      // 차오름은 1초 tick 사이를 부드럽게 보간
+      tempoFill.style.width = `${gauge.toFixed(1)}%`;
+    }
+    if (tempoBar) {
+      tempoBar.classList.toggle("ready-soon", (unit.actionGauge ?? 0) >= 88);
+    }
+  }
 }
 
 function createFieldUnit(unit) {

@@ -575,12 +575,15 @@ body {
   overflow: hidden;
 }
 
-/* 채움 — 양 진영 공통 amber(박자 채널), HP보다 차분한 존재감 */
+/* 채움 — 양 진영 공통 amber(박자 채널), HP보다 차분한 존재감
+   Tempo Smooth 01: 요소가 유지되므로 width 보간이 효과를 낸다.
+   1초 tick 사이를 부드럽게 차오르게(linear, tick과 비슷한 길이). */
 #battle-field .unit .tempo-bar-fill {
   display: block;
   height: 100%;
   border-radius: 2px;
   background: rgba(225, 198, 128, 0.5);
+  transition: width 0.9s linear;
 }
 
 /* 가득 차기 직전(>=88%) — 곧 행동할 기척만 아주 약하게 */

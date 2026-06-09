@@ -134,6 +134,32 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 
 ---
 
+### Tempo Smooth 01 — 전투 흐름 끊김 진단 및 최소 완화 완료
+
+> 새 기능 아님. "한 틱 한 틱 턱턱 멈추는" 체감의 원인 진단 + 부드러움 최소 회복.
+
+- **끊김 원인 진단 (코드 구조 기준)**:
+  - `battleTick`(1000ms) → `renderGame` → `renderUnits`가 매 tick `layer.innerHTML=""`로 **전 유닛 DOM 파괴·재생성**
+  - → `.avatar`의 `sig-idle`(2.6s 호흡)이 **매 1초 0%로 재시작**, 주기를 완주 못 하고 전 캐릭터가 1초 간격으로 동시에 "툭" 리셋 = 체감 끊김의 주범
+  - → 게이지/HP도 재생성 시점에 width가 즉시 박혀 1초 계단 점프. 매번 새 요소라 CSS transition 보간 자체가 불가능했음
+  - FX는 `#fx-layer`(별도, 재구성 대상 아님)라 원인 아님 / hit reaction은 이미 `.fig-react`로 idle과 transform 분리되어 충돌 없음(후보 D 기해결)
+- **완화 (후보 C 핵심 + A)**:
+  - `render.js` `renderUnits`: innerHTML 전체 교체 → **instanceId 키 reconcile**. 아바타/파츠 DOM을 유지하고 변하는 값(HP/게이지/dead)만 `updateFieldUnit`로 갱신 → **idle 연속**
+    - instanceId는 스테이지/재시작 간 안정 → 요소 재사용, FX getBoundingClientRect 영향 없음
+    - 더 이상 없는 유닛만 제거(누적/중복 방지)
+  - `styles.css`: tempo fill에 `transition: width 0.9s linear` — 요소가 유지되므로 비로소 효과. 1초 tick 사이 게이지가 부드럽게 차오름
+  - 리셋(행동 후 급강하)은 `updateFieldUnit`에서 감지해 `transition:none`+reflow로 **즉시 snap** — 천천히 빠지는 어색함 방지
+- **전투 계산/tick 속도/밸런스 무변경** / 새 기능 없음
+- 변경 파일: `src/ui/render.js`, `src/ui/styles.css`, `DEVLOG.md`, `NEXT.md`
+- 검증 (프리뷰):
+  - 동일 `.unit`/`.avatar` 요소 여러 tick·스테이지 유지(`__trackEl` 동일성 true) ✓
+  - **`sig-idle` currentTime 85,325ms 연속 running** — 매 tick 재시작 안 함 확정(수정 전이면 1000ms 미만) ✓
+  - tempo transition 0.9s 적용, 차오름 보간/리셋 snap ✓
+  - 스테이지 2 전환: 중복 0, dead 0(부활), HP 전원 리셋 ✓ / 콘솔 0
+- **나라님 모바일 PASS (2026-06-09) — 이번 commit에 포함**
+
+---
+
 ### Combat Tempo 01 — 속도 게이지 최소 시각화 완료
 
 > "누가 곧 행동할지"를 읽는 최소 정보. UI판 아님 — "곧 행동할 기척" 정도.
@@ -155,7 +181,7 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
   - ready-soon 전 유닛 ≥88%에서 발동(88~100%) ✓
   - 리셋 확인(archer 99%→8% / wolf 100%→12% / slime 95%→0%) ✓
   - HP바와 두께·길이·색 구분, 2줄 깔끔 ✓ / 행동선·숫자·리액션 충돌 없음 ✓ / 콘솔 0
-- **push 안 함 / 나라님 모바일 확인 대기**
+- **push 완료 (commit c7535c4) / 나라님 모바일 PASS (2026-06-09)**
 
 ---
 
@@ -181,7 +207,7 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
   - heal: 사제→전사 회복 시 react-heal 발동(로그 "+12" 일치) ✓
   - hit/heal 클래스 매핑 정확, idle 위에서 튐 없이 제자리 복귀 ✓
   - 행동선/숫자/HP바와 충돌 없음 ✓ / 콘솔 0
-- **push 안 함 / 나라님 모바일 확인 대기**
+- **push 완료 (commit c7535c4) / 나라님 모바일 PASS (2026-06-09)**
 
 ---
 
@@ -207,7 +233,7 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 - **battle.js 무변경** — 전투 계산 로직 손대지 않음
 - 변경 파일: `src/ui/render.js`, `src/ui/styles.css`, `DEVLOG.md`, `NEXT.md`
 - 검증 (프리뷰): 이름/HP 숫자 0개(aria-label만 보존), 화면 조용해짐 ✓ / HP바만으로 체력 읽힘(고블린 감소·슬라임 dead 숨김) ✓ / HP바 아바타 안 가림 ✓ / 전사 방패 우측·궁수 화살 NE 확인 ✓ / 콘솔 0
-- **push 안 함 / 나라님 모바일 확인 대기**
+- **push 완료 (commit d12e9fc) / 나라님 모바일 PASS (2026-06-09)**
 
 ---
 
@@ -225,7 +251,7 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 - **battle.js 변경 없음** — 전투 계산 로직 무변경
 - 변경 파일: `src/ui/render.js`, `src/ui/styles.css`
 - 검증 (프리뷰): 전사 86/120 teal 감소 / 고블린 46/60 coral 감소 / 슬라임 dead 바 숨김 / 전사·궁수·늑대·사제 full bar ✓. console error 0건
-- **push 안 함 / 나라님 모바일 확인 대기**
+- **push 완료 (commit d12e9fc) / 나라님 모바일 PASS (2026-06-09)**
 
 ---
 
