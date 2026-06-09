@@ -14,8 +14,8 @@ Phase 0 ~ 5 push 완료 (commit f467b24).
 Phase 6 + 6.5 push 완료 (commit 3f7b3fd).
 Phase 7 + 7.5 push 완료 (commit 946bcbe).
 Phase 7.8 ~ 8.3 push 완료 (commit 87d1467).
-Action Feedback 01 완료 — 나라님 모바일 확인 후 push 예정.
-(Baseline 01 + Lock은 commit 3af4075로 push 완료. Shell 01 / Formation Spread / Action Feedback 01은 미push)
+Battle Screen Baseline 01 + Lock push 완료 (commit 3af4075).
+Shell 01 + Formation Spread + Action Feedback 01 push 완료 (commit 8667da6) — 나라님 모바일 PASS (2026-06-09).
 
 ---
 
@@ -31,10 +31,7 @@ Action Feedback 01 완료 — 나라님 모바일 확인 후 push 예정.
 
 ## 다음 작업 후보
 
-1. **Battle Screen Shell 01** — 타이틀/전투/결과 Flow + 전투 화면 비율 (나라님 모바일 확인 대기 → push)
-   - 기준: `presentation-lab/monster-battlefield-mockup.html` "1. 기본 대치"
-   - 배경 B안(딥네이비+격자), A안(단색) 토글 1줄
-2. **Shell 01 push 이후 후보 (무대 잠근 뒤 기능 단계)**
+1. **무대 잠근 뒤 기능 단계** — Action Feedback 01 기준점 이후
    - 궁수 공격선 / 사제 회복선 / 적 피격 리액션 (`presentation-lab/action-feedback-prototype-02.html` 재료)
    - 피해·치유 숫자, HP바, 속도게이지, 버프/디버프 표시
    - 캐릭터별 개성 idle / 실루엣 polish

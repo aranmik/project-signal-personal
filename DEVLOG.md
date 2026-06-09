@@ -152,7 +152,7 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 - **피해/회복 숫자**: 피해 `-N`(빨강) / 회복 `+N`(초록) float. 같은 대상 700ms 내 중복 시 `--queued`(0.12s 지연 + 우상단 offset)
 - **battle.js 변경**: `performAttack`/`performHeal` 끝에 FX 이벤트 호출 + `attackLineType()` 헬퍼만 추가. **전투 계산 로직(데미지/타겟팅/사망/회복) 무변경**
 - 변경 파일: index.html, src/core/battle.js, src/ui/render.js, src/ui/styles.css, DEVLOG.md, NEXT.md
-- **push 안 함 / 나라님 모바일 확인 대기**
+- **push 완료 (commit 8667da6) / 나라님 모바일 PASS (2026-06-09)**
 
 ---
 
@@ -168,7 +168,7 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 - 효과: 캐릭터 간 간격 확대 → 행동선/숫자/HP/속도/버프/스킬 텍스트 붙을 여유 확보
 - 적 진영/중앙 대각 lane 유지, 3명 기준에서도 4인 파티 진영(back-right 빈자리) 읽힘
 - 검증 (프리뷰): 타이틀→전투 배치 확인, 콘솔 0, Flow 무영향
-- **push 안 함 / 나라님 모바일 확인 대기**
+- **push 완료 (commit 8667da6)**
 
 ---
 
@@ -196,7 +196,7 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 - **변경 파일**: index.html, src/core/state.js, src/core/battle.js, src/core/main.js, src/ui/render.js, src/ui/styles.css
 - **battle.js 변경**: Flow 함수 2개(startRun/goTitle) 추가만. 전투 계산 로직 무변경
 - 검증 (프리뷰): 타이틀→시작→자동 전투, 로그 오버레이 2줄, 슬라임 사망 처리, 결과 오버레이 로직(eval) 정상, 콘솔 0
-- **push 안 함 / 나라님 모바일 확인 대기**
+- **push 완료 (commit 8667da6) / 나라님 PASS (2026-06-09)**
 
 ---
 
@@ -222,7 +222,7 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
   - 사망 유닛 idle 정지(`.unit.dead .avatar/.monster { animation:none }`), `prefers-reduced-motion` 대응
 - **battle.js / 전투 로직 / 타겟팅 / 성장 / 스테이지 무변경**
 - 검증 (프리뷰): 배경 격자 위 캐릭터 가시성↑, idle computed(sig-idle 2.6s, origin 발밑, 캐릭터별 delay) 확인, 콘솔 0
-- **push 안 함 / 나라님 모바일 실물 확인 대기 (A안 vs B안 포함)**
+- **push 완료 (commit 3af4075)**
 
 ---
 
