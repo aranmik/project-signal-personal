@@ -17,6 +17,7 @@ Phase 7.8 ~ 8.3 push 완료 (commit 87d1467).
 Battle Screen Baseline 01 + Lock push 완료 (commit 3af4075).
 Shell 01 + Formation Spread + Action Feedback 01 push 완료 (commit 8667da6) — 나라님 모바일 PASS (2026-06-09).
 Combat HUD 01 + 01a push 완료 (commit d12e9fc) — 나라님 모바일 PASS (2026-06-09).
+Hit Reaction 01 + Combat Tempo 01 push 완료 (commit TBD).
 
 ---
 
@@ -38,10 +39,10 @@ Combat HUD 01 + 01a push 완료 (commit d12e9fc) — 나라님 모바일 PASS (2
    - 아바타 부위 단위 facing 정밀화 (시선/무기/자세)
 
 2. **무대 잠근 뒤 기능 단계** — Action Feedback 01 기준점 이후
-   - 적 피격 리액션 (`presentation-lab/action-feedback-prototype-02.html` 재료)
-   - 속도게이지, 버프/디버프 표시 (유키 판단: HP바 다음은 신중히)
+   - 버프/디버프 표시 (유키 판단 후 신중히)
    - 캐릭터별 개성 idle / 실루엣 polish
    - slotIndex / 4번째 캐릭터 / 합류 예정 슬롯 재도입은 Phase 9 이후
+   - (완료: 피격/회복 리액션 Hit Reaction 01, 속도게이지 Combat Tempo 01)
 
    > 무대를 먼저 잠근 뒤 기능. 다음 범위는 나라/유키 판단 후 확정.
 

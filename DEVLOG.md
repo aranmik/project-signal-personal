@@ -134,6 +134,57 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 
 ---
 
+### Combat Tempo 01 — 속도 게이지 최소 시각화 완료
+
+> "누가 곧 행동할지"를 읽는 최소 정보. UI판 아님 — "곧 행동할 기척" 정도.
+
+- **구조**: `actionGauge`(0~100, 100에서 행동) 비율을 보조 게이지로
+  - `render.js`: HP바 아래에 `.tempo-bar > .tempo-bar-fill` 추가, width = `clamp(actionGauge, 0, 100)%`. **숫자 없음**
+  - `state.js`의 `unit.actionGauge`를 그대로 읽음 (전투 계산 무변경)
+- **HP바와 의도적 구분** (혼동 방지):
+  - 더 얇게(2px < HP 3px) + 더 짧게(52% < HP 78%) → 보조 채널로 읽힘
+  - 색 채널 분리: HP = 진영색(아군 teal / 적 coral, 생명) / Tempo = **양 진영 공통 amber**(박자) → 색만으로 "체력 아님" 전달
+  - 2줄 구조: 아바타 아래 HP바 → 그 아래 속도바
+- **곧 행동 기척** (`ready-soon`, gauge ≥88%): amber 밝기↑ + 약한 box-shadow glow. 가득 차면 곧 행동함이 직관적으로 읽힘
+- **리셋**: 행동 시 gauge `-=100` → 다음 tick 재구성에서 짧은 바로 표시. 매 tick 새 요소라 cross-render transition 글리치 없음(자연스러운 리셋)
+- **사망 유닛**: 속도 게이지 숨김(`opacity:0`) — 행동 안 함
+- **battle.js 무변경** / 이름·HP 숫자 재추가 없음 / HP바·리액션 구조 유지
+- 변경 파일: `src/ui/render.js`, `src/ui/styles.css`, `DEVLOG.md`, `NEXT.md`
+- 검증 (프리뷰, MutationObserver):
+  - 유닛별 gauge 진행도 반영(speed 차이로 폭 다름) ✓
+  - ready-soon 전 유닛 ≥88%에서 발동(88~100%) ✓
+  - 리셋 확인(archer 99%→8% / wolf 100%→12% / slime 95%→0%) ✓
+  - HP바와 두께·길이·색 구분, 2줄 깔끔 ✓ / 행동선·숫자·리액션 충돌 없음 ✓ / 콘솔 0
+- **push 안 함 / 나라님 모바일 확인 대기**
+
+---
+
+### Hit Reaction 01 — 피격/회복 리액션 최소 강화 완료
+
+> Action Feedback 01(행동선·숫자) 위에, 맞은/회복받은 유닛 본체가 짧게 반응 → "몸에 닿았다" 강화.
+> 새 정보 추가 아님. 화려함 아님. 이미 발생한 행동을 몸으로 읽히게 하는 단계.
+
+- **transform 충돌 회피 구조** (핵심):
+  - idle은 `.avatar`/`.monster`의 transform 점유, scale은 `.unit`의 transform 점유 → 같은 요소에 reaction 얹으면 충돌
+  - `render.js`: 아바타를 `.fig-react` 래퍼로 감쌈 → `.unit`(scale) / `.fig-react`(reaction) / `.avatar`(idle) **세 요소가 각자 transform**, 곱연산으로 합성 (충돌 0)
+  - `.fig-react { transform-origin: center bottom }` — 발밑 고정, 튀거나 밀려 보이지 않게
+- **재구성 타이밍 해결**: `unit-layer`는 매 tick `innerHTML=""`로 재구성 → 행동 직후 클래스가 다음 렌더에서 소실
+  - `playActionFx` → `reactUnit(targetInstanceId, isHeal)`가 `requestAnimationFrame`으로 **renderGame 이후** 새 요소에 클래스 적용
+  - reaction 0.32~0.5s ≪ tick 1000ms → 다음 재구성 전 완료. `animationend`로 클래스 제거
+- **hit 리액션** (`react-hit`, `@keyframes sig-hit` 0.32s): 좌우 ±2px 흔들림(순변위 0) + 짧은 brightness flash(최대 1.85) — 날카롭고 빠름
+- **heal 리액션** (`react-heal`, `@keyframes sig-heal` 0.5s): scale 1→1.05 부드러운 pulse + 초록 `drop-shadow` glow(rgba 159,230,207) — 느리고 부드러움, hit과 결이 다름
+- `prefers-reduced-motion`: reaction 정지 (idle과 동일 정책)
+- **battle.js 무변경** — 전투 계산 로직 손대지 않음. HP바/이름 제거 구조 유지
+- 변경 파일: `src/ui/render.js`, `src/ui/styles.css`, `DEVLOG.md`, `NEXT.md`
+- 검증 (프리뷰, MutationObserver):
+  - hit: 적(goblin/slime/wolf) + 아군(warrior 피격) 모두 react-hit 발동 ✓
+  - heal: 사제→전사 회복 시 react-heal 발동(로그 "+12" 일치) ✓
+  - hit/heal 클래스 매핑 정확, idle 위에서 튐 없이 제자리 복귀 ✓
+  - 행동선/숫자/HP바와 충돌 없음 ✓ / 콘솔 0
+- **push 안 함 / 나라님 모바일 확인 대기**
+
+---
+
 ### Combat HUD 01a — 전투 텍스트 노이즈 제거 + 아바타 방향 규칙 1차 완료
 
 > 전투 화면을 아바타 + HP바 중심으로. 직업/몬스터 이름·HP 숫자 텍스트 제거.

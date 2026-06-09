@@ -479,6 +479,52 @@ body {
 }
 
 /* ===================================================================
+   Hit Reaction 01 — 피격/회복 리액션
+   -------------------------------------------------------------------
+   .fig-react = reaction 전용 transform 레이어.
+     - 부모 .unit(scale) / 자식 .avatar(idle) 와 충돌 없이 합성
+     - transform-origin 발밑 고정 → 튀거나 밀려 보이지 않게
+   hit  : 짧고 날카로운 좌우 흔들림 + 흰 flash (충격)
+   heal : 느리고 부드러운 scale pulse + 초록 glow (치유) — hit과 결이 다름
+   =================================================================== */
+#battle-field .fig-react {
+  display: block;
+  transform-origin: center bottom;
+  will-change: transform, filter;
+}
+
+#battle-field .fig-react.react-hit {
+  animation: sig-hit 0.32s ease-out;
+}
+#battle-field .fig-react.react-heal {
+  animation: sig-heal 0.5s ease-out;
+}
+
+/* 피격: 작은 흔들림(±2px, 순변위 0) + 짧은 밝기 flash */
+@keyframes sig-hit {
+  0%   { transform: translateX(0);      filter: brightness(1); }
+  18%  { transform: translateX(-2px);   filter: brightness(1.85); }
+  42%  { transform: translateX(1.5px);  filter: brightness(1.35); }
+  68%  { transform: translateX(-1px);   filter: brightness(1.1); }
+  100% { transform: translateX(0);      filter: brightness(1); }
+}
+
+/* 회복: 부드러운 scale pulse + 초록 glow */
+@keyframes sig-heal {
+  0%   { transform: scale(1);    filter: brightness(1) drop-shadow(0 0 0 rgba(159, 230, 207, 0)); }
+  38%  { transform: scale(1.05); filter: brightness(1.22) drop-shadow(0 0 7px rgba(159, 230, 207, 0.82)); }
+  100% { transform: scale(1);    filter: brightness(1) drop-shadow(0 0 0 rgba(159, 230, 207, 0)); }
+}
+
+/* 모션 최소화 환경 — 위치 이동 제거, idle과 동일 정책 */
+@media (prefers-reduced-motion: reduce) {
+  #battle-field .fig-react.react-hit,
+  #battle-field .fig-react.react-heal {
+    animation: none;
+  }
+}
+
+/* ===================================================================
    Combat HUD 01 — HP 게이지 (01a: 이름/HP 숫자 제거 후 아바타 바로 아래로 정렬)
    얇은 트랙. 캐릭터·행동선·숫자를 가리지 않게.
    =================================================================== */
@@ -507,6 +553,44 @@ body {
 
 /* 사망 유닛 — HP바 숨김 (dead 전체 opacity 0.4 이미 적용) */
 #battle-field .unit.dead .hp-bar {
+  opacity: 0;
+}
+
+/* ===================================================================
+   Combat Tempo 01 — 속도 게이지 (actionGauge 진행도)
+   -------------------------------------------------------------------
+   HP바와 혼동되지 않게 의도적으로 다르게:
+     - 더 얇게(2px<3px) + 더 짧게(52%<78%)  → 보조 채널로 읽힘
+     - HP는 진영색(teal/적coral) = 생명 / Tempo는 양 진영 공통 amber = 박자
+       → 색 채널 자체가 "이건 체력이 아니라 기척"을 말함
+   "가득 차면 곧 행동한다"만 읽히면 충분. 숫자 없음.
+   =================================================================== */
+#battle-field .unit .tempo-bar {
+  display: block;
+  width: 52%;
+  margin: 3px auto 0;
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+
+/* 채움 — 양 진영 공통 amber(박자 채널), HP보다 차분한 존재감 */
+#battle-field .unit .tempo-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: rgba(225, 198, 128, 0.5);
+}
+
+/* 가득 차기 직전(>=88%) — 곧 행동할 기척만 아주 약하게 */
+#battle-field .unit .tempo-bar.ready-soon .tempo-bar-fill {
+  background: rgba(238, 214, 150, 0.82);
+  box-shadow: 0 0 4px rgba(232, 206, 140, 0.5);
+}
+
+/* 사망 유닛 — 속도 게이지 숨김 (행동하지 않음) */
+#battle-field .unit.dead .tempo-bar {
   opacity: 0;
 }
 

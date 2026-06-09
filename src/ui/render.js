@@ -123,13 +123,24 @@ function createFieldUnit(unit) {
     ? Math.max(0, Math.min(100, (unit.hp / unit.maxHp) * 100)).toFixed(1)
     : "0";
 
+  // Combat Tempo 01: actionGauge(0~100, 100에서 행동) 비율 → 속도 게이지
+  //   HP바와 분리된 보조 채널(곧 행동할 기척). 숫자 없음.
+  const gaugePct = Math.max(0, Math.min(100, unit.actionGauge ?? 0)).toFixed(1);
+  const readyClass = (unit.actionGauge ?? 0) >= 88 ? " ready-soon" : "";
+
   // Combat HUD 01a: 전투 필드는 아바타 + HP바 중심.
   // 직업/몬스터 이름·HP 숫자 텍스트는 제거 (실루엣으로 전달 / 로컬라이즈 레이아웃 보호).
   // 접근성용 이름은 aria-label로만 보존.
+  // Hit Reaction 01: 아바타를 .fig-react로 감싼다.
+  //   transform 충돌 회피용 전용 레이어 — .unit(scale) / .fig-react(피격·회복 반응) / .avatar(idle)
+  //   세 요소가 각자 transform을 가져 곱연산으로 합성된다.
   wrap.setAttribute("aria-label", unit.name);
   wrap.innerHTML = `
-    <div class="${figClass} ${id}">${parts}</div>
+    <div class="fig-react">
+      <div class="${figClass} ${id}">${parts}</div>
+    </div>
     <span class="hp-bar"><span class="hp-bar-fill" style="width:${hpPct}%"></span></span>
+    <span class="tempo-bar${readyClass}"><span class="tempo-bar-fill" style="width:${gaugePct}%"></span></span>
   `;
 
   return wrap;
@@ -185,6 +196,30 @@ export function playActionFx(event) {
   spawnLine(layer, s, t, lineType);
   spawnPulse(layer, t, isHeal);
   spawnNumber(layer, t, targetInstanceId, isHeal, amount);
+  reactUnit(targetInstanceId, isHeal);
+}
+
+// Hit Reaction 01: 맞은/회복받은 유닛 본체가 짧게 반응
+//   unit-layer는 매 tick 재구성되므로, 이번 tick의 renderGame 이후(rAF)
+//   새로 그려진 .fig-react 요소에 반응 클래스를 얹는다.
+function reactUnit(targetInstanceId, isHeal) {
+  requestAnimationFrame(() => {
+    const unit = document.querySelector(
+      `#unit-layer [data-instance-id="${targetInstanceId}"]`
+    );
+    if (!unit) return;
+    const fig = unit.querySelector(".fig-react");
+    if (!fig) return;
+    const cls = isHeal ? "react-heal" : "react-hit";
+    fig.classList.remove("react-hit", "react-heal");
+    void fig.offsetWidth; // reflow — 동일 클래스 재적용 시 애니메이션 재시작 보장
+    fig.classList.add(cls);
+    fig.addEventListener(
+      "animationend",
+      () => fig.classList.remove(cls),
+      { once: true }
+    );
+  });
 }
 
 function spawnLine(layer, s, t, lineType) {
