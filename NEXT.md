@@ -17,7 +17,7 @@ Phase 7.8 ~ 8.3 push 완료 (commit 87d1467).
 Battle Screen Baseline 01 + Lock push 완료 (commit 3af4075).
 Shell 01 + Formation Spread + Action Feedback 01 push 완료 (commit 8667da6) — 나라님 모바일 PASS (2026-06-09).
 Combat HUD 01 + 01a push 완료 (commit d12e9fc) — 나라님 모바일 PASS (2026-06-09).
-Hit Reaction 01 + Combat Tempo 01 push 완료 (commit TBD).
+Hit Reaction 01 + Combat Tempo 01 push 완료 (commit c7535c4).
 
 ---
 
