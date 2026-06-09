@@ -9,12 +9,20 @@ function renderButton(state) {
   const btn = document.getElementById("start-button");
   if (!btn) return;
   btn.disabled = state.battle.isRunning;
-  btn.textContent =
-    state.battle.status === "running"
-      ? "전투 중..."
-      : state.battle.status === "ended"
-      ? "다시 시작"
-      : "전투 시작";
+
+  if (state.battle.status === "running") {
+    btn.textContent = "전투 중...";
+  } else if (state.battle.status === "ended") {
+    if (state.run.result === "victory") {
+      btn.textContent = "다음 스테이지";
+    } else if (state.run.result === "clear") {
+      btn.textContent = "처음부터";
+    } else {
+      btn.textContent = "다시 시작";
+    }
+  } else {
+    btn.textContent = "전투 시작";
+  }
 }
 
 function renderHud(state) {

@@ -29,14 +29,14 @@ export function createInitialEnemies() {
 export const gameState = {
   project: {
     id: "SIGNAL_PERSONAL",
-    version: "v0.1-phase4.5",
+    version: "v0.1-phase5",
   },
 
   screen: "battle",
 
   run: {
     stage: 1,
-    maxStage: 1,
+    maxStage: 3,
     result: null,
   },
 
@@ -52,6 +52,6 @@ export const gameState = {
 
   logs: [
     "Project Signal Personal 시작.",
-    "Phase 4.5: 자동전투 / 사제 회복 완료.",
+    "Phase 5: 스테이지 진행 구조 완료.",
   ],
 };

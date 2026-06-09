@@ -24,6 +24,25 @@ export function resetBattle() {
   clearInterval(tickTimer);
   tickTimer = null;
 
+  gameState.run.stage = 1;
+  gameState.run.result = null;
+
+  gameState.party = createInitialParty();
+  gameState.enemies = createInitialEnemies();
+
+  gameState.battle.tick = 0;
+  gameState.battle.status = "ready";
+  gameState.battle.isRunning = false;
+  gameState.battle.result = null;
+
+  gameState.logs = ["Stage 1 — 처음부터 시작합니다."];
+
+  renderGame(gameState);
+}
+
+export function advanceStage() {
+  gameState.run.stage += 1;
+
   gameState.party = createInitialParty();
   gameState.enemies = createInitialEnemies();
 
@@ -33,9 +52,9 @@ export function resetBattle() {
   gameState.battle.result = null;
   gameState.run.result = null;
 
-  gameState.logs = ["전투를 초기화했습니다."];
+  gameState.logs = [`Stage ${gameState.run.stage} — 전투 시작!`];
 
-  renderGame(gameState);
+  startBattle();
 }
 
 function stopBattle() {
@@ -144,10 +163,15 @@ function checkBattleEnd() {
 
   if (allEnemiesDead) {
     gameState.battle.status = "ended";
-    gameState.battle.result = "victory";
-    gameState.run.result = "victory";
-    pushLog("전투 승리!");
-    pushLog("다시 시작할 수 있습니다.");
+    if (gameState.run.stage < gameState.run.maxStage) {
+      gameState.run.result = "victory";
+      pushLog(`Stage ${gameState.run.stage} 클리어!`);
+      pushLog("다음 스테이지로 진행할 수 있습니다.");
+    } else {
+      gameState.run.result = "clear";
+      pushLog("전체 클리어!");
+      pushLog("처음부터 시작할 수 있습니다.");
+    }
     return true;
   }
 

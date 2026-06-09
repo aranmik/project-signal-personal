@@ -134,10 +134,23 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 
 ---
 
+### Phase 5 — 스테이지 진행 구조 최소 구현 완료
+
+- `src/core/state.js`: `run.maxStage` 1 → 3, `version` → `"v0.1-phase5"`, 초기 로그 갱신
+- `src/core/battle.js`:
+  - `resetBattle()`: `run.stage` 1로 리셋 추가, 로그 문구 갱신
+  - `advanceStage()` 신규 export: stage+1, 아군 완전 재생성(완전 회복), 적 재생성, 자동 전투 시작
+  - `checkBattleEnd()`: 승리 시 `stage < maxStage` → result `"victory"` / `stage === maxStage` → result `"clear"` 분기
+- `src/core/main.js`: `advanceStage` import 추가, 버튼 클릭 분기 — victory → `advanceStage()` / 그 외 → `resetBattle() + startBattle()`
+- `src/ui/render.js`: `renderButton()` — result `"victory"` → "다음 스테이지" / `"clear"` → "처음부터" / `"defeat"` → "다시 시작"
+- 콘솔 에러 없음 확인
+- **아직 push 안 함 — 나라님 로컬 확인 후 승인 대기**
+
+---
+
 ## Push 상태 요약
 
 | Phase | push 여부 |
 |---|---|
-| Phase 0 ~ 4.1 | 완료 |
-| Phase 4.5 | 로컬 완료 / 정합성 보정(4.5a) 진행 중 / push 보류 |
-| Phase 4.5a | 현재 작업 — 정합성 보정 |
+| Phase 0 ~ 4.5a | 완료 (commit 96953a3) |
+| Phase 5 | 로컬 완료 / push 보류 |

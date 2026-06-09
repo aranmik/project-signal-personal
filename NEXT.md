@@ -10,21 +10,19 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 ## 현재 상태
 
 Active 개발 프로젝트: SIGNAL_PERSONAL 하나뿐이다.
-Phase 0 ~ 4.1 push 완료.
-Phase 4.5 로컬 완료 / Phase 4.5a 정합성 보정 완료 / **아직 push 안 함 — 나라님 로컬 확인 후 승인 대기.**
+Phase 0 ~ 4.5a push 완료 (commit 96953a3).
+Phase 5 로컬 완료 / **아직 push 안 함 — 나라님 로컬 확인 후 승인 대기.**
 
 ---
 
 ## 다음 작업 후보
 
-1. **Phase 4.5 + 4.5a 묶음 commit/push** ← 나라님 로컬 확인 후 진행
-   - commit 메시지: `feat: Phase 4.5-4.5a 사제 회복 추가 및 정합성 보정`
+1. **Phase 5 commit/push** ← 나라님 로컬 확인 후 진행
+   - commit 메시지: `feat: Phase 5 스테이지 진행 구조 최소 구현`
 
-2. **Phase 5 — 스테이지 진행 또는 전투 재시작 구조 확장**
+2. **Phase 6 — 기본 직업 스킬 1차**
 
-3. **Phase 6 — 기본 직업 스킬 1차**
-
-4. **Phase 7 — 성장 선택 1차**
+3. **Phase 7 — 성장 선택 1차**
 
 ---
 
@@ -49,12 +47,14 @@ Phase 4.5 로컬 완료 / Phase 4.5a 정합성 보정 완료 / **아직 push 안
 
 ## 다음 세션 시작 방법
 
-렌은 작업 시작 전 아래 문서를 순서대로 읽는다.
+렌은 작업 시작 전 아래 순서를 따른다.
 
-1. CLAUDE.md
-2. NEXT.md (이 파일)
-3. DEVLOG.md 최근 항목
-4. 필요한 경우 docs/06_CHARACTER_AVATAR_GUIDE.md
+1. CLAUDE.md 읽기
+2. NEXT.md (이 파일) 읽기
+3. DEVLOG.md 최근 항목 읽기
+4. 필요한 경우 docs/06_CHARACTER_AVATAR_GUIDE.md 읽기
+5. **미리보기 서버 시작** — `signal-personal` (C:\MCP\.claude\launch.json, 포트 3000)
+   나라님이 오른쪽 패널에서 바로 확인/플레이 가능한 상태로 만든다.
 
 읽은 뒤 바로 코드 수정하지 말고,
 현재 상태를 나라님에게 요약 보고하고 승인 후 다음 작업을 시작한다.
