@@ -104,20 +104,32 @@ function createFieldUnit(unit) {
   const isParty = unit.team === "party";
   const deadClass = unit.isDead ? " dead" : "";
 
+  // Combat HUD 01a: 아바타 facing 규칙
+  //   전투 구도 = 아군 좌하단 / 적 우상단.
+  //   아군은 오른쪽 위(NE)를 향해 싸우고, 적은 왼쪽 아래(SW)를 향한다.
+  //   face-ne / face-sw 클래스를 방향 규칙의 단일 진입점으로 둔다.
+  //   (미래: 상대 진영 영웅은 team과 무관하게 face-sw를 받을 수 있어야 함)
+  const facingClass = isParty ? "face-ne" : "face-sw";
+
   const wrap = document.createElement("div");
-  wrap.className = `unit ${unit.team} ${id}-pos${deadClass}`;
+  wrap.className = `unit ${unit.team} ${id}-pos ${facingClass}${deadClass}`;
   wrap.dataset.instanceId = unit.instanceId;
 
   const figClass = isParty ? "avatar" : "monster";
   const parts = (AVATAR_PARTS[id] || [])
     .map((p) => `<span class="part ${p}"></span>`)
     .join("");
-  const hpDisplay = Math.max(0, unit.hp);
+  const hpPct = unit.maxHp > 0
+    ? Math.max(0, Math.min(100, (unit.hp / unit.maxHp) * 100)).toFixed(1)
+    : "0";
 
+  // Combat HUD 01a: 전투 필드는 아바타 + HP바 중심.
+  // 직업/몬스터 이름·HP 숫자 텍스트는 제거 (실루엣으로 전달 / 로컬라이즈 레이아웃 보호).
+  // 접근성용 이름은 aria-label로만 보존.
+  wrap.setAttribute("aria-label", unit.name);
   wrap.innerHTML = `
     <div class="${figClass} ${id}">${parts}</div>
-    <span class="name">${unit.name}</span>
-    <span class="hp">${hpDisplay}/${unit.maxHp}</span>
+    <span class="hp-bar"><span class="hp-bar-fill" style="width:${hpPct}%"></span></span>
   `;
 
   return wrap;

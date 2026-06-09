@@ -134,6 +134,50 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 
 ---
 
+### Combat HUD 01a — 전투 텍스트 노이즈 제거 + 아바타 방향 규칙 1차 완료
+
+> 전투 화면을 아바타 + HP바 중심으로. 직업/몬스터 이름·HP 숫자 텍스트 제거.
+
+- **이름/HP 숫자 텍스트 제거** (`render.js createFieldUnit`):
+  - `.name`(직업/몬스터명) / `.hp`(`80/80` 등 숫자) span 삭제 → 아바타 + HP바만
+  - 근거: 실루엣으로 정체성 전달 / 로컬라이즈 시 이름 길이가 전장 가리는 위험 차단 / HP바·피해숫자 있으므로 HP 숫자 중복
+  - 접근성용 이름은 `aria-label`로만 보존 (시각 노이즈 0, 스크린리더 유지)
+  - `styles.css`: `.unit .name` / `.unit .hp` 스타일 제거, `.unit min-height 88→74`로 축소
+- **HP바 재정렬** (`styles.css`): 텍스트 사라진 자리 → 아바타 바로 아래. `width 78%` 중앙 정렬, `margin 5px auto 0` (발밑에서 살짝 띄움). HP바 자체 유지
+- **아바타 facing 규칙 1차** (방향 단일 진입점 확립):
+  - `render.js`: 아군 `.face-ne`(우상단 향함) / 적 `.face-sw`(좌하단 향함) 클래스 부여
+  - 규칙: 전투 구도 = 아군 좌하단 / 적 우상단. team이 아니라 **facing 클래스**로 무기·시선 제어 → 미래 상대 진영 영웅(아군 직업이나 SW 향함) 표현 가능
+  - `styles.css` Avatar Facing 블록 + 주석으로 규칙 문서화
+  - 1차 시각 조정 (큰 재작업 금지, 부위 미세 조정만):
+    - 전사: 방패 `left -1px → right -1px`(전방=적 방향), `rotate -7→8deg` — 우상단 막는 자세
+    - 궁수: 화살 `rotate -14→-21deg` — NE 적 고도로 더 세움
+    - 사제: 지팡이 이미 우측(NE) → 조정 없음
+  - `face-sw` 좌우반전 variant는 **Avatar Facing 01** 후보로 분리
+- **battle.js 무변경** — 전투 계산 로직 손대지 않음
+- 변경 파일: `src/ui/render.js`, `src/ui/styles.css`, `DEVLOG.md`, `NEXT.md`
+- 검증 (프리뷰): 이름/HP 숫자 0개(aria-label만 보존), 화면 조용해짐 ✓ / HP바만으로 체력 읽힘(고블린 감소·슬라임 dead 숨김) ✓ / HP바 아바타 안 가림 ✓ / 전사 방패 우측·궁수 화살 NE 확인 ✓ / 콘솔 0
+- **push 안 함 / 나라님 모바일 확인 대기**
+
+---
+
+### Combat HUD 01 — HP바 최소 시각화 완료
+
+> 전투 중 "누가 얼마나 버티는지" 읽기 위한 최소 HP 게이지. 속도 게이지 없음, 전장 분위기 유지.
+
+- **구조**: `createFieldUnit()`에 `.hp-bar > .hp-bar-fill` 추가. width = `(unit.hp / unit.maxHp * 100).toFixed(1)%` inline style
+- **스타일**:
+  - 트랙: `height 3px`, `border-radius 2px`, `background rgba(255,255,255,0.06)` — 존재감 최소
+  - 아군 fill: 차가운 teal `rgba(100,192,200,0.58)` / 적 fill: coral `rgba(220,108,88,0.54)`
+  - 사망 유닛: `.unit.dead .hp-bar { opacity: 0 }` — 바 숨김
+- **배치**: `.hp` 숫자 아래 → 캐릭터 실루엣·이름·숫자·행동선·피해 숫자와 겹침 없음
+- **scale 반영**: 아군 1.2배(rendered 74px) / 적 1.04배(rendered 64px) 자동 적용
+- **battle.js 변경 없음** — 전투 계산 로직 무변경
+- 변경 파일: `src/ui/render.js`, `src/ui/styles.css`
+- 검증 (프리뷰): 전사 86/120 teal 감소 / 고블린 46/60 coral 감소 / 슬라임 dead 바 숨김 / 전사·궁수·늑대·사제 full bar ✓. console error 0건
+- **push 안 함 / 나라님 모바일 확인 대기**
+
+---
+
 ### Action Feedback 01 — source → target 행동선 / 피격 / 숫자 최소 이식 완료
 
 > 기준: `presentation-lab/action-line-rnd-03-5.html`. FX 완성 아님, source→target 문법 1차 검증.
