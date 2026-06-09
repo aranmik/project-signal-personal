@@ -18,6 +18,8 @@ export function createInitialParty(bonuses = { atk: 0, maxHp: 0 }) {
     createUnit(UNIT_TEMPLATES.party.warrior, "hero-warrior-1", bonuses),
     createUnit(UNIT_TEMPLATES.party.priest, "hero-priest-1", bonuses),
     createUnit(UNIT_TEMPLATES.party.archer, "hero-archer-1", bonuses),
+    // Party Join 01: 4번째 동료. instanceId는 스테이지/재시작 간 안정(reconcile 키).
+    createUnit(UNIT_TEMPLATES.party.guardian, "hero-guardian-1", bonuses),
   ];
 }
 
@@ -52,6 +54,9 @@ export const gameState = {
     tick: 0,
     isRunning: false,
     result: null,
+    // Battle Speed 01: 전투 배속(1x/2x). 기본 1x. 세션 내 사용자 선택으로 유지된다
+    //   (스테이지/재시작에서 reset하지 않음 — battle 객체를 재생성하지 않으므로 보존).
+    speed: 1,
   },
 
   logs: [

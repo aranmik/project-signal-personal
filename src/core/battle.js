@@ -3,7 +3,19 @@ import { createInitialParty, createInitialEnemies } from "./state.js";
 import { renderGame, playActionFx } from "../ui/render.js";
 
 let tickTimer = null;
-const TICK_INTERVAL = 1000;
+// Combat Feel Polish 01: 기본 전투 호흡 상향. 나라 체감상 기존 2x가 기본에 가까움.
+//   새 1x = 500ms / 새 2x = 250ms (BASE / speed). 계산식 무변경, tick 간격만.
+const BASE_TICK_INTERVAL = 500; // 1x 기준 tick 간격
+
+// Battle Speed 01: interval을 단일 진입점에서 (재)무장한다.
+//   항상 기존 timer를 먼저 정리 → setInterval 중복 생성 0.
+//   배속은 tick "간격"만 줄인다(계산식 무변경) — 1x 500ms / 2x 250ms.
+function startTicking() {
+  clearInterval(tickTimer);
+  tickTimer = null;
+  const interval = BASE_TICK_INTERVAL / gameState.battle.speed;
+  tickTimer = setInterval(battleTick, interval);
+}
 
 export function startBattle() {
   if (gameState.battle.isRunning) return;
@@ -15,9 +27,17 @@ export function startBattle() {
   pushLog("전투 시작!");
   renderGame(gameState);
 
-  tickTimer = setInterval(() => {
-    battleTick();
-  }, TICK_INTERVAL);
+  startTicking();
+}
+
+// Battle Speed 01: 1x ↔ 2x 토글. 전투 중이면 현재 cadence로 interval 재무장
+//   (startTicking이 기존 timer를 정리하므로 중복 없음). 비전투면 다음 startBattle에 반영.
+export function toggleSpeed() {
+  gameState.battle.speed = gameState.battle.speed === 1 ? 2 : 1;
+  if (gameState.battle.isRunning) {
+    startTicking();
+  }
+  renderGame(gameState);
 }
 
 // Shell 01: 타이틀 → 전투 진입 (스테이지 1부터 새 런 시작 후 자동 전투)

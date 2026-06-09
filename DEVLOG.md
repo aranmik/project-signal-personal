@@ -134,6 +134,82 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 
 ---
 
+### Combat Feel Polish 01 — 전투 속도/HUD/행동선 감각 정리 완료
+
+> 새 기능 아님. 오늘 들어간 4인 파티 + 배속 + HUD + 행동선의 전투 감각을 나라 취향으로 정리.
+> 오늘 push 전 마지막 작업.
+
+**1) 기본 전투 호흡 상향** (`core/battle.js`)
+- 나라 체감상 기존 2x가 기본에 가까움 → `BASE_TICK_INTERVAL` 1000→**500ms**.
+- 새 1x=500ms / 새 2x=250ms(BASE/speed). 계산식 무변경, tick 간격만. startTicking 단일 진입점 유지(interval 중복 0).
+
+**2) HP바/속도게이지 정리** (`ui/styles.css`)
+- **폭 통일**: 속도게이지 52%→**78%(HP바와 동일)**. HP 바로 아래 같은 폭 정렬 → "어디까지 차면 행동"이 한눈에.
+- **간격 축소**: 속도게이지 margin-top 3px→2px.
+- **색 = 상태 정보 기준 통일**(진영 무관): 체력 = **빨강**(`rgba(228,92,80,.62)`, 아군/적 동일, enemy 오버라이드 제거) / 속도 = **파랑**(`rgba(96,165,226,.6)`), ready-soon 파랑 glow.
+  - 근거: HP/속도는 진영이 아니라 상태 → 정보 종류로 색을 고정하는 게 직관적. 진영 구분은 위치/실루엣이 담당.
+- 두께는 HP 3px / 속도 2px 유지 → 같은 폭이어도 두께+색으로 구분, 얇고 조용한 스타일(UI판 아님). 이름/HP 숫자 비노출 유지, 아바타 안 가림.
+
+**3) 행동선 감각** (`ui/render.js spawnLine` + `ui/styles.css`)
+- 직선 span → **SVG 곡선 path**로 교체(구조·anchor·source→target 문법 유지, 좌표는 동일 s/t에서 계산).
+  - **곡선**: 수직벡터로 중간점을 살짝 밀어 약한 bow(Q 2차 베지어). heal은 반대로 휘어 공격선과 결 구분.
+  - **그라데이션**: linearGradient 시작 opacity 0(투명) → 끝 0.95(선명).
+  - **끝점 쐐기**(.fx-head): 끝 접선 방향 회전 → "대상에 꽂혔다".
+  - **타이밍**: path dashoffset 1→0 빠른 draw-in(0.2s, 꽂힘) + svg 수명 0.95s로 느린 fade(잔상) = "팟! → 스스슥". 기존 0.62s보다 느리게.
+  - 2x(250ms)에선 `[data-speed="2"] .fx-svg` fade 0.62s로 단축 → 선 과밀 방지.
+- 색 토큰만 유지(궁수 연두/사제 초록/전사·수호자 amber/적 coral), currentColor로 stroke·head 적용.
+- 화려한 연출/스킬명/다수타겟/치명타 없음. pulse·숫자는 기존 유지.
+
+- 변경 파일: `src/core/battle.js`, `src/ui/render.js`, `src/ui/styles.css`, `DEVLOG.md`, `NEXT.md`
+- 검증 (프리뷰, computed style + SVG 구조 + setInterval 계측 + 정적 선 시각 확인):
+  - 게이지: HP/속도 폭 동일(48.35px), HP=빨강(아군·적 동일)·속도=파랑, 두께 3/2px, 간격 2px ✓
+  - 행동선 SVG: Q 곡선·viewBox·gradient(시작 opacity 0)·끝점 쐐기 렌더 — 정적 캡처로 곡선/그라데이션/화살촉 육안 확인 ✓
+  - 호흡: 1x=500ms / 2x=250ms(lastMs 250) ✓, 토글 시 cadence 500/250 정확
+  - **interval: 토글·스테이지·재시작 전 구간 항상 1개, 전투 종료(2x 포함) 후 0** ✓
+  - **2x FX 과밀: 244 샘플 동시 행동선 최대 2 / 숫자 최대 2** → 읽힘(과밀 아님). 2x=250ms 채택(300ms 안전값 불필요)
+  - Stage 1→2→3 / 성장(수호자 포함) / 전체 클리어("전체 클리어!"·"처음부터") / 재시작(Stage1·보너스 0·4인 full HP·gauge 0) ✓
+  - console error/warn 0
+- **WATCH**: 2x 동시 행동선/숫자 최대 2로 현재는 무난하나, 향후 적/파티 수가 늘면 fx-number(0.9s) 누적 가능 → 그때 숫자 duration 배속 연동 재검토.
+- **push 안 함 / 나라님 모바일 확인 대기 → 확인 후 오늘 묶음(Party Join 01 + Battle Speed 01 + Combat Feel Polish 01) push 예정**
+
+---
+
+### Party Join 01 + Battle Speed 01 — 4번째 동료 합류 + 전투 배속 완료
+
+> Living Battle Screen 01 기준점(commit ccb8039) 위에서 진행. 두 기능 묶음.
+> 목표: 4인 파티가 전장에 서고 싸운다 + 1x/2x 배속으로 흐름 조절.
+
+**1) Party Join 01 — 4번째 동료(수호자/guardian)**
+- **데이터** (`data/units.js`): `party.guardian` 추가 — 기본 공격형(직업 확장 아님).
+  - role `back`, maxHp 105(묵직)·atk 11·speed 6(가장 느림) → 기존 3인과 박자/체감 구분
+- **파티 합류** (`core/state.js`): `createInitialParty`에 `hero-guardian-1` 추가(instanceId reconcile 키 안정). 성장 보너스(atk/maxHp) 동일 적용.
+- **배치** (`styles.css`): 예비였던 back-right anchor를 실제로 채움 — `.guardian-pos { left:158px; bottom:168px }`. 2x2(전열 전사·궁수 / 후열 사제·수호자) 완성.
+- **아바타** (`render.js` AVATAR_PARTS + `styles.css`): 공통 파츠 + 창(lance)로 최소 실루엣 구분(강철+자수정 색, 창끝 삼각). 전사 방패·사제 지팡이·궁수 활과 겹치지 않음. idle delay -1.9s, face-ne 창끝 전방(NE) 겨눔.
+- **전투 참여**: 기존 루프 그대로 작동 — actionGauge/HP바/속도게이지/행동선/피격 리액션 자동 적용. SOURCE_ANCHORS.guardian(창끝) 추가, attackLineType은 party 근접 → slash 재사용.
+- **이름/HP 숫자 비노출 유지** (aria-label만). battle.js 계산 로직 무변경.
+
+**2) Battle Speed 01 — 1x/2x 배속**
+- **상태** (`state.js`): `battle.speed`(기본 1). 세션 내 사용자 선택 유지(battle 객체 재생성 안 하므로 스테이지/재시작에 보존).
+- **interval 단일 진입점** (`battle.js`): `startTicking()` — 항상 `clearInterval` 먼저 → `setInterval(battleTick, 1000/speed)`. **중복 생성 0.** startBattle/toggleSpeed 모두 이 함수만 사용.
+- **토글** (`toggleSpeed`): 1↔2. 전투 중이면 startTicking 재무장(기존 timer 정리되므로 누수 없음), 비전투면 다음 startBattle에 반영. **tick 간격만 조정 — 계산식 무변경.**
+- **HUD** (`index.html` + `render.js renderHud`): 상단 우측 `#speed-toggle`(1x/2x), 2x일 때 amber `.fast` 강조. `#battle-field[data-speed]` 반영.
+- **2x 부드러움** (`styles.css`): `data-speed="2"`에서 tempo fill transition 0.9s→0.45s — cadence(500ms)에 맞춰 게이지가 따라가며 끊김 방지(Tempo Smooth 01 보존).
+- **정리**: 전투 종료(stopBattle)/타이틀(goTitle)/재시작(resetBattle) 모두 기존 clearInterval 유지 → 잔류 interval 없음.
+- 변경 파일: `index.html`, `src/data/units.js`, `src/core/state.js`, `src/core/battle.js`, `src/core/main.js`, `src/ui/render.js`, `src/ui/styles.css`, `DEVLOG.md`, `NEXT.md`
+- 검증 (프리뷰, 동적 import로 gameState 직접 관찰 + setInterval/clearInterval 계측):
+  - 유닛 7개(party 4 + enemy 3), 수호자 HP·속도게이지·face-ne·창 렌더 ✓
+  - 수호자 기본 공격 참여(로그 "수호자가 …를 공격했다. 12 피해" = atk 11+성장 1) ✓, FX 행동선/숫자 발생(Stage2 40/40) ✓
+  - 2x 토글: state.speed 2 / data-speed 2 / 버튼 "2x"+fast ✓
+  - **활성 interval 추적: 토글·스테이지 전환·재시작 전 구간에서 항상 1개**(누수 0) ✓
+  - **전투 종료 후 interval 0 + tick 정지**(2x 포함) ✓
+  - Stage 1→2→3 진행 / 성장(atk·maxHp, 수호자에도 적용) / 전체 클리어 결과 오버레이("전체 클리어!"·"처음부터") ✓
+  - 재시작: Stage1 복귀·보너스 0·4인 full HP·gauge 0·interval 1개 ✓
+  - console error/warn 0
+- **WATCH**: 2x(tick 500ms)에서 fx-number(0.9s)가 다음 틱과 일부 겹칠 수 있음. 현재 단일 행동/틱이라 과밀하진 않으나, 후속에서 FX duration 배속 연동 검토 여지(이번 범위 제외).
+- **push 안 함 / 나라님 모바일 확인 대기**
+
+---
+
 ### Tempo Smooth 01 — 전투 흐름 끊김 진단 및 최소 완화 완료
 
 > 새 기능 아님. "한 틱 한 틱 턱턱 멈추는" 체감의 원인 진단 + 부드러움 최소 회복.

@@ -18,7 +18,9 @@ Battle Screen Baseline 01 + Lock push 완료 (commit 3af4075).
 Shell 01 + Formation Spread + Action Feedback 01 push 완료 (commit 8667da6) — 나라님 모바일 PASS (2026-06-09).
 Combat HUD 01 + 01a push 완료 (commit d12e9fc) — 나라님 모바일 PASS (2026-06-09).
 Hit Reaction 01 + Combat Tempo 01 push 완료 (commit c7535c4) — 나라님 모바일 PASS (2026-06-09).
-Tempo Smooth 01 (전투 흐름 끊김 진단·완화: 유닛 DOM reconcile + idle 연속 + tempo 보간) push 완료 (commit ccb8039) — 나라님 모바일 PASS (2026-06-09).
+Tempo Smooth 01 (전투 흐름 끊김 진단·완화: 유닛 DOM reconcile + idle 연속 + tempo 보간) push 완료 (commit ccb8039) — 나라님 모바일 PASS (2026-06-09). **Living Battle Screen 01 기준점.**
+Party Join 01 (4번째 동료 수호자 합류 — 2x2 완성) + Battle Speed 01 (1x/2x 배속) + Combat Feel Polish 01 (기본 호흡 500ms·게이지 폭/색 통일·행동선 SVG 곡선) 완료 — 나라님 모바일 확인 후 묶음 push 예정.
+  · 기본 호흡: 1x=500ms / 2x=250ms · HP=빨강·속도=파랑(폭 동일) · 행동선=SVG 곡선+그라데이션+화살촉+느린 fade.
 
 ---
 
@@ -41,9 +43,10 @@ Tempo Smooth 01 (전투 흐름 끊김 진단·완화: 유닛 DOM reconcile + idl
 
 2. **무대 잠근 뒤 기능 단계** — Action Feedback 01 기준점 이후
    - 버프/디버프 표시 (유키 판단 후 신중히)
-   - 캐릭터별 개성 idle / 실루엣 polish
-   - slotIndex / 4번째 캐릭터 / 합류 예정 슬롯 재도입은 Phase 9 이후
-   - (완료: 피격/회복 리액션 Hit Reaction 01, 속도게이지 Combat Tempo 01)
+   - 캐릭터별 개성 idle / 실루엣 polish (수호자 포함 4인)
+   - 2x 배속 FX 과밀 후속 조정(WATCH): fx-number 등 duration 배속 연동 검토
+   - slotIndex / 합류 예정 슬롯 연출은 Phase 9 이후 (4번째 동료 자체는 Party Join 01에서 합류 완료)
+   - (완료: 피격/회복 리액션 Hit Reaction 01, 속도게이지 Combat Tempo 01, 4번째 동료 Party Join 01, 배속 Battle Speed 01)
 
    > 무대를 먼저 잠근 뒤 기능. 다음 범위는 나라/유키 판단 후 확정.
 

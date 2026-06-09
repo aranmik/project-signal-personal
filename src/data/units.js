@@ -32,6 +32,20 @@ export const UNIT_TEMPLATES = {
       atk: 16,
       speed: 9,
     },
+
+    // Party Join 01: 4번째 동료(수호자). 직업 확장 아님 — 기본 공격형.
+    //   2x2 후열 back-right 자리를 채워 4인 파티 전투를 확인하는 용도.
+    //   speed 6(가장 느림)·maxHp 105(묵직)로 기존 3인과 박자/체감 구분.
+    guardian: {
+      id: "guardian",
+      name: "수호자",
+      team: "party",
+      job: "guardian",
+      role: "back",
+      maxHp: 105,
+      atk: 11,
+      speed: 6,
+    },
   },
 
   enemies: {

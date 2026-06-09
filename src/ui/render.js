@@ -63,6 +63,17 @@ function renderHud(state) {
   document.getElementById("stage-label").textContent = `Stage ${state.run.stage}`;
   document.getElementById("status-label").textContent = state.battle.status;
   renderPartyBonus(state.run.bonuses);
+
+  // Battle Speed 01: 배속 버튼 라벨/강조 + 전장 data-speed
+  //   data-speed로 tempo fill transition 시간을 cadence에 맞춘다(CSS) → 2x에서도 끊김 없이.
+  const speed = state.battle.speed ?? 1;
+  const speedBtn = document.getElementById("speed-toggle");
+  if (speedBtn) {
+    speedBtn.textContent = `${speed}x`;
+    speedBtn.classList.toggle("fast", speed === 2);
+  }
+  const field = document.getElementById("battle-field");
+  if (field) field.dataset.speed = String(speed);
 }
 
 function renderPartyBonus(bonuses) {
@@ -85,6 +96,8 @@ const AVATAR_PARTS = {
   warrior: ["aura", "base", "stance", "body", "head", "shield"],
   priest: ["aura", "base", "stance", "body", "head", "staff"],
   archer: ["aura", "base", "stance", "body", "head", "bow", "arrow"],
+  // Party Join 01: 수호자 — 기존 공통 파츠 + 창(lance)로 최소 실루엣 구분
+  guardian: ["aura", "base", "stance", "body", "head", "lance"],
   slime: ["shadow", "slime-body", "shine", "eye left", "eye right"],
   goblin: ["shadow", "ear left", "ear right", "goblin-body", "goblin-head", "eye left", "eye right", "mouth"],
   wolf: ["shadow", "tail", "wolf-body", "leg one", "leg two", "wolf-head", "ear left", "ear right", "snout", "eye"],
@@ -211,6 +224,7 @@ const SOURCE_ANCHORS = {
   archer: { fx: 0.18, fy: 0.42 },  // bow
   priest: { fx: 0.82, fy: 0.30 },  // staff tip
   warrior: { fx: 0.70, fy: 0.50 }, // weapon/front
+  guardian: { fx: 0.74, fy: 0.26 }, // lance tip (우상단)
   wolf: { fx: 0.16, fy: 0.52 },    // snout (적은 좌측 대면)
   slime: { fx: 0.5, fy: 0.55 },    // body front
   goblin: { fx: 0.5, fy: 0.52 },
@@ -277,20 +291,71 @@ function reactUnit(targetInstanceId, isHeal) {
   });
 }
 
+// Combat Feel Polish 01: 행동선을 직선 span → SVG 곡선 path로.
+//   source→target 문법/anchor 구조 유지(좌표는 동일하게 s,t에서 계산).
+//   약한 bow(곡선) + 시작 투명→끝 선명 그라데이션 + 끝점 쐐기(화살촉)
+//   + 빠른 draw-in 후 느린 fade("팟! 꽂혔다 → 스스슥 사라진다").
+const SVG_NS = "http://www.w3.org/2000/svg";
+let __fxLineSeq = 0;
+
 function spawnLine(layer, s, t, lineType) {
+  const w = layer.clientWidth || layer.offsetWidth;
+  const h = layer.clientHeight || layer.offsetHeight;
   const dx = t.x - s.x;
   const dy = t.y - s.y;
-  const len = Math.hypot(dx, dy);
-  const ang = (Math.atan2(dy, dx) * 180) / Math.PI;
+  const len = Math.hypot(dx, dy) || 1;
 
-  const line = document.createElement("span");
-  line.className = `fx-line fx-line--${lineType}`;
-  line.style.left = `${s.x}px`;
-  line.style.top = `${s.y}px`;
-  line.style.width = `${len}px`;
-  line.style.transform = `rotate(${ang}deg)`;
-  line.addEventListener("animationend", () => line.remove());
-  layer.appendChild(line);
+  // 수직 단위벡터로 중간점을 살짝 밀어 약한 곡선(arc)을 만든다.
+  //   길이에 비례하되 과하지 않게 clamp. heal은 반대로 휘어 공격선과 결을 구분.
+  const px = -dy / len;
+  const py = dx / len;
+  const bow = Math.min(20, Math.max(6, len * 0.12)) * (lineType === "heal" ? -1 : 1);
+  const mx = (s.x + t.x) / 2 + px * bow;
+  const my = (s.y + t.y) / 2 + py * bow;
+
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("class", `fx-svg fx-svg--${lineType}`);
+  svg.setAttribute("width", w);
+  svg.setAttribute("height", h);
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+
+  const gid = `fxg-${++__fxLineSeq}`;
+  const defs = document.createElementNS(SVG_NS, "defs");
+  const grad = document.createElementNS(SVG_NS, "linearGradient");
+  grad.setAttribute("id", gid);
+  grad.setAttribute("gradientUnits", "userSpaceOnUse");
+  grad.setAttribute("x1", s.x);
+  grad.setAttribute("y1", s.y);
+  grad.setAttribute("x2", t.x);
+  grad.setAttribute("y2", t.y);
+  // 시작점 투명 → 끝점 선명
+  grad.innerHTML =
+    '<stop offset="0%" stop-color="currentColor" stop-opacity="0"></stop>' +
+    '<stop offset="55%" stop-color="currentColor" stop-opacity="0.35"></stop>' +
+    '<stop offset="100%" stop-color="currentColor" stop-opacity="0.95"></stop>';
+  defs.appendChild(grad);
+  svg.appendChild(defs);
+
+  const path = document.createElementNS(SVG_NS, "path");
+  path.setAttribute("class", "fx-path");
+  path.setAttribute("d", `M ${s.x} ${s.y} Q ${mx} ${my} ${t.x} ${t.y}`);
+  path.setAttribute("stroke", `url(#${gid})`);
+  path.setAttribute("pathLength", "1"); // dash draw-in 정규화
+  svg.appendChild(path);
+
+  // 끝점 쐐기 — 끝 접선 방향(t - control)으로 회전, "대상에 꽂혔다"
+  const tanAng = (Math.atan2(t.y - my, t.x - mx) * 180) / Math.PI;
+  const head = document.createElementNS(SVG_NS, "path");
+  head.setAttribute("class", "fx-head");
+  head.setAttribute("d", "M 0 0 L -9 -4.5 L -9 4.5 Z");
+  head.setAttribute("transform", `translate(${t.x} ${t.y}) rotate(${tanAng})`);
+  svg.appendChild(head);
+
+  // 제거는 svg 자체의 수명 애니메이션 종료에서만(자식 animationend 버블 제외)
+  svg.addEventListener("animationend", (e) => {
+    if (e.target === svg) svg.remove();
+  });
+  layer.appendChild(svg);
 }
 
 function spawnPulse(layer, t, isHeal) {
