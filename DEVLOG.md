@@ -143,7 +143,7 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 - `src/ui/styles.css`: `[hidden] { display: none !important }`, growth-panel 스타일, subtitle 스타일
 - `index.html`: battle-view / growth-panel 구조 분리, growth-subtitle 요소 추가
 - 콘솔 에러 없음 확인
-- **아직 push 안 함 — 나라님 승인 대기**
+- **push 완료 (commit 946bcbe)**
 
 ---
 
@@ -159,7 +159,7 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
   - 전투 종료 로그 2줄 → 1줄 통합 ("클리어! ▶ 다음 스테이지" 등)
 - `src/ui/render.js`: 로그 컨테이너 자동 스크롤 하단 고정
 - 콘솔 에러 없음 확인
-- **아직 push 안 함 — 나라님 승인 대기**
+- **push 완료 (commit 3f7b3fd)**
 
 ---
 
@@ -182,4 +182,6 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 | Phase | push 여부 |
 |---|---|
 | Phase 0 ~ 4.5a | 완료 (commit 96953a3) |
-| Phase 5 | 로컬 완료 / push 보류 |
+| Phase 5 | 완료 (commit f467b24) |
+| Phase 6 + 6.5 | 완료 (commit 3f7b3fd) |
+| Phase 7 + 7.5 | 완료 (commit 946bcbe) |
