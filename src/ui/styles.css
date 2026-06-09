@@ -82,11 +82,10 @@ body {
 }
 
 #party-side {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  min-height: 80px;
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  justify-items: center;
 }
 
 /* 로그 영역 */
@@ -137,7 +136,8 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 80px;
+  width: 100%;
+  max-width: 160px;
   padding: 8px 6px;
   border-radius: 8px;
   font-size: 12px;
@@ -173,6 +173,19 @@ body {
 
 .unit-card.dead {
   opacity: 0.35;
+}
+
+.slot-pending {
+  background: transparent !important;
+  border: 1px dashed #2a3a4a !important;
+  opacity: 1;
+  min-height: 72px;
+}
+
+.slot-pending-label {
+  font-size: 10px;
+  color: #4a6a8a;
+  letter-spacing: 0.05em;
 }
 
 .unit-dead-label {

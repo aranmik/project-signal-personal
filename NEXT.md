@@ -19,7 +19,8 @@ Phase 7.8 push 완료 (이번 commit).
 
 ## 다음 작업 후보
 
-1. **Phase 8 — 4인 파티 슬롯과 전장 배치 기초** (후보명, 유키/나라님 확정 대기)
+1. **Phase 8.1** — 아군 2×2 슬롯 그리드 + 합류 예정 슬롯 (나라님 미리보기 확인 대기)
+2. **Phase 8.2** — 세로형 대각 전장 레이아웃 (루다 vertical battlefield polish 확인 후 진행)
 
    > 아직 구현 지시 아님. 루다 presentation-lab polish 결과 확인 후 범위 확정 예정.
 

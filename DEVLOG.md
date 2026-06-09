@@ -134,6 +134,20 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 
 ---
 
+### Phase 8.1 — 아군 2×2 슬롯 그리드 + 4번째 합류 예정 슬롯 완료
+
+- `src/ui/render.js`: `renderUnits()` — party 3명 순서대로 slot 0~2 배치, `createPendingSlot()` 추가 (slot 3, "합류 예정")
+- `src/ui/styles.css`: `#party-side` flex-row → grid 2×2, `.unit-card` width 100%/max-width 160px, `.slot-pending` / `.slot-pending-label` 스타일 추가
+- 슬롯 매핑: party[0]=전사(0) / party[1]=사제(1) / party[2]=궁수(2) / slot 3=합류 예정
+- battle.js 전투 로직 무변경
+- state.js unit.slotIndex 미추가 (Phase 9 시점에 확정 예정)
+- 기존 HP 표시 / 성장 선택 / 파티 강화 현황 표시 유지 확인
+- 전투 진행 / Stage 클리어 / 성장 선택 흐름 정상 확인
+- 콘솔 에러 없음 확인
+- **나라님 미리보기 확인 대기**
+
+---
+
 ### Phase 7.8 — 파티 강화 현황 표시 완료
 
 - `index.html`: `#party-bonus` 요소 추가 (top-hud 아래)

@@ -76,9 +76,21 @@ function renderUnits(state) {
     enemySide.appendChild(createUnitCard(unit));
   });
 
-  state.party.forEach((unit) => {
-    partySide.appendChild(createUnitCard(unit));
+  state.party.forEach((unit, i) => {
+    const card = createUnitCard(unit);
+    card.dataset.slot = i;
+    partySide.appendChild(card);
   });
+
+  partySide.appendChild(createPendingSlot());
+}
+
+function createPendingSlot() {
+  const card = document.createElement("div");
+  card.className = "unit-card party slot-pending";
+  card.dataset.slot = "3";
+  card.innerHTML = `<div class="slot-pending-label">합류 예정</div>`;
+  return card;
 }
 
 function createUnitCard(unit) {
