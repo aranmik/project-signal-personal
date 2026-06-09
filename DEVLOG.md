@@ -134,6 +134,22 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 
 ---
 
+### Phase 6 + 6.5 — 기본 직업 스킬 및 전투 로그 정리 완료
+
+- `src/core/battle.js`:
+  - selectArcherTarget() 추가 — HP 가장 낮은 적 우선 타겟
+  - performAction() 궁수 분기 추가
+  - josa() 헬퍼 추가 — 이/가, 을/를 받침 기준 자동 처리
+  - attackVerb() 추가 — 전사 "베었다" / 궁수 "저격했다" / 그 외 "공격했다"
+  - 모든 전투 로그 조사 보정 적용
+  - 사제 회복 로그 "(+N)" 형식 적용
+  - 전투 종료 로그 2줄 → 1줄 통합 ("클리어! ▶ 다음 스테이지" 등)
+- `src/ui/render.js`: 로그 컨테이너 자동 스크롤 하단 고정
+- 콘솔 에러 없음 확인
+- **아직 push 안 함 — 나라님 승인 대기**
+
+---
+
 ### Phase 5 — 스테이지 진행 구조 최소 구현 완료
 
 - `src/core/state.js`: `run.maxStage` 1 → 3, `version` → `"v0.1-phase5"`, 초기 로그 갱신

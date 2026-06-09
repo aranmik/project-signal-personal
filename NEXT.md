@@ -10,19 +10,17 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 ## 현재 상태
 
 Active 개발 프로젝트: SIGNAL_PERSONAL 하나뿐이다.
-Phase 0 ~ 4.5a push 완료 (commit 96953a3).
-Phase 5 로컬 완료 / **아직 push 안 함 — 나라님 로컬 확인 후 승인 대기.**
+Phase 0 ~ 5 push 완료 (commit f467b24).
+Phase 6 + 6.5 로컬 완료 / **아직 push 안 함 — 나라님 승인 대기.**
 
 ---
 
 ## 다음 작업 후보
 
-1. **Phase 5 commit/push** ← 나라님 로컬 확인 후 진행
-   - commit 메시지: `feat: Phase 5 스테이지 진행 구조 최소 구현`
+1. **Phase 6 + 6.5 commit/push** ← 나라님 확인 후 진행
+   - commit 메시지: `feat: Phase 6 기본 직업 스킬 및 전투 로그 정리`
 
-2. **Phase 6 — 기본 직업 스킬 1차**
-
-3. **Phase 7 — 성장 선택 1차**
+2. **Phase 7 — 성장 선택 1차**
 
 ---
 

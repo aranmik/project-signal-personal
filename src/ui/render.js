@@ -75,4 +75,7 @@ function renderLogs(state) {
     li.textContent = text;
     logList.appendChild(li);
   });
+
+  const container = document.getElementById("battle-log");
+  container.scrollTop = container.scrollHeight;
 }

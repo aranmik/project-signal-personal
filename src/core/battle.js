@@ -108,10 +108,12 @@ function performAction(unit) {
     }
   }
 
-  const targetPool = isParty
-    ? gameState.enemies
-    : gameState.party;
-  const attackTarget = selectAttackTarget(targetPool);
+  const targetPool = isParty ? gameState.enemies : gameState.party;
+
+  const attackTarget = isParty && unit.id === "archer"
+    ? selectArcherTarget(targetPool)
+    : selectAttackTarget(targetPool);
+
   if (attackTarget) {
     performAttack(unit, attackTarget);
   }
@@ -122,6 +124,12 @@ function selectAttackTarget(pool) {
   const alive = pool.filter((u) => !u.isDead);
   const front = alive.filter((u) => u.role === "front");
   return front.length > 0 ? front[0] : alive[0] ?? null;
+}
+
+function selectArcherTarget(pool) {
+  const alive = pool.filter((u) => !u.isDead);
+  if (alive.length === 0) return null;
+  return alive.reduce((lowest, u) => u.hp < lowest.hp ? u : lowest);
 }
 
 function selectHealTarget(party) {
@@ -135,16 +143,35 @@ function selectHealTarget(party) {
   return lowest.hp / lowest.maxHp < 0.7 ? lowest : null;
 }
 
+function josa(name, type) {
+  const code = name.charCodeAt(name.length - 1);
+  const hasBatchim = (code - 0xAC00) % 28 !== 0;
+  if (type === "은는") return hasBatchim ? "은" : "는";
+  if (type === "이가") return hasBatchim ? "이" : "가";
+  if (type === "을를") return hasBatchim ? "을" : "를";
+  return "";
+}
+
+function attackVerb(unit) {
+  if (unit.id === "archer") return "저격했다";
+  if (unit.id === "warrior") return "베었다";
+  return "공격했다";
+}
+
 function performAttack(attacker, target) {
   const damage = attacker.atk;
   target.hp -= damage;
 
-  pushLog(`${attacker.name}가 ${target.name}을(를) 공격했다. ${damage} 피해.`);
+  const verb = attackVerb(attacker);
+  const ro = josa(target.name, "을를");
+  const i = josa(target.name, "이가");
+
+  pushLog(`${attacker.name}${josa(attacker.name, "이가")} ${target.name}${ro} ${verb}. ${damage} 피해.`);
 
   if (target.hp <= 0) {
     target.hp = 0;
     target.isDead = true;
-    pushLog(`${target.name}이(가) 쓰러졌다.`);
+    pushLog(`${target.name}${josa(target.name, "이가")} 쓰러졌다.`);
   }
 }
 
@@ -154,7 +181,7 @@ function performHeal(healer, target) {
   target.hp = Math.min(target.maxHp, target.hp + healAmount);
   const actualHeal = target.hp - hpBefore;
 
-  pushLog(`${healer.name}가 ${target.name}을(를) 회복했다. ${actualHeal} 회복.`);
+  pushLog(`${healer.name}${josa(healer.name, "이가")} ${target.name}${josa(target.name, "을를")} 회복했다. (+${actualHeal})`);
 }
 
 function checkBattleEnd() {
@@ -165,12 +192,10 @@ function checkBattleEnd() {
     gameState.battle.status = "ended";
     if (gameState.run.stage < gameState.run.maxStage) {
       gameState.run.result = "victory";
-      pushLog(`Stage ${gameState.run.stage} 클리어!`);
-      pushLog("다음 스테이지로 진행할 수 있습니다.");
+      pushLog(`Stage ${gameState.run.stage} 클리어! ▶ 다음 스테이지`);
     } else {
       gameState.run.result = "clear";
-      pushLog("전체 클리어!");
-      pushLog("처음부터 시작할 수 있습니다.");
+      pushLog("전체 클리어! ▶ 처음부터");
     }
     return true;
   }
@@ -179,8 +204,7 @@ function checkBattleEnd() {
     gameState.battle.status = "ended";
     gameState.battle.result = "defeat";
     gameState.run.result = "defeat";
-    pushLog("전투 패배...");
-    pushLog("다시 시작할 수 있습니다.");
+    pushLog("전투 패배... ▶ 다시 시작");
     return true;
   }
 
