@@ -134,6 +134,21 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 
 ---
 
+### Phase 8.3 — 전장 아바타 표시 구조 1차 완료
+
+- `src/ui/render.js`: `createUnitCard()`에 `<div class="unit-avatar unit-avatar--{id}">` 추가
+- `src/ui/styles.css`: `.unit-avatar` 베이스 + 6종 CSS-only 심볼 아바타
+  - 전사: 파란 원 + 검 십자 / 사제: 보라 원 + 회복 십자 / 궁수: 초록 원 + 화살촉
+  - 슬라임: 하늘 물방울 + 하이라이트 / 고블린: 황록 원 + 뾰족 귀 / 늑대: 회색 원 + 뾰족 귀
+- 적 아바타 22px / 아군 아바타 28px (CSS selector 오버라이드)
+- 외부 이미지 / canvas 없음, 교체 가능한 클래스 기반 구조
+- 전투 진행 / HP 감소 / DEAD / 전투 로그 정상 확인
+- 합류 예정 슬롯 유지 확인
+- 콘솔 에러 없음 확인
+- **나라님 미리보기 확인 대기**
+
+---
+
 ### Phase 8.2 — 세로형 약원근 대각 전장 레이아웃 완료
 
 - `src/ui/styles.css`:

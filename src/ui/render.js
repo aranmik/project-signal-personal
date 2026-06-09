@@ -102,8 +102,10 @@ function createUnitCard(unit) {
 
   const label = unit.job || unit.type || unit.role;
   const hpDisplay = Math.max(0, unit.hp);
+  const avatarId = unit.id || "unknown";
 
   card.innerHTML = `
+    <div class="unit-avatar unit-avatar--${avatarId}"></div>
     <div class="unit-name">${unit.name}</div>
     <div class="unit-role">${label}</div>
     <div class="unit-hp">HP ${hpDisplay} / ${unit.maxHp}</div>

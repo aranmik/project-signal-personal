@@ -19,8 +19,11 @@ Phase 7.8 push 완료 (이번 commit).
 
 ## 다음 작업 후보
 
-1. **Phase 8.2** — 세로형 약원근 대각 전장 레이아웃 (나라님 미리보기 확인 대기)
-2. **Phase 8.3 이후** — 미정 (유키/나라님 확정 대기)
+1. **Phase 8.3** — 전장 아바타 1차 (나라님 미리보기/모바일 확인 대기)
+2. **Phase 8.3 이후 후보**
+   - 루다 small-size readability polish 확인 후 아바타 CSS polish
+   - 행동선 / 피격 / 회복선은 추후 별도 Phase로 분리
+   - slotIndex / 배치 선택 UI는 Phase 9 이후
 
    > 아직 구현 지시 아님. 루다 presentation-lab polish 결과 확인 후 범위 확정 예정.
 

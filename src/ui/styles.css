@@ -316,6 +316,163 @@ body {
   cursor: default;
 }
 
+/* === Phase 8.3: 유닛 아바타 === */
+
+.unit-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  position: relative;
+  flex-shrink: 0;
+  margin-top: 2px;
+  margin-bottom: 1px;
+}
+
+#enemy-side .unit-avatar {
+  width: 22px;
+  height: 22px;
+}
+
+#party-side .unit-avatar {
+  width: 28px;
+  height: 28px;
+}
+
+/* 전사 — 파란 원 + 검 십자 */
+.unit-avatar--warrior {
+  background: #1e3e80;
+  border: 2px solid #4a8ae0;
+}
+.unit-avatar--warrior::before {
+  content: "";
+  position: absolute;
+  width: 2px;
+  background: #9ad4f0;
+  top: 14%; bottom: 14%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.unit-avatar--warrior::after {
+  content: "";
+  position: absolute;
+  height: 2px;
+  background: #9ad4f0;
+  left: 18%; right: 18%;
+  top: 35%;
+}
+
+/* 사제 — 보라 원 + 십자 (회복) */
+.unit-avatar--priest {
+  background: #3a1e62;
+  border: 2px solid #b090ff;
+}
+.unit-avatar--priest::before {
+  content: "";
+  position: absolute;
+  width: 2px;
+  background: #d0b0ff;
+  top: 14%; bottom: 14%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.unit-avatar--priest::after {
+  content: "";
+  position: absolute;
+  height: 2px;
+  background: #d0b0ff;
+  left: 18%; right: 18%;
+  top: 33%;
+}
+
+/* 궁수 — 초록 원 + 화살촉 */
+.unit-avatar--archer {
+  background: #1a4820;
+  border: 2px solid #4aaa5a;
+}
+.unit-avatar--archer::before {
+  content: "";
+  position: absolute;
+  width: 0; height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 9px solid #6adf7a;
+  top: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.unit-avatar--archer::after {
+  content: "";
+  position: absolute;
+  width: 2px;
+  background: #6adf7a;
+  top: 12px; bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* 슬라임 — 하늘 물방울 + 하이라이트 */
+.unit-avatar--slime {
+  background: #186a8a;
+  border: 2px solid #4ac8e8;
+  border-radius: 42% 42% 52% 52%;
+}
+.unit-avatar--slime::before {
+  content: "";
+  position: absolute;
+  width: 7px; height: 7px;
+  background: rgba(255, 255, 255, 0.32);
+  border-radius: 50%;
+  top: 3px; left: 4px;
+}
+
+/* 고블린 — 황록 원 + 뾰족 귀 */
+.unit-avatar--goblin {
+  background: #3a5810;
+  border: 2px solid #88cc2a;
+}
+.unit-avatar--goblin::before {
+  content: "";
+  position: absolute;
+  width: 0; height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 8px solid #5a8820;
+  top: 0px; left: 2px;
+}
+.unit-avatar--goblin::after {
+  content: "";
+  position: absolute;
+  width: 0; height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 8px solid #5a8820;
+  top: 0px; right: 2px;
+}
+
+/* 늑대 — 회색 원 + 뾰족 귀 */
+.unit-avatar--wolf {
+  background: #282838;
+  border: 2px solid #8888aa;
+}
+.unit-avatar--wolf::before {
+  content: "";
+  position: absolute;
+  width: 0; height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 9px solid #5a5a7a;
+  top: 0px; left: 3px;
+}
+.unit-avatar--wolf::after {
+  content: "";
+  position: absolute;
+  width: 0; height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 9px solid #5a5a7a;
+  top: 0px; right: 3px;
+}
+
 /* 성장 선택 화면 */
 #growth-panel {
   display: flex;
