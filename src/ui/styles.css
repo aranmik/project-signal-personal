@@ -65,6 +65,13 @@ body {
 
 /* === Phase 8.2: 세로형 약원근 대각 전장 === */
 
+/* battle-view가 game-frame을 꽉 채우도록 — 전장이 화면 주인공 */
+#battle-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
 #battle-field {
   flex: 1;
   display: flex;
@@ -84,8 +91,8 @@ body {
   background: linear-gradient(
     148deg,
     transparent 18%,
-    rgba(16, 32, 56, 0.32) 34%,
-    rgba(16, 32, 56, 0.32) 66%,
+    rgba(16, 32, 56, 0.42) 34%,
+    rgba(16, 32, 56, 0.42) 66%,
     transparent 82%
   );
   pointer-events: none;
@@ -103,8 +110,8 @@ body {
   background: linear-gradient(
     90deg,
     transparent 5%,
-    rgba(44, 88, 132, 0.28) 28%,
-    rgba(44, 88, 132, 0.28) 72%,
+    rgba(44, 88, 132, 0.42) 28%,
+    rgba(44, 88, 132, 0.42) 72%,
     transparent 95%
   );
   transform: rotate(-14deg);
@@ -129,9 +136,9 @@ body {
   padding-top: 4px;
 }
 
-/* 적 카드 세로 엇갈림 — 왼쪽 낮고 오른쪽 높게 (대각 사선 강화) */
-#enemy-side .unit-card:nth-child(1) { margin-top: 12px; }
-#enemy-side .unit-card:nth-child(2) { margin-top: 6px; }
+/* 적 카드 세로 엇갈림 — 왼쪽 낮고 오른쪽 높게 (깊이감 강화) */
+#enemy-side .unit-card:nth-child(1) { margin-top: 20px; }
+#enemy-side .unit-card:nth-child(2) { margin-top: 10px; }
 #enemy-side .unit-card:nth-child(3) { margin-top: 0; }
 
 /* 아군 진영 — 아래-왼쪽, 가까운 쪽 */
@@ -252,7 +259,7 @@ body {
 /* 아군 카드 — 그리드 셀 채움, 가까운 느낌 (패널감 완화) */
 #party-side .unit-card {
   width: 100%;
-  padding: 8px 6px;
+  padding: 6px 5px;
 }
 
 .unit-card.party {
