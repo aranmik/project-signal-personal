@@ -62,6 +62,35 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 - 구현 없음, 문서만 작성
 - **아직 push 안 함**
 
+### Phase 4.5a — 정합성 보정 완료
+
+- `src/core/state.js`: `dead: false` → `isDead: false` (필드명 통일)
+- `src/core/state.js`: `version` → `"v0.1-phase4.5"` 갱신
+- `src/core/state.js`: 초기 로그 "Phase 3: 유닛 데이터 분리 완료." → "Phase 4.5: 자동전투 / 사제 회복 완료."
+- `src/core/battle.js`: `performHeal()` 로그를 계산 회복량 → 실제 회복량(actualHeal)으로 수정
+- `DEVLOG.md`: Push 상태 요약 현행화 (Phase 0~4.1 완료 / 4.5 로컬·보정 중)
+- `NEXT.md`: 다음 1순위 Phase 4.5a 정합성 보정으로 갱신
+- **아직 push 안 함 — 나라님 로컬 확인 후 승인 대기**
+
+### Phase 4.5 — 사제 회복 추가 완료
+
+- `src/core/battle.js`: 함수 구조 재정리
+  - performAction(unit) — 행동 분기 (회복 또는 공격)
+  - selectHealTarget(party) — 살아있는 아군 중 HP 비율 최저, 70% 미만 조건
+  - performHeal(healer, target) — healAmount = Math.round(atk * 1.5), maxHp clamp
+  - selectAttackTarget(pool) — 기존 front 우선 로직 분리
+  - performAttack(attacker, target) — 기존 공격 로직 유지
+- 사제 판별: unit.id === "priest"
+- 회복량: 사제 atk 8 기준 12 회복
+- 로컬 Preview 확인 완료
+  - 사제가 전사 HP 70% 미만 시 "사제가 전사을(를) 회복했다. 12 회복." 로그 출력 ✓
+  - 전사 HP 회복 수치 증가 확인 ✓
+  - maxHp 초과 없음 ✓
+  - 회복 대상 없을 시 사제 공격 정상 동작 ✓
+  - 전투 승리 정상 종료 ✓
+  - 콘솔 에러 없음 ✓
+- **아직 push 안 함 — 나라님 로컬 확인 후 승인 대기**
+
 ### Phase 4.1 — 전투 관찰 / 재시작 보강 완료
 
 - `src/core/battle.js`: tick interval 500ms → 1000ms 완화
@@ -109,9 +138,6 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 
 | Phase | push 여부 |
 |---|---|
-| Phase 0 ~ 2 | 완료 |
-| Phase 2.5 ~ 3.5 | **미완료 — 나라님 승인 대기** |
-
----
-
-다음 목표: Phase 4 — 자동전투 1차 구현 (다음 세션)
+| Phase 0 ~ 4.1 | 완료 |
+| Phase 4.5 | 로컬 완료 / 정합성 보정(4.5a) 진행 중 / push 보류 |
+| Phase 4.5a | 현재 작업 — 정합성 보정 |

@@ -6,7 +6,7 @@ function createUnit(template, instanceId) {
     instanceId,
     hp: template.maxHp,
     actionGauge: 0,
-    dead: false,
+    isDead: false,
   };
 }
 
@@ -29,7 +29,7 @@ export function createInitialEnemies() {
 export const gameState = {
   project: {
     id: "SIGNAL_PERSONAL",
-    version: "v0.1-phase3-units",
+    version: "v0.1-phase4.5",
   },
 
   screen: "battle",
@@ -52,6 +52,6 @@ export const gameState = {
 
   logs: [
     "Project Signal Personal 시작.",
-    "Phase 3: 유닛 데이터 분리 완료.",
+    "Phase 4.5: 자동전투 / 사제 회복 완료.",
   ],
 };

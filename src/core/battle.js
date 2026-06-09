@@ -67,7 +67,7 @@ function battleTick() {
     });
 
   if (ready.length > 0) {
-    performAttack(ready[0]);
+    performAction(ready[0]);
   }
 
   if (checkBattleEnd()) {
@@ -77,34 +77,65 @@ function battleTick() {
   renderGame(gameState);
 }
 
-function selectTarget(attacker) {
-  const isParty = gameState.party.includes(attacker);
-  const pool = isParty
-    ? gameState.enemies.filter((u) => !u.isDead)
-    : gameState.party.filter((u) => !u.isDead);
+function performAction(unit) {
+  const isParty = gameState.party.includes(unit);
 
-  const front = pool.filter((u) => u.role === "front");
-  return front.length > 0 ? front[0] : pool[0] ?? null;
+  if (isParty && unit.id === "priest") {
+    const healTarget = selectHealTarget(gameState.party);
+    if (healTarget) {
+      performHeal(unit, healTarget);
+      unit.actionGauge -= 100;
+      return;
+    }
+  }
+
+  const targetPool = isParty
+    ? gameState.enemies
+    : gameState.party;
+  const attackTarget = selectAttackTarget(targetPool);
+  if (attackTarget) {
+    performAttack(unit, attackTarget);
+  }
+  unit.actionGauge -= 100;
 }
 
-function performAttack(attacker) {
-  const target = selectTarget(attacker);
-  if (!target) return;
+function selectAttackTarget(pool) {
+  const alive = pool.filter((u) => !u.isDead);
+  const front = alive.filter((u) => u.role === "front");
+  return front.length > 0 ? front[0] : alive[0] ?? null;
+}
 
+function selectHealTarget(party) {
+  const candidates = party.filter((u) => !u.isDead && u.hp < u.maxHp);
+  if (candidates.length === 0) return null;
+
+  const lowest = candidates.reduce((a, b) =>
+    a.hp / a.maxHp <= b.hp / b.maxHp ? a : b
+  );
+
+  return lowest.hp / lowest.maxHp < 0.7 ? lowest : null;
+}
+
+function performAttack(attacker, target) {
   const damage = attacker.atk;
   target.hp -= damage;
 
-  const attackerName = attacker.name;
-  const targetName = target.name;
-  pushLog(`${attackerName}가 ${targetName}을(를) 공격했다. ${damage} 피해.`);
+  pushLog(`${attacker.name}가 ${target.name}을(를) 공격했다. ${damage} 피해.`);
 
   if (target.hp <= 0) {
     target.hp = 0;
     target.isDead = true;
-    pushLog(`${targetName}이(가) 쓰러졌다.`);
+    pushLog(`${target.name}이(가) 쓰러졌다.`);
   }
+}
 
-  attacker.actionGauge -= 100;
+function performHeal(healer, target) {
+  const healAmount = Math.round(healer.atk * 1.5);
+  const hpBefore = target.hp;
+  target.hp = Math.min(target.maxHp, target.hp + healAmount);
+  const actualHeal = target.hp - hpBefore;
+
+  pushLog(`${healer.name}가 ${target.name}을(를) 회복했다. ${actualHeal} 회복.`);
 }
 
 function checkBattleEnd() {
