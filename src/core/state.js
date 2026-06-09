@@ -1,20 +1,23 @@
 import { UNIT_TEMPLATES } from "../data/units.js";
 
-function createUnit(template, instanceId) {
+function createUnit(template, instanceId, bonuses = { atk: 0, maxHp: 0 }) {
+  const maxHp = template.maxHp + bonuses.maxHp;
   return {
     ...template,
     instanceId,
-    hp: template.maxHp,
+    atk: template.atk + bonuses.atk,
+    maxHp,
+    hp: maxHp,
     actionGauge: 0,
     isDead: false,
   };
 }
 
-export function createInitialParty() {
+export function createInitialParty(bonuses = { atk: 0, maxHp: 0 }) {
   return [
-    createUnit(UNIT_TEMPLATES.party.warrior, "hero-warrior-1"),
-    createUnit(UNIT_TEMPLATES.party.priest, "hero-priest-1"),
-    createUnit(UNIT_TEMPLATES.party.archer, "hero-archer-1"),
+    createUnit(UNIT_TEMPLATES.party.warrior, "hero-warrior-1", bonuses),
+    createUnit(UNIT_TEMPLATES.party.priest, "hero-priest-1", bonuses),
+    createUnit(UNIT_TEMPLATES.party.archer, "hero-archer-1", bonuses),
   ];
 }
 
@@ -29,7 +32,7 @@ export function createInitialEnemies() {
 export const gameState = {
   project: {
     id: "SIGNAL_PERSONAL",
-    version: "v0.1-phase5",
+    version: "v0.1-phase7",
   },
 
   screen: "battle",
@@ -38,6 +41,7 @@ export const gameState = {
     stage: 1,
     maxStage: 3,
     result: null,
+    bonuses: { atk: 0, maxHp: 0 },
   },
 
   party: createInitialParty(),
@@ -52,6 +56,6 @@ export const gameState = {
 
   logs: [
     "Project Signal Personal 시작.",
-    "Phase 5: 스테이지 진행 구조 완료.",
+    "Phase 7: 성장 선택 구조 완료.",
   ],
 };

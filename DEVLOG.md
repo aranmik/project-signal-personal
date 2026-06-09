@@ -134,6 +134,19 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 
 ---
 
+### Phase 7 + 7.5 — 성장 선택 구조 및 가독성 정리 완료
+
+- `src/core/state.js`: `run.bonuses { atk, maxHp }` 추가, `createInitialParty(bonuses)` 반영, version `v0.1-phase7`
+- `src/core/battle.js`: `applyGrowth()` export, 승리 시 `screen = "growth"` 전환, `resetBattle()` bonuses 초기화, 로그 "성장 선택: 공격 훈련 — 파티 공격력 +1" 형식
+- `src/core/main.js`: `applyGrowth` import, 성장 버튼 이벤트 연결
+- `src/ui/render.js`: `renderGrowthPanel()` 추가, screen 분기, subtitle 렌더링
+- `src/ui/styles.css`: `[hidden] { display: none !important }`, growth-panel 스타일, subtitle 스타일
+- `index.html`: battle-view / growth-panel 구조 분리, growth-subtitle 요소 추가
+- 콘솔 에러 없음 확인
+- **아직 push 안 함 — 나라님 승인 대기**
+
+---
+
 ### Phase 6 + 6.5 — 기본 직업 스킬 및 전투 로그 정리 완료
 
 - `src/core/battle.js`:

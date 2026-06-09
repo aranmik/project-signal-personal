@@ -26,6 +26,8 @@ export function resetBattle() {
 
   gameState.run.stage = 1;
   gameState.run.result = null;
+  gameState.run.bonuses = { atk: 0, maxHp: 0 };
+  gameState.screen = "battle";
 
   gameState.party = createInitialParty();
   gameState.enemies = createInitialEnemies();
@@ -40,10 +42,27 @@ export function resetBattle() {
   renderGame(gameState);
 }
 
+export function applyGrowth(type) {
+  const b = gameState.run.bonuses;
+  let logMsg = "";
+
+  if (type === "atk") {
+    b.atk += 1;
+    logMsg = "성장 선택: 공격 훈련 — 파티 공격력 +1";
+  } else {
+    b.maxHp += 5;
+    logMsg = "성장 선택: 체력 훈련 — 파티 최대 HP +5";
+  }
+
+  gameState.screen = "battle";
+  gameState.logs = [logMsg];
+  advanceStage();
+}
+
 export function advanceStage() {
   gameState.run.stage += 1;
 
-  gameState.party = createInitialParty();
+  gameState.party = createInitialParty(gameState.run.bonuses);
   gameState.enemies = createInitialEnemies();
 
   gameState.battle.tick = 0;
@@ -52,7 +71,7 @@ export function advanceStage() {
   gameState.battle.result = null;
   gameState.run.result = null;
 
-  gameState.logs = [`Stage ${gameState.run.stage} — 전투 시작!`];
+  gameState.logs.push(`Stage ${gameState.run.stage} — 전투 시작!`);
 
   startBattle();
 }
@@ -192,7 +211,8 @@ function checkBattleEnd() {
     gameState.battle.status = "ended";
     if (gameState.run.stage < gameState.run.maxStage) {
       gameState.run.result = "victory";
-      pushLog(`Stage ${gameState.run.stage} 클리어! ▶ 다음 스테이지`);
+      gameState.screen = "growth";
+      pushLog(`Stage ${gameState.run.stage} 클리어! 성장을 선택하세요.`);
     } else {
       gameState.run.result = "clear";
       pushLog("전체 클리어! ▶ 처음부터");

@@ -1,8 +1,28 @@
 export function renderGame(state) {
-  renderHud(state);
-  renderUnits(state);
-  renderLogs(state);
-  renderButton(state);
+  const growthPanel = document.getElementById("growth-panel");
+  const battleView = document.getElementById("battle-view");
+
+  if (state.screen === "growth") {
+    growthPanel.hidden = false;
+    battleView.hidden = true;
+    renderGrowthPanel(state);
+  } else {
+    growthPanel.hidden = true;
+    battleView.hidden = false;
+    renderHud(state);
+    renderUnits(state);
+    renderLogs(state);
+    renderButton(state);
+  }
+}
+
+function renderGrowthPanel(state) {
+  document.getElementById("growth-stage-label").textContent =
+    `Stage ${state.run.stage} 클리어!`;
+  document.getElementById("growth-subtitle").textContent =
+    "파티를 강화하세요.";
+  document.getElementById("growth-log").textContent =
+    state.logs[state.logs.length - 1] ?? "";
 }
 
 function renderButton(state) {

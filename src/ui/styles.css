@@ -4,6 +4,8 @@
   box-sizing: border-box;
 }
 
+[hidden] { display: none !important; }
+
 body {
   background: #0a0a0f;
   color: #eee;
@@ -172,4 +174,59 @@ body {
 #start-button:disabled {
   background: #444;
   cursor: default;
+}
+
+/* 성장 선택 화면 */
+#growth-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 100dvh;
+  padding: 32px 24px;
+  gap: 24px;
+  background: #1a1a2e;
+}
+
+#growth-stage-label {
+  font-size: 20px;
+  font-weight: bold;
+  color: #e0e0e0;
+}
+
+#growth-subtitle {
+  font-size: 14px;
+  color: #aaa;
+  text-align: center;
+}
+
+#growth-log {
+  font-size: 13px;
+  color: #7ec8e3;
+  text-align: center;
+}
+
+#growth-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+#growth-choices button {
+  width: 100%;
+  padding: 18px;
+  background: #16213e;
+  color: #eee;
+  font-size: 15px;
+  font-weight: bold;
+  border: 2px solid #3a6ea8;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+#growth-choices button:active {
+  background: #1e3a5f;
+  border-color: #7ec8e3;
 }

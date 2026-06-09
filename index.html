@@ -10,23 +10,37 @@
   <main id="app">
     <section id="game-frame">
 
-      <header id="top-hud">
-        <div id="stage-label">Stage 1</div>
-        <div id="status-label">Ready</div>
-      </header>
-
-      <section id="battle-field">
-        <div id="enemy-side"></div>
-        <div id="party-side"></div>
+      <!-- 성장 선택 화면 -->
+      <section id="growth-panel" hidden>
+        <div id="growth-stage-label"></div>
+        <div id="growth-subtitle"></div>
+        <p id="growth-log"></p>
+        <div id="growth-choices">
+          <button id="growth-atk">공격 훈련 — 파티 공격력 +1</button>
+          <button id="growth-maxhp">체력 훈련 — 파티 최대 HP +5</button>
+        </div>
       </section>
 
-      <section id="battle-log">
-        <ul id="log-list"></ul>
-      </section>
+      <!-- 전투 화면 -->
+      <div id="battle-view">
+        <header id="top-hud">
+          <div id="stage-label">Stage 1</div>
+          <div id="status-label">Ready</div>
+        </header>
 
-      <footer id="bottom-panel">
-        <button id="start-button">전투 시작</button>
-      </footer>
+        <section id="battle-field">
+          <div id="enemy-side"></div>
+          <div id="party-side"></div>
+        </section>
+
+        <section id="battle-log">
+          <ul id="log-list"></ul>
+        </section>
+
+        <footer id="bottom-panel">
+          <button id="start-button">전투 시작</button>
+        </footer>
+      </div>
 
     </section>
   </main>
