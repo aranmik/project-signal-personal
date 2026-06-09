@@ -134,6 +134,33 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 
 ---
 
+### Phase 8.2 — 세로형 약원근 대각 전장 레이아웃 완료
+
+- `src/ui/styles.css`:
+  - `#battle-field`: `position: relative`, `gap: 0`, padding 조정
+  - `#battle-field::before`: 대각 그라디언트 pseudo-element — 중앙 통로 암시 (z-index 0)
+  - `#enemy-side`: `justify-content: flex-end` — 적 진영 우상단 정렬
+  - `#party-side`: `padding-left: 8px` — 아군 진영 좌하단 유지
+  - `.unit-card` 베이스: `width: auto`, `min-width: 68px`
+  - `#enemy-side .unit-card`: `width: 76px`, padding/font 축소 — 먼 느낌
+  - `#party-side .unit-card`: `width: 100%`, padding 확대 — 가까운 느낌
+- render.js / battle.js 무변경
+- scale/transform 없음 — 좌표/크기 규칙으로만 구현
+- 슬라임 DEAD, 전사 HP 감소, 로그 정상 확인
+- 2×2 슬롯 / 합류 예정 / 파티 강화 현황 유지 확인
+- 콘솔 에러 없음 확인
+- **나라님 미리보기 확인 대기**
+
+---
+
+### 문서 구조 추가 — 공방일지 / 결정 기록
+
+- `WORKSHOP_DIARY.md`: 나라님 공방 개발 여정 기록 (기준점 날만 짧게 작성)
+- `docs/DECISIONS.md`: 설계 판단 결정 기록 (무엇을 왜 결정했는가 중심)
+- 2026-06-09 기준 초기 기록 포함
+
+---
+
 ### Phase 8.1 — 아군 2×2 슬롯 그리드 + 4번째 합류 예정 슬롯 완료
 
 - `src/ui/render.js`: `renderUnits()` — party 3명 순서대로 slot 0~2 배치, `createPendingSlot()` 추가 (slot 3, "합류 예정")

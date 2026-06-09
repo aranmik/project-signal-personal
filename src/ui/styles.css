@@ -63,38 +63,105 @@ body {
   flex-shrink: 0;
 }
 
-/* 중앙 전투 영역 */
+/* === Phase 8.2: 세로형 약원근 대각 전장 === */
+
 #battle-field {
   flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 16px;
-  gap: 12px;
+  padding: 12px 16px 14px;
+  gap: 0;
+  position: relative;
+  overflow: hidden;
 }
 
+/* 중앙 통로 배경 — 대각 그라디언트 */
+#battle-field::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    148deg,
+    transparent 18%,
+    rgba(16, 32, 56, 0.32) 34%,
+    rgba(16, 32, 56, 0.32) 66%,
+    transparent 82%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* 중앙 통로 흐름선 — 조용한 사선 */
+#battle-field::after {
+  content: "";
+  position: absolute;
+  top: 46%;
+  left: -8%;
+  width: 116%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 5%,
+    rgba(44, 88, 132, 0.28) 28%,
+    rgba(44, 88, 132, 0.28) 72%,
+    transparent 95%
+  );
+  transform: rotate(-14deg);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* 적/아군 진영은 lane 위에 */
+#enemy-side,
+#party-side {
+  position: relative;
+  z-index: 1;
+}
+
+/* 적 진영 — 위-오른쪽, 먼 쪽 */
 #enemy-side {
   display: flex;
-  justify-content: center;
-  gap: 12px;
-  min-height: 80px;
+  justify-content: flex-end;
+  gap: 8px;
   align-items: flex-start;
+  padding-right: 12px;
+  padding-top: 4px;
 }
 
+/* 적 카드 세로 엇갈림 — 왼쪽 낮고 오른쪽 높게 (대각 사선 강화) */
+#enemy-side .unit-card:nth-child(1) { margin-top: 12px; }
+#enemy-side .unit-card:nth-child(2) { margin-top: 6px; }
+#enemy-side .unit-card:nth-child(3) { margin-top: 0; }
+
+/* 아군 진영 — 아래-왼쪽, 가까운 쪽 */
 #party-side {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   justify-items: center;
+  padding-left: 12px;
+  padding-bottom: 4px;
 }
 
 /* 로그 영역 */
 #battle-log {
-  padding: 8px 16px;
+  padding: 6px 16px;
   background: #0f0f1a;
-  max-height: 140px;
+  max-height: 80px;
   overflow-y: auto;
   flex-shrink: 0;
+  transition: max-height 0.2s ease;
+}
+
+/* 전투 중 — 로그 2~3줄만 */
+#battle-view[data-status="running"] #battle-log {
+  max-height: 60px;
+}
+
+/* 전투 종료 후 — 로그 더 보이기 */
+#battle-view[data-status="ended"] #battle-log {
+  max-height: 120px;
 }
 
 #log-list {
@@ -112,6 +179,7 @@ body {
   padding-bottom: max(12px, env(safe-area-inset-bottom));
   background: #16213e;
   flex-shrink: 0;
+  transition: padding 0.15s ease;
 }
 
 #start-button {
@@ -124,35 +192,77 @@ body {
   border: none;
   border-radius: 8px;
   cursor: pointer;
+  transition: background 0.15s, padding 0.15s, font-size 0.15s;
 }
 
 #start-button:active {
   background: #c73652;
 }
 
-/* 유닛 카드 */
+/* 전투 중 — 버튼 패시브 상태 (액션 없음) */
+#battle-view[data-status="running"] #bottom-panel {
+  padding: 6px 16px;
+  padding-bottom: max(6px, env(safe-area-inset-bottom));
+}
+
+#battle-view[data-status="running"] #start-button {
+  background: transparent;
+  border: 1px solid #2a3a4a;
+  color: #4a7a9a;
+  font-size: 12px;
+  font-weight: normal;
+  padding: 6px;
+  cursor: default;
+}
+
+#battle-view[data-status="running"] #start-button:active {
+  background: transparent;
+}
+
+/* 유닛 카드 베이스 */
 .unit-card {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 100%;
+  width: auto;
+  min-width: 68px;
   max-width: 160px;
   padding: 8px 6px;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 12px;
   text-align: center;
-  gap: 4px;
+  gap: 3px;
+}
+
+/* 적 카드 — 작고 먼 느낌, 텍스트는 읽히게 */
+#enemy-side .unit-card {
+  width: 88px;
+  padding: 7px 5px;
+}
+
+#enemy-side .unit-name {
+  font-size: 12px;
+}
+
+#enemy-side .unit-hp {
+  font-size: 10px;
+}
+
+/* 아군 카드 — 그리드 셀 채움, 가까운 느낌 (패널감 완화) */
+#party-side .unit-card {
+  width: 100%;
+  padding: 8px 6px;
 }
 
 .unit-card.party {
-  background: #1e3a5f;
-  border: 1px solid #3a6ea8;
+  background: rgba(30, 58, 95, 0.72);
+  border: 1px solid rgba(58, 110, 168, 0.55);
 }
 
 .unit-card.enemy {
-  background: #3b1a1a;
-  border: 1px solid #8a3030;
+  background: rgba(59, 26, 26, 0.72);
+  border: 1px solid rgba(138, 48, 48, 0.55);
 }
 
 .unit-name {

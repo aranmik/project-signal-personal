@@ -9,6 +9,7 @@ export function renderGame(state) {
   } else {
     growthPanel.hidden = true;
     battleView.hidden = false;
+    battleView.dataset.status = state.battle.status;
     renderHud(state);
     renderUnits(state);
     renderLogs(state);
