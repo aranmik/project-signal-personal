@@ -156,7 +156,7 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
   - **`sig-idle` currentTime 85,325ms 연속 running** — 매 tick 재시작 안 함 확정(수정 전이면 1000ms 미만) ✓
   - tempo transition 0.9s 적용, 차오름 보간/리셋 snap ✓
   - 스테이지 2 전환: 중복 0, dead 0(부활), HP 전원 리셋 ✓ / 콘솔 0
-- **나라님 모바일 PASS (2026-06-09) — 이번 commit에 포함**
+- **push 완료 (commit ccb8039) / 나라님 모바일 PASS (2026-06-09)**
 
 ---
 
