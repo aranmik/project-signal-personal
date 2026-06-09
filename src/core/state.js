@@ -10,7 +10,7 @@ function createUnit(template, instanceId) {
   };
 }
 
-function createInitialParty() {
+export function createInitialParty() {
   return [
     createUnit(UNIT_TEMPLATES.party.warrior, "hero-warrior-1"),
     createUnit(UNIT_TEMPLATES.party.priest, "hero-priest-1"),
@@ -18,7 +18,7 @@ function createInitialParty() {
   ];
 }
 
-function createInitialEnemies() {
+export function createInitialEnemies() {
   return [
     createUnit(UNIT_TEMPLATES.enemies.slime, "enemy-slime-1"),
     createUnit(UNIT_TEMPLATES.enemies.goblin, "enemy-goblin-1"),

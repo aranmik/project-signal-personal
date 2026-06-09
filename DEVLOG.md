@@ -62,6 +62,40 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 - 구현 없음, 문서만 작성
 - **아직 push 안 함**
 
+### Phase 4.1 — 전투 관찰 / 재시작 보강 완료
+
+- `src/core/battle.js`: tick interval 500ms → 1000ms 완화
+- `src/core/battle.js`: resetBattle() 함수 추가 (party/enemies 완전 재생성, 상태 초기화)
+- `src/core/battle.js`: 종료 로그에 "다시 시작할 수 있습니다." 추가
+- `src/core/state.js`: createInitialParty / createInitialEnemies export 추가
+- `src/core/main.js`: ended 상태에서 버튼 클릭 시 reset → start 연결
+- `src/ui/render.js`: 버튼 텍스트 ready/running/ended 상태별 처리
+  - ready → 전투 시작 / running → 전투 중... / ended → 다시 시작
+- 로컬 Preview 전 흐름 확인 완료
+  - 1000ms 속도로 전투 흐름 눈으로 따라갈 수 있음 ✓
+  - 슬라임 DEAD → 고블린 DEAD → 늑대 DEAD → 승리 ✓
+  - 종료 후 "다시 시작" 버튼 활성화 ✓
+  - 재시작 시 HP / DEAD / gauge / 로그 정상 초기화 ✓
+  - 두 번째 전투 정상 진행 ✓
+  - 콘솔 에러 없음 ✓
+- **아직 push 안 함 — 나라님 로컬 확인 후 승인 대기**
+
+### Phase 4 — 자동전투 최소 루프 완료
+
+- `src/core/battle.js`: 신규 생성
+  - startBattle / stopBattle / battleTick / selectTarget / performAttack / checkBattleEnd
+  - 500ms 간격 setInterval 루프
+  - actionGauge += speed, >= 100 시 행동
+  - front 우선 타겟 선택, 배열 앞쪽 우선
+  - isDead 판정, tick interval 종료 처리
+- `src/core/main.js`: 전투 시작 버튼 이벤트 연결
+- `src/ui/render.js`: renderButton 추가 (전투 중/승리/패배 버튼 상태), DEAD 카드 표시
+- `src/ui/styles.css`: dead 카드 스타일 (opacity 0.35, DEAD 라벨), 버튼 disabled 스타일
+- 로컬 Preview 전투 실행 확인 완료
+  - 전투 시작 → HP 감소 → DEAD 표시 → 적 전멸 → 승리 정상 동작
+  - 콘솔 에러 없음
+- **아직 push 안 함**
+
 ### 로컬 미리보기 환경 구축 완료
 
 - Node.js v24.16.0 설치

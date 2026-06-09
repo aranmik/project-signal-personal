@@ -2,6 +2,19 @@ export function renderGame(state) {
   renderHud(state);
   renderUnits(state);
   renderLogs(state);
+  renderButton(state);
+}
+
+function renderButton(state) {
+  const btn = document.getElementById("start-button");
+  if (!btn) return;
+  btn.disabled = state.battle.isRunning;
+  btn.textContent =
+    state.battle.status === "running"
+      ? "전투 중..."
+      : state.battle.status === "ended"
+      ? "다시 시작"
+      : "전투 시작";
 }
 
 function renderHud(state) {
@@ -27,15 +40,18 @@ function renderUnits(state) {
 
 function createUnitCard(unit) {
   const card = document.createElement("div");
-  card.className = `unit-card ${unit.team}`;
+  const deadClass = unit.isDead ? " dead" : "";
+  card.className = `unit-card ${unit.team}${deadClass}`;
   card.dataset.instanceId = unit.instanceId;
 
   const label = unit.job || unit.type || unit.role;
+  const hpDisplay = Math.max(0, unit.hp);
 
   card.innerHTML = `
     <div class="unit-name">${unit.name}</div>
     <div class="unit-role">${label}</div>
-    <div class="unit-hp">HP ${unit.hp} / ${unit.maxHp}</div>
+    <div class="unit-hp">HP ${hpDisplay} / ${unit.maxHp}</div>
+    ${unit.isDead ? '<div class="unit-dead-label">DEAD</div>' : ""}
   `;
 
   return card;

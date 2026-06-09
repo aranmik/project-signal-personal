@@ -158,3 +158,18 @@ body {
   font-size: 11px;
   color: #7ec8e3;
 }
+
+.unit-card.dead {
+  opacity: 0.35;
+}
+
+.unit-dead-label {
+  font-size: 10px;
+  color: #ff4444;
+  font-weight: bold;
+}
+
+#start-button:disabled {
+  background: #444;
+  cursor: default;
+}
