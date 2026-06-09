@@ -118,3 +118,43 @@ body {
 #start-button:active {
   background: #c73652;
 }
+
+/* 유닛 카드 */
+.unit-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  padding: 8px 6px;
+  border-radius: 8px;
+  font-size: 12px;
+  text-align: center;
+  gap: 4px;
+}
+
+.unit-card.party {
+  background: #1e3a5f;
+  border: 1px solid #3a6ea8;
+}
+
+.unit-card.enemy {
+  background: #3b1a1a;
+  border: 1px solid #8a3030;
+}
+
+.unit-name {
+  font-size: 13px;
+  font-weight: bold;
+  color: #eee;
+}
+
+.unit-role {
+  font-size: 10px;
+  color: #888;
+}
+
+.unit-hp {
+  font-size: 11px;
+  color: #7ec8e3;
+}
