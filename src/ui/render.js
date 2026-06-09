@@ -48,6 +48,21 @@ function renderButton(state) {
 function renderHud(state) {
   document.getElementById("stage-label").textContent = `Stage ${state.run.stage}`;
   document.getElementById("status-label").textContent = state.battle.status;
+  renderPartyBonus(state.run.bonuses);
+}
+
+function renderPartyBonus(bonuses) {
+  const el = document.getElementById("party-bonus");
+  const { atk, maxHp } = bonuses;
+  if (atk === 0 && maxHp === 0) {
+    el.hidden = true;
+    return;
+  }
+  const parts = [];
+  if (atk > 0) parts.push(`공격 +${atk}`);
+  if (maxHp > 0) parts.push(`최대 HP +${maxHp}`);
+  el.textContent = `파티 강화: ${parts.join(" · ")}`;
+  el.hidden = false;
 }
 
 function renderUnits(state) {

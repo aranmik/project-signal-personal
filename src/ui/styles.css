@@ -53,6 +53,16 @@ body {
   color: #7ec8e3;
 }
 
+/* 파티 강화 현황 */
+#party-bonus {
+  padding: 4px 16px;
+  background: #16213e;
+  font-size: 11px;
+  color: #f0c040;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 /* 중앙 전투 영역 */
 #battle-field {
   flex: 1;

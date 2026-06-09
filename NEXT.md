@@ -13,6 +13,7 @@ Active 개발 프로젝트: SIGNAL_PERSONAL 하나뿐이다.
 Phase 0 ~ 5 push 완료 (commit f467b24).
 Phase 6 + 6.5 push 완료 (commit 3f7b3fd).
 Phase 7 + 7.5 push 완료 (commit 946bcbe).
+Phase 7.8 push 완료 (이번 commit).
 
 ---
 

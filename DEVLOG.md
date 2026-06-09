@@ -134,6 +134,18 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 
 ---
 
+### Phase 7.8 — 파티 강화 현황 표시 완료
+
+- `index.html`: `#party-bonus` 요소 추가 (top-hud 아래)
+- `src/ui/render.js`: `renderPartyBonus(bonuses)` 추가 — 보너스 없으면 hidden, 있으면 "파티 강화: 공격 +N · 최대 HP +N" 표시
+- `src/ui/styles.css`: `#party-bonus` 스타일 — 11px, 노란빛(#f0c040), top-hud 아래 한 줄 띠
+- 표시 규칙: atk > 0 → `공격 +N`, maxHp > 0 → `최대 HP +N`, 둘 다 0 → hidden
+- 패배/처음부터 → `resetBattle()` bonuses 초기화 → 표시 사라짐 확인
+- 콘솔 에러 없음 확인
+- **push 완료 (이번 commit)**
+
+---
+
 ### Phase 7 + 7.5 — 성장 선택 구조 및 가독성 정리 완료
 
 - `src/core/state.js`: `run.bonuses { atk, maxHp }` 추가, `createInitialParty(bonuses)` 반영, version `v0.1-phase7`
@@ -185,3 +197,4 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 | Phase 5 | 완료 (commit f467b24) |
 | Phase 6 + 6.5 | 완료 (commit 3f7b3fd) |
 | Phase 7 + 7.5 | 완료 (commit 946bcbe) |
+| Phase 7.8 | 완료 (이번 commit) |
