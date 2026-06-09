@@ -10,6 +10,16 @@
   <main id="app">
     <section id="game-frame">
 
+      <!-- 타이틀 화면 -->
+      <section id="title-screen" hidden>
+        <div id="title-inner">
+          <p id="title-kicker">개인 공방 / Auto-Battle</p>
+          <h1 id="title-name">Project Signal Personal</h1>
+          <p id="title-tagline">너의 선택으로 강해진다.</p>
+          <button id="title-start" type="button">시작</button>
+        </div>
+      </section>
+
       <!-- 성장 선택 화면 -->
       <section id="growth-panel" hidden>
         <div id="growth-stage-label"></div>
@@ -25,7 +35,10 @@
       <div id="battle-view">
         <header id="top-hud">
           <div id="stage-label">Stage 1</div>
-          <div id="status-label">Ready</div>
+          <div id="hud-right">
+            <span id="status-label">ready</span>
+            <button id="to-title-btn" type="button" aria-label="타이틀로">타이틀</button>
+          </div>
         </header>
 
         <div id="party-bonus" hidden></div>
@@ -33,16 +46,21 @@
         <section id="battle-field">
           <span class="team-label enemy">enemy side</span>
           <span class="team-label party">party side</span>
+          <div id="log-overlay" hidden></div>
           <div id="unit-layer"></div>
+          <div id="fx-layer"></div>
         </section>
 
-        <section id="battle-log">
-          <ul id="log-list"></ul>
-        </section>
-
-        <footer id="bottom-panel">
-          <button id="start-button">전투 시작</button>
-        </footer>
+        <!-- 결과 오버레이 (전투 종료 시에만) -->
+        <div id="result-overlay" hidden>
+          <div id="result-card">
+            <div id="result-title"></div>
+            <div class="result-actions">
+              <button id="result-restart" type="button"></button>
+              <button id="result-title-btn" type="button">타이틀로</button>
+            </div>
+          </div>
+        </div>
       </div>
 
     </section>

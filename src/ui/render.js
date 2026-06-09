@@ -1,20 +1,29 @@
 export function renderGame(state) {
+  const titleScreen = document.getElementById("title-screen");
   const growthPanel = document.getElementById("growth-panel");
   const battleView = document.getElementById("battle-view");
 
+  titleScreen.hidden = true;
+  growthPanel.hidden = true;
+  battleView.hidden = true;
+
+  if (state.screen === "title") {
+    titleScreen.hidden = false;
+    return;
+  }
+
   if (state.screen === "growth") {
     growthPanel.hidden = false;
-    battleView.hidden = true;
     renderGrowthPanel(state);
-  } else {
-    growthPanel.hidden = true;
-    battleView.hidden = false;
-    battleView.dataset.status = state.battle.status;
-    renderHud(state);
-    renderUnits(state);
-    renderLogs(state);
-    renderButton(state);
+    return;
   }
+
+  battleView.hidden = false;
+  battleView.dataset.status = state.battle.status;
+  renderHud(state);
+  renderUnits(state);
+  renderLogOverlay(state);
+  renderResultOverlay(state);
 }
 
 function renderGrowthPanel(state) {
@@ -26,23 +35,27 @@ function renderGrowthPanel(state) {
     state.logs[state.logs.length - 1] ?? "";
 }
 
-function renderButton(state) {
-  const btn = document.getElementById("start-button");
-  if (!btn) return;
-  btn.disabled = state.battle.isRunning;
+// 결과 오버레이 — 전투 종료(클리어/패배)에서만 노출
+function renderResultOverlay(state) {
+  const overlay = document.getElementById("result-overlay");
+  const titleEl = document.getElementById("result-title");
+  const restartBtn = document.getElementById("result-restart");
+  if (!overlay) return;
 
-  if (state.battle.status === "running") {
-    btn.textContent = "전투 중...";
-  } else if (state.battle.status === "ended") {
-    if (state.run.result === "victory") {
-      btn.textContent = "다음 스테이지";
-    } else if (state.run.result === "clear") {
-      btn.textContent = "처음부터";
+  const ended = state.battle.status === "ended";
+  const result = state.run.result;
+
+  if (ended && (result === "clear" || result === "defeat")) {
+    if (result === "clear") {
+      titleEl.textContent = "전체 클리어!";
+      restartBtn.textContent = "처음부터";
     } else {
-      btn.textContent = "다시 시작";
+      titleEl.textContent = "전투 패배...";
+      restartBtn.textContent = "다시 시작";
     }
+    overlay.hidden = false;
   } else {
-    btn.textContent = "전투 시작";
+    overlay.hidden = true;
   }
 }
 
@@ -110,17 +123,112 @@ function createFieldUnit(unit) {
   return wrap;
 }
 
-function renderLogs(state) {
-  const logList = document.getElementById("log-list");
-  logList.innerHTML = "";
+/* =========================================================
+   Action Feedback 01 — source → target 행동선 / 피격 / 숫자
+   루다 action-line-rnd-03-5 문법 이식 (좌표는 실제 유닛 rect에서 계산)
+   ========================================================= */
 
-  const recent = state.logs.slice(-8);
-  recent.forEach((text) => {
-    const li = document.createElement("li");
-    li.textContent = text;
-    logList.appendChild(li);
-  });
+// source anchor: 유닛 박스 내 비율 위치 (확장 가능한 anchor 구조)
+const SOURCE_ANCHORS = {
+  archer: { fx: 0.18, fy: 0.42 },  // bow
+  priest: { fx: 0.82, fy: 0.30 },  // staff tip
+  warrior: { fx: 0.70, fy: 0.50 }, // weapon/front
+  wolf: { fx: 0.16, fy: 0.52 },    // snout (적은 좌측 대면)
+  slime: { fx: 0.5, fy: 0.55 },    // body front
+  goblin: { fx: 0.5, fy: 0.52 },
+};
+const TARGET_HIT = { fx: 0.5, fy: 0.5 };       // body / hit-point
+const TARGET_HEAL = { fx: 0.5, fy: 0.32 };     // heal-point (상단)
 
-  const container = document.getElementById("battle-log");
-  container.scrollTop = container.scrollHeight;
+// 같은 대상 숫자 중복 시 queue offset 판단용
+const recentNumberAt = new Map();
+
+function unitPoint(instanceId, frac, fieldRect) {
+  const el = document.querySelector(
+    `#unit-layer [data-instance-id="${instanceId}"]`
+  );
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return {
+    x: r.left - fieldRect.left + frac.fx * r.width,
+    y: r.top - fieldRect.top + frac.fy * r.height,
+  };
+}
+
+// battle.js에서 행동 발생 시 호출 (전투 계산과 분리된 FX 이벤트)
+export function playActionFx(event) {
+  const { sourceInstanceId, sourceUnitId, targetInstanceId, lineType, isHeal, amount } = event;
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+
+  const fieldRect = field.getBoundingClientRect();
+  const srcFrac = SOURCE_ANCHORS[sourceUnitId] || { fx: 0.5, fy: 0.45 };
+  const tgtFrac = isHeal ? TARGET_HEAL : TARGET_HIT;
+
+  const s = unitPoint(sourceInstanceId, srcFrac, fieldRect);
+  const t = unitPoint(targetInstanceId, tgtFrac, fieldRect);
+  if (!s || !t) return;
+
+  spawnLine(layer, s, t, lineType);
+  spawnPulse(layer, t, isHeal);
+  spawnNumber(layer, t, targetInstanceId, isHeal, amount);
+}
+
+function spawnLine(layer, s, t, lineType) {
+  const dx = t.x - s.x;
+  const dy = t.y - s.y;
+  const len = Math.hypot(dx, dy);
+  const ang = (Math.atan2(dy, dx) * 180) / Math.PI;
+
+  const line = document.createElement("span");
+  line.className = `fx-line fx-line--${lineType}`;
+  line.style.left = `${s.x}px`;
+  line.style.top = `${s.y}px`;
+  line.style.width = `${len}px`;
+  line.style.transform = `rotate(${ang}deg)`;
+  line.addEventListener("animationend", () => line.remove());
+  layer.appendChild(line);
+}
+
+function spawnPulse(layer, t, isHeal) {
+  const p = document.createElement("span");
+  p.className = `fx-pulse${isHeal ? " fx-pulse--heal" : ""}`;
+  p.style.left = `${t.x}px`;
+  p.style.top = `${t.y}px`;
+  p.addEventListener("animationend", () => p.remove());
+  layer.appendChild(p);
+}
+
+function spawnNumber(layer, t, targetInstanceId, isHeal, amount) {
+  const now = performance.now();
+  const last = recentNumberAt.get(targetInstanceId) || 0;
+  const overlap = now - last < 700; // 같은 대상에 거의 동시 → queue offset
+  recentNumberAt.set(targetInstanceId, now);
+
+  const n = document.createElement("span");
+  n.className =
+    `fx-number ${isHeal ? "fx-number--heal" : "fx-number--dmg"}` +
+    (overlap ? " fx-number--queued" : "");
+  n.textContent = `${isHeal ? "+" : "-"}${amount}`;
+  n.style.left = `${t.x}px`;
+  n.style.top = `${t.y}px`;
+  n.addEventListener("animationend", () => n.remove());
+  layer.appendChild(n);
+}
+
+// 로그 오버레이 — 최근 1~2줄만 전장 상단 좌측에 약하게
+function renderLogOverlay(state) {
+  const el = document.getElementById("log-overlay");
+  if (!el) return;
+
+  const recent = state.logs.slice(-2);
+  if (recent.length === 0) {
+    el.hidden = true;
+    return;
+  }
+  el.innerHTML = recent
+    .map((text) => `<div class="log-line">${text}</div>`)
+    .join("");
+  el.hidden = false;
 }

@@ -35,7 +35,7 @@ export const gameState = {
     version: "v0.1-phase7",
   },
 
-  screen: "battle",
+  screen: "title",
 
   run: {
     stage: 1,

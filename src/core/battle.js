@@ -1,6 +1,6 @@
 import { gameState } from "./state.js";
 import { createInitialParty, createInitialEnemies } from "./state.js";
-import { renderGame } from "../ui/render.js";
+import { renderGame, playActionFx } from "../ui/render.js";
 
 let tickTimer = null;
 const TICK_INTERVAL = 1000;
@@ -18,6 +18,23 @@ export function startBattle() {
   tickTimer = setInterval(() => {
     battleTick();
   }, TICK_INTERVAL);
+}
+
+// Shell 01: 타이틀 → 전투 진입 (스테이지 1부터 새 런 시작 후 자동 전투)
+export function startRun() {
+  resetBattle();
+  startBattle();
+}
+
+// Shell 01: 전투/결과 → 타이틀로 복귀
+export function goTitle() {
+  clearInterval(tickTimer);
+  tickTimer = null;
+  gameState.battle.isRunning = false;
+  gameState.battle.status = "ready";
+  gameState.run.result = null;
+  gameState.screen = "title";
+  renderGame(gameState);
 }
 
 export function resetBattle() {
@@ -177,6 +194,12 @@ function attackVerb(unit) {
   return "공격했다";
 }
 
+function attackLineType(attacker) {
+  if (attacker.team === "enemy") return "enemy";
+  if (attacker.id === "archer") return "straight";
+  return "slash"; // 전사(및 근접) — source→target connector
+}
+
 function performAttack(attacker, target) {
   const damage = attacker.atk;
   target.hp -= damage;
@@ -186,6 +209,16 @@ function performAttack(attacker, target) {
   const i = josa(target.name, "이가");
 
   pushLog(`${attacker.name}${josa(attacker.name, "이가")} ${target.name}${ro} ${verb}. ${damage} 피해.`);
+
+  // Action Feedback 01: source → target 행동선 + 피격 + 피해 숫자
+  playActionFx({
+    sourceInstanceId: attacker.instanceId,
+    sourceUnitId: attacker.id,
+    targetInstanceId: target.instanceId,
+    lineType: attackLineType(attacker),
+    isHeal: false,
+    amount: damage,
+  });
 
   if (target.hp <= 0) {
     target.hp = 0;
@@ -201,6 +234,16 @@ function performHeal(healer, target) {
   const actualHeal = target.hp - hpBefore;
 
   pushLog(`${healer.name}${josa(healer.name, "이가")} ${target.name}${josa(target.name, "을를")} 회복했다. (+${actualHeal})`);
+
+  // Action Feedback 01: source → target 회복선 + 회복 숫자
+  playActionFx({
+    sourceInstanceId: healer.instanceId,
+    sourceUnitId: healer.id,
+    targetInstanceId: target.instanceId,
+    lineType: "heal",
+    isHeal: true,
+    amount: actualHeal,
+  });
 }
 
 function checkBattleEnd() {

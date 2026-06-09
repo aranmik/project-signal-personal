@@ -14,21 +14,28 @@ Phase 0 ~ 5 push 완료 (commit f467b24).
 Phase 6 + 6.5 push 완료 (commit 3f7b3fd).
 Phase 7 + 7.5 push 완료 (commit 946bcbe).
 Phase 7.8 ~ 8.3 push 완료 (commit 87d1467).
-Battle Screen Baseline 01 Lock 정돈 완료 — 나라님 모바일 실물 확인 후 push 예정.
-(Phase 8.4 / 8.4a / 8.4b는 unit-card 조정 방향이라 baseline으로 대체됨)
+Action Feedback 01 완료 — 나라님 모바일 확인 후 push 예정.
+(Baseline 01 + Lock은 commit 3af4075로 push 완료. Shell 01 / Formation Spread / Action Feedback 01은 미push)
+
+---
+
+## 화면 Flow (Shell 01 확정)
+
+타이틀(시작) → 전투(자동) → 승리 시 성장 선택 → 다음 스테이지 → 최종 클리어/패배 시 결과 오버레이(처음부터·다시 시작 / 타이틀로)
+
+- 하단 로그/버튼 영역 제거, 로그는 좌상단 2줄 오버레이
+- 상단 HUD: Stage / status / 타이틀 버튼 (향후 속도옵션·설정 자리)
+- 전투 영역 확대(밴드 560), 아군 1.2배 / 적 1.04배
 
 ---
 
 ## 다음 작업 후보
 
-1. **Battle Screen Baseline 01 Lock** — 전장 공간/배경/idle 정돈 (나라님 모바일 확인 대기)
+1. **Battle Screen Shell 01** — 타이틀/전투/결과 Flow + 전투 화면 비율 (나라님 모바일 확인 대기 → push)
    - 기준: `presentation-lab/monster-battlefield-mockup.html` "1. 기본 대치"
-   - 배경: 딥네이비 + 약한 격자(B안). A안(완전 단색)은 토글 1줄
-   - 진영: 전열2/후열2 여지 + 적 간격 확보, 중앙 lane 유지
-   - idle: 공통 약한 호흡(발밑 고정) 재적용
-   - 모바일 확인 후 Lock → push
-2. **Lock 이후 후보 (무대 잠근 뒤 기능 단계)**
-   - 궁수 공격선 / 사제 회복선 / 적 피격 리액션
+   - 배경 B안(딥네이비+격자), A안(단색) 토글 1줄
+2. **Shell 01 push 이후 후보 (무대 잠근 뒤 기능 단계)**
+   - 궁수 공격선 / 사제 회복선 / 적 피격 리액션 (`presentation-lab/action-feedback-prototype-02.html` 재료)
    - 피해·치유 숫자, HP바, 속도게이지, 버프/디버프 표시
    - 캐릭터별 개성 idle / 실루엣 polish
    - slotIndex / 4번째 캐릭터 / 합류 예정 슬롯 재도입은 Phase 9 이후

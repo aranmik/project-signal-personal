@@ -134,6 +134,72 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 
 ---
 
+### Action Feedback 01 — source → target 행동선 / 피격 / 숫자 최소 이식 완료
+
+> 기준: `presentation-lab/action-line-rnd-03-5.html`. FX 완성 아님, source→target 문법 1차 검증.
+
+- **구조**: 전투 계산과 분리된 FX 이벤트. `battle.js` → `playActionFx({sourceInstanceId, sourceUnitId, targetInstanceId, lineType, isHeal, amount})` 호출
+  - `index.html`: `#fx-layer` 추가 (tick 재렌더에 안 지워짐, FX는 animationend로 self-remove)
+  - `render.js`: `playActionFx` export + 헬퍼(spawnLine/spawnPulse/spawnNumber)
+  - 좌표는 **하드코딩 아님** — 실제 유닛 `getBoundingClientRect()`에서 anchor 비율로 계산 (밴드 offset/스케일에 안정적)
+- **anchor 구조** (확장 가능): `SOURCE_ANCHORS`(archer=bow / priest=staff / warrior=weapon / wolf=snout / slime·goblin=body) + target hit(중앙) / heal(상단)
+- **행동선** = source anchor에 left/top, width=거리, `rotate(atan2)`로 target 지향 (transform-origin: left center)
+  - 궁수 `--straight` (연두 얇은 직선 + 화살촉)
+  - 사제 `--heal` (초록 부드러운 선)
+  - 전사 `--slash` (금색 connector + 베기 arc, 원거리 투사체처럼 안 보이게 낮게) — WATCH
+  - 적/늑대 `--enemy` (붉은 낮은 trail + claw)
+- **피격 pulse**: target 주변 14px 원, 화면 흔들림 없음
+- **피해/회복 숫자**: 피해 `-N`(빨강) / 회복 `+N`(초록) float. 같은 대상 700ms 내 중복 시 `--queued`(0.12s 지연 + 우상단 offset)
+- **battle.js 변경**: `performAttack`/`performHeal` 끝에 FX 이벤트 호출 + `attackLineType()` 헬퍼만 추가. **전투 계산 로직(데미지/타겟팅/사망/회복) 무변경**
+- 변경 파일: index.html, src/core/battle.js, src/ui/render.js, src/ui/styles.css, DEVLOG.md, NEXT.md
+- **push 안 함 / 나라님 모바일 확인 대기**
+
+---
+
+### Party Formation Spread — 아군 진영 2x2 공간 확장 정돈 완료
+
+> 좌표 정돈만. 기능/로직/battle.js 무변경, push 없음.
+
+- `src/ui/styles.css` 아군 좌표만 재배치 (전열2/후열2 가상 anchor 기반, 진영 폭·높이 확대):
+  - front-left 전사: `left 14→8 / bottom 30→26` (좌측 벽 근접)
+  - front-right 궁수: `left 118→128 / bottom 18→46` (우측으로 크게 벌림)
+  - back-left 사제: `left 50→44 / bottom 134→152` (후열 중앙-좌, 높게)
+  - back-right(4번째) 가상 anchor ≈ left 168 / bottom 174 — 비표시, 공간만 암시
+- 효과: 캐릭터 간 간격 확대 → 행동선/숫자/HP/속도/버프/스킬 텍스트 붙을 여유 확보
+- 적 진영/중앙 대각 lane 유지, 3명 기준에서도 4인 파티 진영(back-right 빈자리) 읽힘
+- 검증 (프리뷰): 타이틀→전투 배치 확인, 콘솔 0, Flow 무영향
+- **push 안 함 / 나라님 모바일 확인 대기**
+
+---
+
+### Battle Screen Shell 01 — 타이틀/전투/결과 Flow + 전투 화면 비율 정돈 완료
+
+> 기능 확장 아님. 모든 전투 연출/정보 UI가 올라갈 전투 화면 Shell/Flow/비율 확정.
+
+- **Flow 구성**: `타이틀 → 전투 → (성장) → 결과` 분리
+  - `state.js`: `screen` 초기값 `"battle"` → `"title"`
+  - `battle.js`: `startRun()`(타이틀→스테이지1 새 런+자동 전투), `goTitle()`(전투/결과→타이틀 복귀) 추가. 기존 전투 로직/타겟팅/성장/스테이지 무변경
+  - `index.html`: `#title-screen`(제목/태그라인/시작 버튼) 추가
+- **하단 UI 제거**: `#battle-log`(하단 고정 로그) + `#bottom-panel`/`#start-button`(상시 버튼) 완전 제거 → 전투 영역으로 환원
+  - "전투 시작"은 타이틀 `시작` 버튼으로 이동, 진입 시 자동 전투
+  - 전투 중 하단 액자 0
+- **로그 재배치**: 하단 로그 영역 폐지 → `#log-overlay` 최근 2줄만 전장 좌상단(빈 대각 코너)에 약하게 오버레이 (pointer-events:none)
+- **결과 오버레이**: `#result-overlay` — 전투 종료(clear/defeat)에서만 노출
+  - clear: "전체 클리어!" + [처음부터][타이틀로]
+  - defeat: "전투 패배..." + [다시 시작][타이틀로]
+  - victory(중간 스테이지)는 기존대로 성장 화면으로
+- **상단 HUD 유지·정리**: Stage / status 유지, 우측에 `#hud-right`(status + `타이틀` 버튼) — 향후 속도옵션/로그/설정 들어갈 구조
+- **전투 영역 확대 + 캐릭터 확대**:
+  - `#unit-layer` 밴드 470px → 560px (하단 UI 제거분 환원)
+  - 아군 scale 1.06 → 1.2, 적 0.94 → 1.04
+  - 좌표 더 넓게 재배치 (아군 전열2/후열2 사선 + 4번째 자리 여백, 적 간격 확대)
+- **변경 파일**: index.html, src/core/state.js, src/core/battle.js, src/core/main.js, src/ui/render.js, src/ui/styles.css
+- **battle.js 변경**: Flow 함수 2개(startRun/goTitle) 추가만. 전투 계산 로직 무변경
+- 검증 (프리뷰): 타이틀→시작→자동 전투, 로그 오버레이 2줄, 슬라임 사망 처리, 결과 오버레이 로직(eval) 정상, 콘솔 0
+- **push 안 함 / 나라님 모바일 확인 대기**
+
+---
+
 ### Battle Screen Baseline 01 Lock — 전장 공간 / 배경 / idle 정돈 완료
 
 > 기능 추가 아님. 향후 HP바/속도게이지/피해·치유 숫자/버프/스킬 텍스트/행동선/피격이
