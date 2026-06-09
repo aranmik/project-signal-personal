@@ -63,93 +63,399 @@ body {
   flex-shrink: 0;
 }
 
-/* === Phase 8.2: 세로형 약원근 대각 전장 === */
-
-/* battle-view가 game-frame을 꽉 채우도록 — 전장이 화면 주인공 */
+/* battle-view가 game-frame을 꽉 채우도록 */
 #battle-view {
   display: flex;
   flex-direction: column;
   flex: 1;
 }
 
+/* ====================================================================
+   Battle Screen Baseline 01 — 루다 monster-battlefield-mockup "1. 기본 대치" 이식
+   #battle-field = .field (어두운 전장)
+   유닛은 카드가 아니라 전장 위 absolute 좌표로 서 있는 캐릭터
+   ==================================================================== */
+
+/* 배경: 거의 검은 딥네이비 + 아주 약한 시그널식 격자 — 캐릭터가 먼저 보이게 */
 #battle-field {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 12px 16px 14px;
-  gap: 0;
   position: relative;
+  flex: 1;
+  min-height: 360px;
   overflow: hidden;
+  background-color: #0a0d14;
+  background-image:
+    linear-gradient(rgba(120, 150, 190, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 150, 190, 0.04) 1px, transparent 1px);
+  background-size: 30px 30px;
+  background-position: center center;
 }
 
-/* 중앙 통로 배경 — 대각 그라디언트 */
+/* 중앙 lane — 행동선이 지나갈 무대 (아주 약한 세로 발광, 공허함 방지) */
 #battle-field::before {
   content: "";
   position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    148deg,
-    transparent 18%,
-    rgba(16, 32, 56, 0.42) 34%,
-    rgba(16, 32, 56, 0.42) 66%,
-    transparent 82%
-  );
+  left: 50%;
+  top: 6%;
+  bottom: 6%;
+  width: 44%;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at center, rgba(90, 130, 175, 0.07), transparent 72%);
   pointer-events: none;
-  z-index: 0;
 }
 
-/* 중앙 통로 흐름선 — 조용한 사선 */
-#battle-field::after {
-  content: "";
+/* 유닛 무대 — 화면 중앙 밴드로 고정 (배경은 화면 전체, 캐릭터는 일정 구도) */
+#unit-layer {
   position: absolute;
-  top: 46%;
-  left: -8%;
-  width: 116%;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent 5%,
-    rgba(44, 88, 132, 0.42) 28%,
-    rgba(44, 88, 132, 0.42) 72%,
-    transparent 95%
-  );
-  transform: rotate(-14deg);
-  pointer-events: none;
-  z-index: 0;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: min(100%, 470px);
 }
 
-/* 적/아군 진영은 lane 위에 */
-#enemy-side,
-#party-side {
-  position: relative;
+/* 진영 라벨 */
+#battle-field .team-label {
+  position: absolute;
+  color: rgba(154, 168, 184, 0.7);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   z-index: 1;
 }
+#battle-field .team-label.enemy { right: 13px; top: 10px; }
+#battle-field .team-label.party { left: 13px; bottom: 10px; }
 
-/* 적 진영 — 위-오른쪽, 먼 쪽 */
-#enemy-side {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  align-items: flex-start;
-  padding-right: 12px;
-  padding-top: 4px;
+/* 전장 위 유닛 — 카드가 아니라 "서 있는 말" */
+#battle-field .unit {
+  position: absolute;
+  width: 62px;
+  min-height: 88px;
+  text-align: center;
+  z-index: 5;
 }
 
-/* 적 카드 세로 엇갈림 — 왼쪽 낮고 오른쪽 높게 (깊이감 강화) */
-#enemy-side .unit-card:nth-child(1) { margin-top: 20px; }
-#enemy-side .unit-card:nth-child(2) { margin-top: 10px; }
-#enemy-side .unit-card:nth-child(3) { margin-top: 0; }
-
-/* 아군 진영 — 아래-왼쪽, 가까운 쪽 */
-#party-side {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  justify-items: center;
-  padding-left: 12px;
-  padding-bottom: 4px;
+/* 원근감: 아군 가까워서 약간 크게, 적 멀어서 살짝 작게 */
+#battle-field .unit.party {
+  transform: scale(1.06);
+  transform-origin: center bottom;
 }
+#battle-field .unit.enemy {
+  transform: scale(0.94);
+  transform-origin: center top;
+}
+
+/* 이름 / HP — 캐릭터 아래 보조 정보 */
+#battle-field .unit .name {
+  display: block;
+  margin-top: -2px;
+  color: #9aa8b8;
+  font-size: 10px;
+  line-height: 1.1;
+}
+#battle-field .unit .hp {
+  display: block;
+  color: rgba(126, 200, 227, 0.72);
+  font-size: 9px;
+  line-height: 1.3;
+}
+
+/* 사망 상태 */
+#battle-field .unit.dead {
+  opacity: 0.4;
+  filter: grayscale(0.55);
+}
+
+/* 좌표 — 아군 좌하단 / 적 우상단, 서로 대각선 대치
+   아군: 전열2(전사·궁수) / 후열(사제) + 4번째 후열 자리 여유
+   적: 슬라임·고블린·늑대 간격 확보, 정보(HP/속도/숫자)가 붙어도 안 겹치게 */
+#battle-field .warrior-pos { left: 16px; bottom: 24px; }   /* 전열 좌 */
+#battle-field .archer-pos { left: 104px; bottom: 12px; }    /* 전열 우 */
+#battle-field .priest-pos { left: 48px; bottom: 104px; }    /* 후열 좌 (4번째 후열 우측 자리 비워둠) */
+
+#battle-field .slime-pos { right: 102px; top: 56px; }
+#battle-field .goblin-pos { right: 24px; top: 22px; }
+#battle-field .wolf-pos { right: 56px; top: 128px; }
+
+/* 공통 idle — 전투 직전 숨 쉬며 대치하는 느낌 (발밑 고정, 약한 호흡) */
+@keyframes sig-idle {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  50%      { transform: translateY(-1.6px) scaleY(1.025); }
+}
+
+/* 유닛 몸체 컨테이너 */
+#battle-field .avatar,
+#battle-field .monster {
+  position: relative;
+  width: 62px;
+  height: 64px;
+  margin: 0 auto;
+  transform-origin: center bottom;
+  animation: sig-idle 2.6s ease-in-out infinite;
+}
+
+/* 캐릭터별 박자 분산 — 기계적 동기화 방지 */
+#battle-field .avatar.warrior { animation-delay: 0s; }
+#battle-field .avatar.priest { animation-delay: -0.7s; }
+#battle-field .avatar.archer { animation-delay: -1.2s; }
+#battle-field .monster.slime { animation-delay: -0.4s; animation-duration: 3s; }
+#battle-field .monster.goblin { animation-delay: -0.9s; animation-duration: 2.3s; }
+#battle-field .monster.wolf { animation-delay: -1.5s; }
+
+/* 사망 유닛 / 모션 최소화 환경 — idle 정지 */
+#battle-field .unit.dead .avatar,
+#battle-field .unit.dead .monster {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  #battle-field .avatar,
+  #battle-field .monster {
+    animation: none;
+  }
+}
+
+#battle-field .part {
+  position: absolute;
+  display: block;
+}
+
+/* 공통 파츠 — 발밑 그림자 / 베이스 / 자세 / 몸통 / 머리 / 오라 */
+#battle-field .shadow {
+  left: 9px; bottom: 1px;
+  width: 44px; height: 7px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.34);
+}
+#battle-field .base {
+  left: 10px; bottom: 0;
+  width: 42px; height: 7px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+}
+#battle-field .stance {
+  left: 18px; bottom: 7px;
+  width: 26px; height: 8px;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid #526071;
+}
+#battle-field .body {
+  left: 20px; top: 27px;
+  width: 24px; height: 25px;
+  border-radius: 8px 8px 6px 6px;
+  background: #78889a;
+  border: 2px solid #d5dde6;
+}
+#battle-field .head {
+  left: 22px; top: 10px;
+  width: 19px; height: 19px;
+  border-radius: 50%;
+  background: #f0c9a2;
+  border: 2px solid #f8e5c8;
+}
+#battle-field .aura {
+  inset: 4px 5px 2px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  opacity: 0.65;
+}
+
+/* ---- 전사: 넓은 자세 + 큰 방패 ---- */
+#battle-field .warrior .body {
+  left: 17px; width: 29px;
+  background: #6d7685;
+  border-color: #f0c36a;
+}
+#battle-field .warrior .stance {
+  left: 12px; width: 38px;
+  border-left-width: 13px;
+  border-right-width: 13px;
+  border-top-color: #7c6c4a;
+}
+#battle-field .warrior .shield {
+  left: -1px; top: 25px;
+  width: 25px; height: 32px;
+  border-radius: 11px 11px 15px 15px;
+  background: #455160;
+  border: 3px solid #f0c36a;
+  box-shadow: inset 0 0 0 3px rgba(240, 195, 106, 0.22);
+  transform: rotate(-7deg);
+  z-index: 2;
+}
+
+/* ---- 사제: 로브 + 오라 + 지팡이 빛 ---- */
+#battle-field .priest .body {
+  left: 21px; width: 21px; height: 28px;
+  background: #446b62;
+  border-color: #9fe6cf;
+  border-radius: 14px 14px 8px 8px;
+}
+#battle-field .priest .aura {
+  border-color: rgba(159, 230, 207, 0.72);
+  box-shadow: 0 0 16px rgba(159, 230, 207, 0.34);
+}
+#battle-field .priest .staff {
+  right: 4px; top: 11px;
+  width: 4px; height: 46px;
+  border-radius: 4px;
+  background: #d6f8ec;
+  transform: rotate(3deg);
+}
+#battle-field .priest .staff::before {
+  content: "";
+  position: absolute;
+  left: -8px; top: -9px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: 3px solid #9fe6cf;
+  background: rgba(159, 230, 207, 0.2);
+  box-shadow: 0 0 8px rgba(159, 230, 207, 0.32);
+}
+
+/* ---- 궁수: 기울어진 몸체 + 활 + 화살 ---- */
+#battle-field .archer .body {
+  left: 24px; width: 21px;
+  background: #536a3e;
+  border-color: #a8d46a;
+  transform: skewX(-8deg);
+}
+#battle-field .archer .stance {
+  left: 16px; width: 34px;
+  border-left-width: 5px;
+  border-right-width: 16px;
+  border-top-color: #5f753f;
+  transform: skewX(-15deg);
+}
+#battle-field .archer .bow {
+  left: 1px; top: 13px;
+  width: 31px; height: 47px;
+  border-left: 5px solid #a8d46a;
+  border-radius: 50% 0 0 50%;
+  transform: rotate(-13deg);
+}
+#battle-field .archer .arrow {
+  left: 27px; top: 35px;
+  width: 31px; height: 3px;
+  border-radius: 3px;
+  background: #dce8c4;
+  transform: rotate(-14deg);
+  z-index: 3;
+}
+
+/* ---- 슬라임: 둥근 물방울 몸체 + 광택 + 눈 ---- */
+#battle-field .slime .slime-body {
+  left: 7px; bottom: 8px;
+  width: 50px; height: 43px;
+  border-radius: 52% 52% 42% 42%;
+  background: #8fd9b6;
+  border: 3px solid #d8f8eb;
+  box-shadow: inset 0 -10px 0 rgba(52, 120, 100, 0.18);
+}
+#battle-field .slime .shine {
+  left: 19px; top: 21px;
+  width: 12px; height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  transform: rotate(-22deg);
+}
+#battle-field .slime .eye,
+#battle-field .goblin .eye,
+#battle-field .wolf .eye {
+  border-radius: 50%;
+  background: #182027;
+}
+#battle-field .slime .eye { top: 37px; width: 5px; height: 6px; }
+#battle-field .slime .eye.left { left: 23px; }
+#battle-field .slime .eye.right { right: 23px; }
+
+/* ---- 고블린: 양쪽 귀 + 둥근 머리 + 눈 + 입 + 작은 몸 ---- */
+#battle-field .goblin .ear {
+  top: 22px;
+  width: 19px; height: 15px;
+  background: #a8c96b;
+  border: 3px solid #ddeaab;
+  clip-path: polygon(0 50%, 100% 0, 78% 100%);
+}
+#battle-field .goblin .ear.left { left: 4px; transform: rotate(155deg); }
+#battle-field .goblin .ear.right { right: 4px; transform: rotate(25deg); }
+#battle-field .goblin .goblin-head {
+  left: 15px; top: 18px;
+  width: 38px; height: 37px;
+  border-radius: 43% 43% 40% 40%;
+  background: #a8c96b;
+  border: 3px solid #ddeaab;
+  box-shadow: inset 0 -8px 0 rgba(72, 96, 45, 0.18);
+}
+#battle-field .goblin .eye {
+  top: 32px;
+  width: 7px; height: 5px;
+  border-radius: 8px;
+}
+#battle-field .goblin .eye.left { left: 22px; transform: rotate(-10deg); }
+#battle-field .goblin .eye.right { right: 22px; transform: rotate(10deg); }
+#battle-field .goblin .mouth {
+  left: 28px; top: 44px;
+  width: 14px; height: 5px;
+  border-bottom: 2px solid #171d20;
+  border-radius: 0 0 10px 10px;
+}
+#battle-field .goblin .goblin-body {
+  left: 22px; bottom: 9px;
+  width: 25px; height: 18px;
+  border-radius: 8px 8px 5px 5px;
+  background: #6f7c49;
+  border: 2px solid #f0c36a;
+}
+
+/* ---- 늑대: 옆모습 + 꼬리 + 다리 + 귀 + 주둥이 ---- */
+#battle-field .wolf .tail {
+  left: 5px; bottom: 23px;
+  width: 23px; height: 12px;
+  border-radius: 12px 0 0 12px;
+  background: #7d8998;
+  border: 2px solid #d7dee8;
+  transform: rotate(-24deg);
+}
+#battle-field .wolf .wolf-body {
+  left: 18px; bottom: 17px;
+  width: 39px; height: 24px;
+  border-radius: 45% 45% 35% 35%;
+  background: #9ba8bb;
+  border: 3px solid #d7dee8;
+  box-shadow: inset 0 -7px 0 rgba(65, 75, 88, 0.18);
+}
+#battle-field .wolf .wolf-head {
+  right: 7px; top: 18px;
+  width: 31px; height: 28px;
+  border-radius: 42% 46% 36% 42%;
+  background: #9ba8bb;
+  border: 3px solid #d7dee8;
+  transform: rotate(-8deg);
+}
+#battle-field .wolf .snout {
+  right: 0; top: 30px;
+  width: 22px; height: 13px;
+  border-radius: 0 12px 12px 0;
+  background: #d7dee8;
+  transform: rotate(-7deg);
+}
+#battle-field .wolf .ear {
+  top: 9px;
+  width: 13px; height: 16px;
+  background: #9ba8bb;
+  border: 3px solid #d7dee8;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+#battle-field .wolf .ear.left { right: 29px; transform: rotate(-18deg); }
+#battle-field .wolf .ear.right { right: 13px; transform: rotate(16deg); }
+#battle-field .wolf .eye { right: 25px; top: 29px; width: 5px; height: 5px; }
+#battle-field .wolf .leg {
+  bottom: 8px;
+  width: 5px; height: 12px;
+  border-radius: 5px;
+  background: #d7dee8;
+}
+#battle-field .wolf .leg.one { left: 26px; }
+#battle-field .wolf .leg.two { left: 47px; }
 
 /* 로그 영역 */
 #battle-log {
@@ -206,7 +512,7 @@ body {
   background: #c73652;
 }
 
-/* 전투 중 — 버튼 패시브 상태 (액션 없음) */
+/* 전투 중 — 버튼 패시브 상태 */
 #battle-view[data-status="running"] #bottom-panel {
   padding: 6px 16px;
   padding-bottom: max(6px, env(safe-area-inset-bottom));
@@ -226,251 +532,9 @@ body {
   background: transparent;
 }
 
-/* 유닛 카드 베이스 */
-.unit-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: auto;
-  min-width: 68px;
-  max-width: 160px;
-  padding: 8px 6px;
-  border-radius: 6px;
-  font-size: 12px;
-  text-align: center;
-  gap: 3px;
-}
-
-/* 적 카드 — 작고 먼 느낌, 텍스트는 읽히게 */
-#enemy-side .unit-card {
-  width: 88px;
-  padding: 7px 5px;
-}
-
-#enemy-side .unit-name {
-  font-size: 12px;
-}
-
-#enemy-side .unit-hp {
-  font-size: 10px;
-}
-
-/* 아군 카드 — 그리드 셀 채움, 가까운 느낌 (패널감 완화) */
-#party-side .unit-card {
-  width: 100%;
-  padding: 6px 5px;
-}
-
-.unit-card.party {
-  background: rgba(30, 58, 95, 0.72);
-  border: 1px solid rgba(58, 110, 168, 0.55);
-}
-
-.unit-card.enemy {
-  background: rgba(59, 26, 26, 0.72);
-  border: 1px solid rgba(138, 48, 48, 0.55);
-}
-
-.unit-name {
-  font-size: 13px;
-  font-weight: bold;
-  color: #eee;
-}
-
-.unit-role {
-  font-size: 10px;
-  color: #888;
-}
-
-.unit-hp {
-  font-size: 11px;
-  color: #7ec8e3;
-}
-
-.unit-card.dead {
-  opacity: 0.35;
-}
-
-.slot-pending {
-  background: transparent !important;
-  border: 1px dashed #2a3a4a !important;
-  opacity: 1;
-  min-height: 72px;
-}
-
-.slot-pending-label {
-  font-size: 10px;
-  color: #4a6a8a;
-  letter-spacing: 0.05em;
-}
-
-.unit-dead-label {
-  font-size: 10px;
-  color: #ff4444;
-  font-weight: bold;
-}
-
 #start-button:disabled {
   background: #444;
   cursor: default;
-}
-
-/* === Phase 8.3: 유닛 아바타 === */
-
-.unit-avatar {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  position: relative;
-  flex-shrink: 0;
-  margin-top: 2px;
-  margin-bottom: 1px;
-}
-
-#enemy-side .unit-avatar {
-  width: 22px;
-  height: 22px;
-}
-
-#party-side .unit-avatar {
-  width: 28px;
-  height: 28px;
-}
-
-/* 전사 — 파란 원 + 검 십자 */
-.unit-avatar--warrior {
-  background: #1e3e80;
-  border: 2px solid #4a8ae0;
-}
-.unit-avatar--warrior::before {
-  content: "";
-  position: absolute;
-  width: 2px;
-  background: #9ad4f0;
-  top: 14%; bottom: 14%;
-  left: 50%;
-  transform: translateX(-50%);
-}
-.unit-avatar--warrior::after {
-  content: "";
-  position: absolute;
-  height: 2px;
-  background: #9ad4f0;
-  left: 18%; right: 18%;
-  top: 35%;
-}
-
-/* 사제 — 보라 원 + 십자 (회복) */
-.unit-avatar--priest {
-  background: #3a1e62;
-  border: 2px solid #b090ff;
-}
-.unit-avatar--priest::before {
-  content: "";
-  position: absolute;
-  width: 2px;
-  background: #d0b0ff;
-  top: 14%; bottom: 14%;
-  left: 50%;
-  transform: translateX(-50%);
-}
-.unit-avatar--priest::after {
-  content: "";
-  position: absolute;
-  height: 2px;
-  background: #d0b0ff;
-  left: 18%; right: 18%;
-  top: 33%;
-}
-
-/* 궁수 — 초록 원 + 화살촉 */
-.unit-avatar--archer {
-  background: #1a4820;
-  border: 2px solid #4aaa5a;
-}
-.unit-avatar--archer::before {
-  content: "";
-  position: absolute;
-  width: 0; height: 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-bottom: 9px solid #6adf7a;
-  top: 3px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-.unit-avatar--archer::after {
-  content: "";
-  position: absolute;
-  width: 2px;
-  background: #6adf7a;
-  top: 12px; bottom: 4px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-/* 슬라임 — 하늘 물방울 + 하이라이트 */
-.unit-avatar--slime {
-  background: #186a8a;
-  border: 2px solid #4ac8e8;
-  border-radius: 42% 42% 52% 52%;
-}
-.unit-avatar--slime::before {
-  content: "";
-  position: absolute;
-  width: 7px; height: 7px;
-  background: rgba(255, 255, 255, 0.32);
-  border-radius: 50%;
-  top: 3px; left: 4px;
-}
-
-/* 고블린 — 황록 원 + 뾰족 귀 */
-.unit-avatar--goblin {
-  background: #3a5810;
-  border: 2px solid #88cc2a;
-}
-.unit-avatar--goblin::before {
-  content: "";
-  position: absolute;
-  width: 0; height: 0;
-  border-left: 4px solid transparent;
-  border-right: 4px solid transparent;
-  border-bottom: 8px solid #5a8820;
-  top: 0px; left: 2px;
-}
-.unit-avatar--goblin::after {
-  content: "";
-  position: absolute;
-  width: 0; height: 0;
-  border-left: 4px solid transparent;
-  border-right: 4px solid transparent;
-  border-bottom: 8px solid #5a8820;
-  top: 0px; right: 2px;
-}
-
-/* 늑대 — 회색 원 + 뾰족 귀 */
-.unit-avatar--wolf {
-  background: #282838;
-  border: 2px solid #8888aa;
-}
-.unit-avatar--wolf::before {
-  content: "";
-  position: absolute;
-  width: 0; height: 0;
-  border-left: 4px solid transparent;
-  border-right: 4px solid transparent;
-  border-bottom: 9px solid #5a5a7a;
-  top: 0px; left: 3px;
-}
-.unit-avatar--wolf::after {
-  content: "";
-  position: absolute;
-  width: 0; height: 0;
-  border-left: 4px solid transparent;
-  border-right: 4px solid transparent;
-  border-bottom: 9px solid #5a5a7a;
-  top: 0px; right: 3px;
 }
 
 /* 성장 선택 화면 */

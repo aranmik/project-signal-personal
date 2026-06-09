@@ -13,19 +13,27 @@ Active 개발 프로젝트: SIGNAL_PERSONAL 하나뿐이다.
 Phase 0 ~ 5 push 완료 (commit f467b24).
 Phase 6 + 6.5 push 완료 (commit 3f7b3fd).
 Phase 7 + 7.5 push 완료 (commit 946bcbe).
-Phase 7.8 push 완료 (이번 commit).
+Phase 7.8 ~ 8.3 push 완료 (commit 87d1467).
+Battle Screen Baseline 01 Lock 정돈 완료 — 나라님 모바일 실물 확인 후 push 예정.
+(Phase 8.4 / 8.4a / 8.4b는 unit-card 조정 방향이라 baseline으로 대체됨)
 
 ---
 
 ## 다음 작업 후보
 
-1. **Phase 8.3** — 전장 아바타 1차 (나라님 미리보기/모바일 확인 대기)
-2. **Phase 8.3 이후 후보**
-   - 루다 small-size readability polish 확인 후 아바타 CSS polish
-   - 행동선 / 피격 / 회복선은 추후 별도 Phase로 분리
-   - slotIndex / 배치 선택 UI는 Phase 9 이후
+1. **Battle Screen Baseline 01 Lock** — 전장 공간/배경/idle 정돈 (나라님 모바일 확인 대기)
+   - 기준: `presentation-lab/monster-battlefield-mockup.html` "1. 기본 대치"
+   - 배경: 딥네이비 + 약한 격자(B안). A안(완전 단색)은 토글 1줄
+   - 진영: 전열2/후열2 여지 + 적 간격 확보, 중앙 lane 유지
+   - idle: 공통 약한 호흡(발밑 고정) 재적용
+   - 모바일 확인 후 Lock → push
+2. **Lock 이후 후보 (무대 잠근 뒤 기능 단계)**
+   - 궁수 공격선 / 사제 회복선 / 적 피격 리액션
+   - 피해·치유 숫자, HP바, 속도게이지, 버프/디버프 표시
+   - 캐릭터별 개성 idle / 실루엣 polish
+   - slotIndex / 4번째 캐릭터 / 합류 예정 슬롯 재도입은 Phase 9 이후
 
-   > 아직 구현 지시 아님. 루다 presentation-lab polish 결과 확인 후 범위 확정 예정.
+   > 무대를 먼저 잠근 뒤 기능. 다음 범위는 나라/유키 판단 후 확정.
 
    ### 확인된 방향 후보 (유키 메모 2026-06-09)
 

@@ -134,6 +134,129 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 
 ---
 
+### Battle Screen Baseline 01 Lock — 전장 공간 / 배경 / idle 정돈 완료
+
+> 기능 추가 아님. 향후 HP바/속도게이지/피해·치유 숫자/버프/스킬 텍스트/행동선/피격이
+> 올라갈 "기본 무대 공간"을 잠그는 정돈 작업.
+
+- **배경 단순화** (`src/ui/styles.css` `#battle-field`):
+  - 강한 사선 빛/다층 그라디언트 제거 → 거의 검은 딥네이비(`#0a0d14`) + 아주 약한 시그널식 격자(30px, rgba(120,150,190,0.04))
+  - B안(격자) 채택. A안(완전 단색)은 `background-image: none` 한 줄로 토글 가능
+  - `#battle-field::before`: 사다리꼴 강한 빛 → 중앙 세로 약한 발광(공허함 방지, 행동선 무대 암시)
+  - 결과: 캐릭터 실루엣이 배경보다 먼저 읽힘
+- **유닛 무대 밴드** (`#unit-layer`): `inset:0` → 화면 중앙 세로 고정 밴드 `height: min(100%, 470px)`, `top:50% translateY(-50%)`
+  - 배경은 화면 전체를 채우되, 캐릭터 구도는 화면 높이와 무관하게 일정하게 유지
+- **진영 공간 확장** (좌표 재배치):
+  - 아군: 전열2(전사 좌·궁수 우) / 후열(사제 좌) — 후열 우측에 4번째 자리 여백 확보 (전열2/후열2 대비)
+  - 적: 슬라임/고블린/늑대 간격 확대 — 향후 HP/속도/숫자/버프 붙어도 안 겹치게
+  - 중앙 대각 lane 유지 (양 진영 너무 멀지 않게 조정)
+- **공통 idle 재적용**:
+  - `@keyframes sig-idle`: translateY -1.6px + scaleY 1.025, `transform-origin: center bottom` (발밑 고정 호흡감)
+  - 캐릭터별 delay/duration 분산 (warrior 0 / priest -0.7 / archer -1.2 / slime -0.4(3s) / goblin -0.9(2.3s) / wolf -1.5) — 기계적 동기화 방지
+  - 사망 유닛 idle 정지(`.unit.dead .avatar/.monster { animation:none }`), `prefers-reduced-motion` 대응
+- **battle.js / 전투 로직 / 타겟팅 / 성장 / 스테이지 무변경**
+- 검증 (프리뷰): 배경 격자 위 캐릭터 가시성↑, idle computed(sig-idle 2.6s, origin 발밑, 캐릭터별 delay) 확인, 콘솔 0
+- **push 안 함 / 나라님 모바일 실물 확인 대기 (A안 vs B안 포함)**
+
+---
+
+### Battle Screen Baseline 01 — 루다 기본 대치 화면 본게임 이식 완료
+
+> 기존 unit-card 구조를 살리는 작업이 아니라, 기본 전투 화면 기준을 새로 잡는 작업.
+> 기준 파일: `presentation-lab/monster-battlefield-mockup.html`, 장면 "1. 기본 대치"
+
+- **구조 전환**: `unit-card` 슬롯 UI 폐기 → `.field` 위 absolute 좌표 배치 `.unit > .avatar/.monster > .part`
+- `index.html`: `#battle-field` 내부를 `team-label` 2개 + `#unit-layer`로 교체 (`enemy-side`/`party-side` 제거)
+- `src/ui/render.js`:
+  - `createUnitCard()` → `createFieldUnit()` 전면 교체
+  - `AVATAR_PARTS` 맵 — id별 파츠 목록 (warrior 6 / priest 6 / archer 7 / slime 5 / goblin 8 / wolf 10)
+  - 아군 `.avatar`, 적 `.monster`, `${id}-pos` 좌표 클래스, dead 클래스
+  - 이름 + HP를 캐릭터 아래 보조 정보로 (`.name` 10px / `.hp` 9px)
+  - 합류 예정 슬롯은 기본 대치 화면에서 비표시 (Phase 9 슬롯 작업에서 재검토)
+- `src/ui/styles.css`: 전투 영역 CSS 전면 교체 (시안 CSS 그대로 이식, `#battle-field` 스코프)
+  - `#battle-field` = 어두운 전장 (다층 그라디언트), `flex:1`, `min-height:360px`, `overflow:hidden`
+  - `#battle-field::before` = 중앙 원근 사다리꼴 빛 (행동선 공간)
+  - `.unit.party { scale(1.06) }` / `.unit.enemy { scale(0.94) }` — 약한 원근감
+  - 좌표: 아군 좌하단 / 적 우상단 (warrior/priest/archer/slime/goblin/wolf 6좌표)
+  - 공통 파츠 (shadow/base/stance/body/head/aura) + 직업별 (전사 방패 / 사제 지팡이+오라 / 궁수 활+화살) + 몬스터별 (슬라임 물방울 / 고블린 귀+머리 / 늑대 옆모습+꼬리+다리)
+  - 발밑 그림자(shadow/base)로 접지감 유지
+  - 기존 `.unit-card`, `.unit-avatar--*`, `#enemy-side`, `#party-side`, `.slot-pending`, `avatar-bob` 전부 제거
+- **battle.js / 전투 로직 / 타겟팅 / 성장 / 스테이지 무변경**
+- 검증 (프리뷰):
+  - 전장 위 6캐릭터 직접 배치 / 카드 UI 없음 ✓
+  - 사망 시 dead 클래스 (opacity 0.4 + grayscale) ✓
+  - Stage 1 → 성장(공격 +1) → Stage 2 정상 전환, 6유닛 재배치 ✓
+  - 모든 스테이지 동일 6캐릭터(미지 id 없음) 확인 → 좌표 하드코딩 안전
+  - 콘솔 에러 0
+- idle: 기본 대치(정지 화면) 충실 위해 이번 baseline에서는 미적용 (후속에서 재검토)
+- **push 안 함 / 나라님 모바일 확인 대기**
+
+---
+
+### Phase 8.4b — 루다 아바타 파츠 본게임 이식 / 원형 아이콘 구조 탈피 완료
+
+- `src/ui/render.js`: `createUnitCard()`에 `<div class="avatar-fig"></div>` 추가 — 파츠 레이어
+- `src/ui/styles.css`: 아바타 섹션 전체 교체 (Phase 8.3/8.4 구조 → 8.4b 구조)
+  - **인간형 (전사/사제/궁수)**: 컨테이너 투명, `avatar-fig::before` = 몸통, `avatar-fig::after` = 머리, `container::before` = 무기
+    - 전사: 파란 갑옷 몸통 + 헬멧 머리 + 빛나는 사선 검
+    - 사제: 좁은 로브 몸통 + 머리 + 왼쪽 지팡이 발광 (`box-shadow` 상단 글로우)
+    - 궁수: 슬림 몸통 + 머리 + 오른쪽 활 호형 (`border-radius` arc)
+  - **몬스터 (슬라임/고블린/늑대)**: 얼굴/몸체 형태 유지, `avatar-fig::before` = 눈, `::after` = 세부
+    - 고블린: 큰 귀 (`rotate(-28deg)/rotate(28deg)`) + 눈 box-shadow
+    - 늑대: 큰 귀 + 호박색 눈 (`#d4b880`) + 주둥이 힌트 타원
+    - 슬라임: 물방울 형태 + 눈 + 광택 하이라이트
+- battle.js 무변경
+- idle 2.0px 유지 (구조 변경에도 자연스럽게 동작)
+- Stage 1 전투 시작 / 유닛 배치 / 합류 예정 정상 확인
+- 콘솔 에러 없음 확인
+- **나라님 모바일 확인 대기**
+
+---
+
+### Phase 8.4a — 루다 mockup 감성 회복 / 전장형 아바타 배치 완료
+
+- `src/ui/styles.css`:
+  - **카드 패널감 ↓↓**: `.unit-card.party` bg `rgba(30,58,95,0.72)` → `rgba(20,40,68,0.26)` / border opacity `0.55` → `0.16`
+  - `.unit-card.enemy` bg `rgba(59,26,26,0.72)` → `rgba(48,16,16,0.26)` / border opacity `0.55` → `0.16`
+  - border-radius `6px` → `4px` — 카드 느낌 약화
+  - **아바타 크기 ↑**: party `28px` → `44px` / enemy `22px` → `32px` / base `26px` → `38px`
+  - **텍스트 보조화**: `.unit-name` 13px bold → 11px weight500 / `.unit-role` 10px → 9px / `.unit-hp` 11px → 10px / card gap `3px` → `2px`
+  - **idle bob 약화**: 2.5px → 2.0px (오래 봐도 산만하지 않은 강도)
+  - **궁수 심볼 clip-path 변환**: border-trick(px) → `clip-path: polygon` 비율 방식으로 — 아바타 크기에 무관하게 자동 스케일
+  - **슬라임 눈 크기별 오버라이드**: enemy(32px)/party(44px) 각각 box-shadow offset 조정
+- render.js / battle.js 무변경
+- party 44px 아바타 확인 (JS computed style 검증)
+- dead 유닛 idle 없음 / fade 정상 확인
+- 합류 예정 슬롯 조용히 유지 확인
+- 콘솔 에러 없음 확인
+- **나라님 모바일 확인 대기**
+
+---
+
+### Phase 8.4 — 아바타 polish + 공통 idle 1차 완료
+
+- `src/ui/styles.css`:
+  - `@keyframes avatar-bob`: 0%→45%→100% 상하 2.5px bob idle 정의
+  - `.unit-avatar` 베이스에 `animation: avatar-bob infinite` 공통 적용
+  - 캐릭터별 박자 분산 — duration 2.0s~3.0s / delay 음수값으로 즉시 mid-cycle 시작
+    - 전사 2.4s/0s / 사제 2.8s/-0.7s / 궁수 2.2s/-1.1s
+    - 슬라임 3.0s/-0.4s / 고블린 2.0s/-0.9s / 늑대 2.6s/-1.5s
+  - dead 유닛 / 합류 예정 슬롯 — idle 없음 (animation: none)
+  - `prefers-reduced-motion: reduce` — idle 전체 제거
+  - **Phase 8.4 몬스터 얼굴 polish** (small-size readability):
+    - 슬라임: `::before` 재활용 → 작은 눈 2개 (3.5px, box-shadow로 오른쪽 눈) 양쪽 넓게
+    - 고블린: `background: radial-gradient` 레이어 2개로 눈 추가 — `::before/::after` 귀 유지
+    - 늑대: `background: radial-gradient` 레이어 2개로 눈 추가 — `::before/::after` 귀 유지
+    - 눈 간격: 고블린 30%↔70%, 늑대 32%↔68% — 가운데 몰림 방지
+- render.js / battle.js 무변경
+- 6종 idle animation 적용 확인 (JS computed style 검증)
+- 합류 예정 슬롯 idle 없음 확인
+- Stage 1 → 성장 → Stage 2 → Stage 3 흐름 유지 확인
+- 콘솔 에러 없음 확인
+- **나라님 모바일 확인 대기**
+
+---
+
 ### Phase 8.3 — 전장 아바타 표시 구조 1차 완료
 
 - `src/ui/render.js`: `createUnitCard()`에 `<div class="unit-avatar unit-avatar--{id}">` 추가

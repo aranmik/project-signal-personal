@@ -66,53 +66,48 @@ function renderPartyBonus(bonuses) {
   el.hidden = false;
 }
 
+// Battle Screen Baseline 01: 전장 위 absolute 유닛 배치
+// 루다 monster-battlefield-mockup.html "1. 기본 대치" 파츠 구조 이식
+const AVATAR_PARTS = {
+  warrior: ["aura", "base", "stance", "body", "head", "shield"],
+  priest: ["aura", "base", "stance", "body", "head", "staff"],
+  archer: ["aura", "base", "stance", "body", "head", "bow", "arrow"],
+  slime: ["shadow", "slime-body", "shine", "eye left", "eye right"],
+  goblin: ["shadow", "ear left", "ear right", "goblin-body", "goblin-head", "eye left", "eye right", "mouth"],
+  wolf: ["shadow", "tail", "wolf-body", "leg one", "leg two", "wolf-head", "ear left", "ear right", "snout", "eye"],
+};
+
 function renderUnits(state) {
-  const enemySide = document.getElementById("enemy-side");
-  const partySide = document.getElementById("party-side");
+  const layer = document.getElementById("unit-layer");
+  if (!layer) return;
+  layer.innerHTML = "";
 
-  enemySide.innerHTML = "";
-  partySide.innerHTML = "";
-
-  state.enemies.forEach((unit) => {
-    enemySide.appendChild(createUnitCard(unit));
-  });
-
-  state.party.forEach((unit, i) => {
-    const card = createUnitCard(unit);
-    card.dataset.slot = i;
-    partySide.appendChild(card);
-  });
-
-  partySide.appendChild(createPendingSlot());
+  state.party.forEach((unit) => layer.appendChild(createFieldUnit(unit)));
+  state.enemies.forEach((unit) => layer.appendChild(createFieldUnit(unit)));
 }
 
-function createPendingSlot() {
-  const card = document.createElement("div");
-  card.className = "unit-card party slot-pending";
-  card.dataset.slot = "3";
-  card.innerHTML = `<div class="slot-pending-label">합류 예정</div>`;
-  return card;
-}
-
-function createUnitCard(unit) {
-  const card = document.createElement("div");
+function createFieldUnit(unit) {
+  const id = unit.id || "unknown";
+  const isParty = unit.team === "party";
   const deadClass = unit.isDead ? " dead" : "";
-  card.className = `unit-card ${unit.team}${deadClass}`;
-  card.dataset.instanceId = unit.instanceId;
 
-  const label = unit.job || unit.type || unit.role;
+  const wrap = document.createElement("div");
+  wrap.className = `unit ${unit.team} ${id}-pos${deadClass}`;
+  wrap.dataset.instanceId = unit.instanceId;
+
+  const figClass = isParty ? "avatar" : "monster";
+  const parts = (AVATAR_PARTS[id] || [])
+    .map((p) => `<span class="part ${p}"></span>`)
+    .join("");
   const hpDisplay = Math.max(0, unit.hp);
-  const avatarId = unit.id || "unknown";
 
-  card.innerHTML = `
-    <div class="unit-avatar unit-avatar--${avatarId}"></div>
-    <div class="unit-name">${unit.name}</div>
-    <div class="unit-role">${label}</div>
-    <div class="unit-hp">HP ${hpDisplay} / ${unit.maxHp}</div>
-    ${unit.isDead ? '<div class="unit-dead-label">DEAD</div>' : ""}
+  wrap.innerHTML = `
+    <div class="${figClass} ${id}">${parts}</div>
+    <span class="name">${unit.name}</span>
+    <span class="hp">${hpDisplay}/${unit.maxHp}</span>
   `;
 
-  return card;
+  return wrap;
 }
 
 function renderLogs(state) {
