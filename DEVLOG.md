@@ -134,6 +134,49 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 
 ---
 
+### LBS 04A Micro Polish — Hero Formation Right Shift 완료
+
+> LBS 04A 모바일 PASS 방향. 영웅 진형 하단부가 살짝 좌측에 치우쳐 보여 무게중심만 미세 보정.
+> 큰 재배치 아님 — 하단 좌측 60 영역 안에서 하단/우하단 2지점만 살짝 오른쪽으로.
+
+- (`styles.css`) 가장 아래 영웅 **전사 left 2→34(+32px)**, 우하단 영웅 **수호자 left 100→130(+30px)**. archer/priest 미변경.
+- 측정: 전사 cx 33→65, 수호자 cx 131→161. party maxRight 198 (<좌측60 경계 234) → **영역 철학 유지**(중앙으로 안 끌어옴). 박스 겹침 0(HP바/속도게이지 겹침 없음). 행동선은 적으로 향해 파티에 안 쌓임.
+- 적/보스/행동선/battle 계산 무변경. console error/warn 0.
+- **push 안 함 / 나라님이 직접 GitHub push + 모바일 Pages 확인 (LBS 04A 최종 PASS 전 미세 폴리시)**
+
+---
+
+### Living Battle Screen 04A — Asymmetric Field Partition + Formation Layout 완료
+
+> 핵심 문장: "전장은 상하로 나뉘고, 적은 상단 우측 70 영역을, 아군은 하단 좌측 60 영역을 넓게 사용한다.
+> 구석 정렬이 아니라 영역 활용이 핵심이다." 최우선 기준 = 전투 장면의 구도와 호흡.
+> 04의 "구석 몰기"를 "상하 절반 분할 + 비대칭 영역 활용"으로 재정의. 행동선은 유지(배치/구도/호흡 중심).
+
+**좌표계**: unit-layer 390×560. 상단 절반(top 0~280)=적 / 하단 절반(bottom 0~280, 즉 top 280~560)=아군.
+
+**1) 적 — 상단 절반의 우측 70(x 117~390) 영역 활용** (`styles.css`)
+- 기본 3체: goblin(right24/top10) / slime(right162/top60, 30:70 경계 근처) / wolf(right70/top140). 측정 cx 197~335·cy 50~180(전부 top half), 우상 한 점이 아니라 영역 폭·높이 활용.
+- 프리뷰 슬롯 6개를 우측70 영역에 3열×2행 spread(전부 x≥126). 다수전 측정 cx 159~339·전부 top half.
+
+**2) 아군 — 하단 절반의 좌측 60(x 0~234) 영역 활용, 사선** (`styles.css`)
+- 전사(left2/bottom8) → 수호자(left100/bottom44) → 궁수(left30/bottom108) → 사제(left122/bottom172)로 지그재그 사선.
+- 측정 cx 33~153·cy 342~506(전부 bottom half)·right≤190(<234). 영역 전체를 4인이 나눠 사선으로 펼침, 높이 차로 HP/게이지/FX 겹침 없이 개별 판독.
+
+**3) 중앙 공간/호흡**: party top(297)~enemy bottom(219) 사이 mid 밴드 + 대각이 행동선 통로. 각 진영이 자기 영역을 채워 "구석 아이콘+빈 공간"이 아니라 "각자 영역을 잡고 대치하는 전장"으로 읽힘(중앙 slime·priest가 허전함 방지).
+
+**4) 보스** (`styles.css`): slot-boss right72/top24, scale 2.8. 측정 box left200~right374(16px 여백, 클리핑 없음)·top24~bottom237(상단 절반 내, 파티 영역 안 침범)·cx287 → 상단 우측 70 영역을 장악하는 큰 적(모서리/중앙 허수아비 아님).
+
+**5) 속도 UI 단순화 2x/MAX** (`battle.js`)
+- SPEED_STEPS를 [2x, MAX]로 축소(1x/3x/4x 제거). 일반=2x, 장기 관찰=MAX. 배열만 축소·저위험, startTicking 단일 진입점/계산식/MIN_TICK 60ms 무변경.
+- 런타임 계측: 2x=250ms / MAX=60ms, 전투 중 토글 시 startTicking 정확 재무장.
+
+- 변경 파일: `src/core/battle.js`, `src/ui/styles.css`, `DEVLOG.md`, `NEXT.md` (state.js 기본 2x는 04에서 이미 적용 / render.js·행동선 무변경)
+- 검증 (프리뷰, 측정 + 스크린샷): 적 top-half·우측70 / 아군 bottom-half·좌측60 영역 비율 측정 일치 ✓, 구도 스크린샷(기본/보스/다수전/정예) 양호 ✓, 보스 영역 장악·클리핑 없음 ✓, 속도 2x↔MAX·MAX 60ms ✓, 정식 플로우(전멸→growth victory) 무결 ✓, console error/warn 0
+- **WATCH**: 좌하단 전사 박스 left x−4(scale 1.2)로 화면 끝 근접(아바타 안 잘림). 다수전 6체는 영역 내 spread지만 정예/다수에서 상단이 다소 빽빽 — 모바일 체감 보고 간격 미세조정 여지. 속도 단순화로 1x/3x/4x 제거됨(필요 시 SPEED_STEPS 복원 가능).
+- **push 안 함 / 나라님이 직접 GitHub push + 모바일 Pages 확인**
+
+---
+
 ### Living Battle Screen 04 — Diagonal Formation + Curved Action Space 완료
 
 > 핵심 문장: "유닛은 양 끝으로 물러나고, 중앙은 행동선의 무대가 된다."
@@ -170,7 +213,7 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
   - 보스 우측 여백 2px(scale 2.8)로 빠듯 — 더 키우면 우측 클리핑 위험. 현 2.8이 안전 상한 근처.
   - 좌하단 전사 박스 좌측이 x−2(scale 1.2 영향)로 살짝 화면 끝에 닿음 — 아바타 자체는 안 잘리나 모바일에서 답답하면 left 미세 +조정.
   - slash 곡률 강(bowMax82) — 모바일에서 너무 휘어 보이면 70 전후로 미세조정 카드. heal 곡선 방향은 파티 내 단거리라 좌상 말림은 약함(필요 시 후속).
-- **push 안 함 / 나라님이 직접 GitHub push + 모바일 Pages 확인**
+- **push 완료 (commit a7dea46 "test: preview diagonal battle layout") — 나라님이 직접 commit+push (2026-06-10). 모바일 확인 후 04A로 이어짐.**
 
 ---
 

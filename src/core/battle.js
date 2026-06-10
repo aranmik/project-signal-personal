@@ -9,11 +9,10 @@ const BASE_TICK_INTERVAL = 500; // 1x 기준 tick 간격
 // Combat Breath Preview 01: 배속 스텝 1x→2x→3x→4x→MAX 순환.
 //   MAX는 무제한이 아니라 "안전 상한"을 둔 빠른 모드 — interval을 MIN_TICK_INTERVAL로 floor한다.
 //   (배수만 크게 두고 interval을 캡 → FX/전투 루프가 무너지지 않고 연출도 보이는 빠른 모드)
+//   Living Battle Screen 04A: 모바일 운용상 속도 선택지를 2x/MAX로 단순화.
+//   일반 전투 = 2x, 장기 관찰/무한 스테이지 = MAX. (구조는 그대로 — 배열만 축소, 저위험)
 const SPEED_STEPS = [
-  { mult: 1, label: "1x" },
   { mult: 2, label: "2x" },
-  { mult: 3, label: "3x" },
-  { mult: 4, label: "4x" },
   { mult: 10, label: "MAX" },
 ];
 const MIN_TICK_INTERVAL = 60; // MAX 안전 상한 — 이 밑으로는 내려가지 않는다(≈16 tick/s)

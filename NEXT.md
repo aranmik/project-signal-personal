@@ -26,10 +26,14 @@ Action Line Variety 01 (행동선 경로/성격 다양화 — 타입별 변주) 
   · acting cue: 행동 직전 발밑 고정 scale pop으로 "나야 지금!" → 선 → 반응. 시선 acting>line>reaction>idle.
   · 프리뷰(개발용): 배속 1x~MAX(60ms floor), #preview-bar 다수전(6체)/정예(2+3)/보스(1체). 전투 계산/정식 시스템 무변경.
   · 배속 1x→2x→3x→4x→MAX(안전 상한 60ms floor) 순환, tempo는 --tick 변수로 정합. 프리뷰: 다수전(6체)/정예혼합(정예2+일반3)/보스단독(1체). #preview-bar로 선택, 프리뷰는 종료해도 battle 화면 유지. 전투 계산/정식 시스템 무변경. (WATCH: 백그라운드 스로틀로 MAX 실속도는 모바일 포그라운드에서 최종 확인)
-Living Battle Screen 04 (Diagonal Formation + Curved Action Space) 완료 — 나라님이 직접 push + 모바일 확인 예정.
+Living Battle Screen 04 (Diagonal Formation + Curved Action Space) push 완료 (commit a7dea46, 나라님 직접 commit+push 2026-06-10) — 모바일 확인 후 04A로 이어짐.
   · 핵심: "유닛은 양 끝으로 물러나고, 중앙은 행동선의 무대가 된다." 아군 좌하단 사선 진형 / 적 우상단 / 중앙 비움.
   · 기본 속도 2x. melee slash 곡률 강화(bowMax 36→82, 바나나슛 — 우하 빈 공간 경유). 궁수 직선·사제 부드러움·몬스터 거침 대비 유지.
   · 보스 scale 2.8 우상단(클리핑 없음). battle.js/전투계산/정식 시스템 무변경.
+Living Battle Screen 04A (Asymmetric Field Partition + Formation Layout) 완료 — 나라님이 직접 push + 모바일 확인 예정.
+  · 핵심: "전장은 상하로 나뉘고, 적은 상단 우측 70 / 아군은 하단 좌측 60 영역을 넓게 사용. 구석 정렬 아닌 영역 활용." 최우선=구도/호흡.
+  · 좌표계 unit-layer 390×560. 적=상단절반(top0~280)·우측70(x≥117) spread / 아군=하단절반·좌측60(x≤234) 사선 spread. 중앙 mid밴드=행동선 통로(허전하지 않게).
+  · 속도 UI 단순화: SPEED_STEPS=[2x,MAX](1x/3x/4x 제거). 보스 우측70 영역 장악(클리핑 없음). 행동선/battle계산/정식 시스템 무변경.
 
 ---
 

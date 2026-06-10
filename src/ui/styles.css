@@ -159,34 +159,38 @@ body {
    적: 슬라임·고블린·늑대 간격 확보, 정보(HP/속도/숫자)가 붙어도 안 겹치게 */
 /* 아군 진영 — 전열2/후열2 가상 anchor 기반, 진영 공간을 넓게 사용
    front-left 전사 / front-right 궁수 / back-left 사제 / back-right(4번째) 예비 */
-/* Living Battle Screen 04: 파티를 최대한 좌하단으로 물러난 "사선 진형"으로.
-   전사(맨 아래 좌) → 수호자(우상) → 궁수(좌상) → 사제(맨 위 우)로 지그재그 사선.
-   중앙(아군~적 사이)을 행동선 무대로 비우고, 유닛은 좌하단 구석에 모은다.
-   x 최대 ~164(<중앙 195), 서로 높이를 달리해 HP/게이지/FX 겹침 회피. */
-#battle-field .warrior-pos { left: 4px; bottom: 12px; }      /* 맨 아래-좌 (구석) */
-#battle-field .guardian-pos { left: 80px; bottom: 52px; }    /* 우상 (전사 위) */
-#battle-field .archer-pos { left: 14px; bottom: 116px; }     /* 좌상 */
-#battle-field .priest-pos { left: 92px; bottom: 168px; }     /* 맨 위-우 (사선 끝) */
+/* Living Battle Screen 04A: 상하 50/50 분할 후 각 진영이 "자기 영역을 넓게" 사용.
+   좌표계 = unit-layer 390×560. 상단(top 0~280)=적, 하단(bottom 0~280)=아군.
+   구석 몰기가 아니라 영역 활용 — 아군은 하단 "좌측 60(x 0~234)" 영역 전체를 사선으로 펼친다.
+   전사(맨아래-좌) → 수호자(아래-우) → 궁수(중-좌) → 사제(위-우, 중앙선 근처)로 지그재그 사선.
+   x 0~196(<좌측60 경계 234), 높이 차로 HP/게이지/FX 겹침 회피·개별 판독. */
+/* LBS 04A Micro Polish: 하단/우하단 무게중심을 좌측60 영역 안에서 살짝 오른쪽으로.
+   가장 아래(전사) +32px, 우하단(수호자) +30px만 이동 — 사선/간격/영역 철학 유지. */
+#battle-field .warrior-pos { left: 34px;  bottom: 8px; }    /* 하단 끝(아래) — 살짝 우로 */
+#battle-field .guardian-pos { left: 130px; bottom: 44px; }  /* 아래-우 — 살짝 우로 */
+#battle-field .archer-pos { left: 30px;  bottom: 108px; }   /* 중간-좌 (유지) */
+#battle-field .priest-pos { left: 122px; bottom: 172px; }   /* 위-우 (유지) */
 
-/* 적은 최대한 우상단으로. 중앙을 비우고 우상 구석에 대치 구도. */
-#battle-field .goblin-pos { right: 12px; top: 16px; }   /* 우상 구석 */
-#battle-field .slime-pos { right: 92px; top: 44px; }
-#battle-field .wolf-pos { right: 40px; top: 120px; }
+/* 적은 상단 "우측 70(x 117~390)" 영역 전체를 넓게 사용(우상 한 점 정렬 아님).
+   top 10~150으로 상단 절반의 폭·높이를 활용해 영역감을 살린다. */
+#battle-field .goblin-pos { right: 24px;  top: 10px; }   /* 우-상 */
+#battle-field .slime-pos { right: 162px; top: 60px; }    /* 영역 좌측(중앙선 근처)-중 */
+#battle-field .wolf-pos { right: 70px;  top: 140px; }    /* 우-하(상단 절반 안) */
 
 /* ===================================================================
    Combat Breath Preview 01 — 프리뷰 전투 장면 (개발/확인용, 정식 배치 아님)
    적 zone(우상단) 안에 slot 그리드로 다수 배치 + 정예/보스 크기 class.
    =================================================================== */
-/* Living Battle Screen 04: 다수전도 최대한 우상단으로 — 오른쪽 컬럼 위주 spread.
-   leftmost(right≤120)도 x≥206으로 중앙(195) 우측에 머물러 중앙 무대를 비운다. */
-#battle-field .enemy-slot-0 { right: 10px;  top: 14px; }
-#battle-field .enemy-slot-1 { right: 86px;  top: 26px; }
-#battle-field .enemy-slot-2 { right: 22px;  top: 90px; }
-#battle-field .enemy-slot-3 { right: 100px; top: 104px; }
-#battle-field .enemy-slot-4 { right: 40px;  top: 168px; }
-#battle-field .enemy-slot-5 { right: 118px; top: 178px; }
-/* 보스 단독 — 우상단에 크게 버티는 구도(중앙 허수아비 아님) */
-#battle-field .enemy-slot-boss { right: 58px; top: 36px; }
+/* Living Battle Screen 04A: 다수전도 상단 "우측 70(x 117~390)" 영역을 꽉 차게 — 3열×2행 spread.
+   leftmost도 x≥126(>30/70 경계 117)으로 영역 안에 머물되, 우상 한 점에 몰지 않고 폭을 활용. */
+#battle-field .enemy-slot-0 { right: 20px;  top: 10px; }
+#battle-field .enemy-slot-1 { right: 102px; top: 26px; }
+#battle-field .enemy-slot-2 { right: 186px; top: 12px; }
+#battle-field .enemy-slot-3 { right: 50px;  top: 118px; }
+#battle-field .enemy-slot-4 { right: 134px; top: 138px; }
+#battle-field .enemy-slot-5 { right: 200px; top: 110px; }
+/* 보스 단독 — 상단 우측 70 영역을 "장악"하는 큰 적(모서리/중앙 허수아비 아님) */
+#battle-field .enemy-slot-boss { right: 72px; top: 24px; }
 
 /* 정예/보스처럼 보이게 — 크기만 키운다(.unit.enemy scale 오버라이드, 발밑/머리 고정).
    임시 스타일: 정식 정예/보스 시스템 아님. */
