@@ -91,12 +91,13 @@ export const gameState = {
     tick: 0,
     isRunning: false,
     result: null,
-    // Battle Speed 01 → Combat Breath Preview 01: 전투 배속. 기본 1x.
+    // Battle Speed 01 → Combat Breath Preview 01/02: 전투 배속.
     //   speed = interval 계산용 배수, speedLabel = 표시(1x/2x/3x/4x/MAX).
     //   세션 내 사용자 선택으로 유지(스테이지/재시작에서 reset 안 함).
-    speed: 1,
-    speedLabel: "1x",
-    tickInterval: 500, // 현재 tick 간격(ms) — renderHud가 --tick CSS 변수로 반영
+    //   Living Battle Screen 04: 모바일 확인 결과 2x가 기본 체감에 가장 적합 → 기본값 2x.
+    speed: 2,
+    speedLabel: "2x",
+    tickInterval: 250, // 현재 tick 간격(ms) — renderHud가 --tick CSS 변수로 반영
     // Combat Breath Preview 01: 프리뷰 장면 활성 시 종류(null=정식 런)
     previewKind: null,
   },

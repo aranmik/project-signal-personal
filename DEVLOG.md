@@ -134,6 +134,46 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 
 ---
 
+### Living Battle Screen 04 — Diagonal Formation + Curved Action Space 완료
+
+> 핵심 문장: "유닛은 양 끝으로 물러나고, 중앙은 행동선의 무대가 된다."
+> 아군을 최대한 좌하단 사선 진형으로, 적을 최대한 우상단으로 밀어 중앙을 행동선 무대로 비운다.
+> melee 곡률을 강화해 빈 공간(우하/좌상)을 경유하는 "바나나슛"을 만든다. 기본 속도 2x.
+
+**1) 기본 속도 2x** (`state.js`)
+- 모바일 확인 결과 2x가 기본 체감에 적합 → `battle.speed=2 / speedLabel="2x" / tickInterval=250`. MAX 유지, 3x/4x도 순환에 유지. startTicking 단일 진입점·전투 계산식 무변경.
+
+**2) 아군 좌하단 사선 진형** (`styles.css` party-pos)
+- 4인을 좌하단 구석으로 물러난 지그재그 사선으로: 전사(left4/bottom12 맨아래좌) → 수호자(left80/bottom52 우상) → 궁수(left14/bottom116 좌상) → 사제(left92/bottom168 맨위우).
+- 측정(unit-layer 390×560): party x −2~160(전부 중앙 195 좌측), 2열 사선 형태. 높이를 달리해 HP/게이지/FX 겹침 회피, 개별 판독 가능.
+
+**3) 적 우상단 진형** (`styles.css` enemy-pos / enemy-slot / boss)
+- 기본 3체: goblin(right12/top16) / slime(right92/top44) / wolf(right40/top120) — 우상 구석 대치.
+- 프리뷰 슬롯 6개를 우상단 위주로 재배치(전부 x≥206, 중앙 우측 유지). 다수전 6체 측정 minX 209.
+- 보스: scale 2.4→**2.8**, slot-boss right58/top36 — 우상단에서 크게 버티는 구도. 측정 box left214~right388(2px 여백)·top184~bottom396, **클리핑 없음**.
+
+**4) 중앙 행동선 무대 확보**
+- 위 배치로 party(좌하단)~enemy(우상단) 사이 중앙 대각 band가 비워짐 → 행동선/궤적이 묻히지 않는 무대.
+
+**5) melee slash 곡률 강화(바나나슛)** (`render.js` LINE_STYLE)
+- slash bowF 0.26→**0.36**, bowMax 36→**82**, bowMin 16→26. ghost 배수 1.7→1.4(과한 잔상 방지).
+- 정적 계측: 전사→적 slash 제어점이 chord 중점에서 (+96,+64)px 우하로 불룩 → 빈 우하 공간을 경유해 휘어 target에 꽂힘. **궁수 straight는 offset ~8px(거의 직선) — 직선↔곡선 대비 유지.**
+- heal bowF/bowMax 소폭↑(0.30/44 → 0.34/56)로 회복선도 곡선이 더 보이게(부드러움 유지).
+
+- 변경 파일: `src/core/state.js`, `src/ui/styles.css`, `src/ui/render.js`, `DEVLOG.md`, `NEXT.md` (battle.js 무변경)
+- 검증 (프리뷰, 측정 + 정적/라이브 스크린샷):
+  - 파티 좌하단 사선 / 적 우상단 / 중앙 비움 스크린샷 확인 ✓
+  - slash 바나나 곡선 + 궁수 직선 대비 + heal 부드러운 곡선 시각 확인 ✓
+  - 보스 2.8 우상단 버티는 구도, 클리핑 없음 ✓ / 다수전 6체·정예 혼합 우상단 유지 ✓
+  - 기본 속도 2x, 정식 플로우(전멸→growth victory) 무결 ✓, console error/warn 0
+- **WATCH**:
+  - 보스 우측 여백 2px(scale 2.8)로 빠듯 — 더 키우면 우측 클리핑 위험. 현 2.8이 안전 상한 근처.
+  - 좌하단 전사 박스 좌측이 x−2(scale 1.2 영향)로 살짝 화면 끝에 닿음 — 아바타 자체는 안 잘리나 모바일에서 답답하면 left 미세 +조정.
+  - slash 곡률 강(bowMax82) — 모바일에서 너무 휘어 보이면 70 전후로 미세조정 카드. heal 곡선 방향은 파티 내 단거리라 좌상 말림은 약함(필요 시 후속).
+- **push 안 함 / 나라님이 직접 GitHub push + 모바일 Pages 확인**
+
+---
+
 ### Combat Breath Preview 01 — 배속 확장 + 장면 프리뷰 스테이지 완료
 
 > 정식 콘텐츠 추가 아님. 전투의 호흡·화면 밀도를 나라가 직접 보며 판단하기 위한 개발/프리뷰용 작업.

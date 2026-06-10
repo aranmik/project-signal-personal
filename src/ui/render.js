@@ -364,10 +364,12 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 let __fxLineSeq = 0;
 
 // 타입별 경로/끝점 성격. bowF=길이비례 곡률, flip=휘는 방향, head=끝 장식.
+//   Living Battle Screen 04: 궁수는 직선성 유지, 전사/수호자(slash)만 곡률을 적극 강화
+//   ("바나나슛" — 빈 공간(우하/좌상)을 살짝 경유해 휘어 꽂힘). 직선↔곡선 대비 유지.
 const LINE_STYLE = {
   straight: { bowF: 0.05, bowMin: 3,  bowMax: 8,  flip: 1,  head: "arrow", draw: true },
-  slash:    { bowF: 0.26, bowMin: 16, bowMax: 36, flip: 1,  head: "slash", draw: true, ghost: true },
-  heal:     { bowF: 0.30, bowMin: 18, bowMax: 44, flip: -1, head: "spark", draw: false },
+  slash:    { bowF: 0.36, bowMin: 26, bowMax: 82, flip: 1,  head: "slash", draw: true, ghost: true },
+  heal:     { bowF: 0.34, bowMin: 20, bowMax: 56, flip: -1, head: "spark", draw: false },
   enemy:    { bowF: 0.16, bowMin: 8,  bowMax: 22, flip: 1,  head: "claw",  draw: false, rough: true },
 };
 
@@ -415,7 +417,7 @@ function spawnLine(layer, s, t, lineType) {
 
   // slash: 더 크게 휜 잔상 스트로크(베기 sweep 느낌) — 본선 뒤에 깔린다
   if (cfg.ghost) {
-    const gbow = bow * 1.7;
+    const gbow = bow * 1.4;
     const gx = (s.x + t.x) / 2 + px * gbow;
     const gy = (s.y + t.y) / 2 + py * gbow;
     const ghost = document.createElementNS(SVG_NS, "path");

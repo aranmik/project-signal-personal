@@ -159,29 +159,34 @@ body {
    적: 슬라임·고블린·늑대 간격 확보, 정보(HP/속도/숫자)가 붙어도 안 겹치게 */
 /* 아군 진영 — 전열2/후열2 가상 anchor 기반, 진영 공간을 넓게 사용
    front-left 전사 / front-right 궁수 / back-left 사제 / back-right(4번째) 예비 */
-#battle-field .warrior-pos { left: 8px; bottom: 26px; }     /* front-left (좌측 벽 근접) */
-#battle-field .archer-pos { left: 128px; bottom: 46px; }    /* front-right (우측으로 크게 벌림) */
-#battle-field .priest-pos { left: 44px; bottom: 152px; }    /* back-left (후열 중앙-좌, 높게) */
-/* Party Join 01: back-right(4번째) 수호자 — 예비 anchor를 실제로 채운다 */
-#battle-field .guardian-pos { left: 158px; bottom: 168px; } /* back-right (후열 우측, 궁수 위) */
+/* Living Battle Screen 04: 파티를 최대한 좌하단으로 물러난 "사선 진형"으로.
+   전사(맨 아래 좌) → 수호자(우상) → 궁수(좌상) → 사제(맨 위 우)로 지그재그 사선.
+   중앙(아군~적 사이)을 행동선 무대로 비우고, 유닛은 좌하단 구석에 모은다.
+   x 최대 ~164(<중앙 195), 서로 높이를 달리해 HP/게이지/FX 겹침 회피. */
+#battle-field .warrior-pos { left: 4px; bottom: 12px; }      /* 맨 아래-좌 (구석) */
+#battle-field .guardian-pos { left: 80px; bottom: 52px; }    /* 우상 (전사 위) */
+#battle-field .archer-pos { left: 14px; bottom: 116px; }     /* 좌상 */
+#battle-field .priest-pos { left: 92px; bottom: 168px; }     /* 맨 위-우 (사선 끝) */
 
-#battle-field .slime-pos { right: 110px; top: 64px; }
-#battle-field .goblin-pos { right: 20px; top: 26px; }
-#battle-field .wolf-pos { right: 56px; top: 152px; }
+/* 적은 최대한 우상단으로. 중앙을 비우고 우상 구석에 대치 구도. */
+#battle-field .goblin-pos { right: 12px; top: 16px; }   /* 우상 구석 */
+#battle-field .slime-pos { right: 92px; top: 44px; }
+#battle-field .wolf-pos { right: 40px; top: 120px; }
 
 /* ===================================================================
    Combat Breath Preview 01 — 프리뷰 전투 장면 (개발/확인용, 정식 배치 아님)
    적 zone(우상단) 안에 slot 그리드로 다수 배치 + 정예/보스 크기 class.
    =================================================================== */
-/* 다수전/혼합 — 적 zone에 느슨한 3열×2행 spread (의도적으로 빽빽하게: 과밀 확인용) */
-#battle-field .enemy-slot-0 { right: 14px;  top: 22px; }
-#battle-field .enemy-slot-1 { right: 96px;  top: 40px; }
-#battle-field .enemy-slot-2 { right: 174px; top: 26px; }
-#battle-field .enemy-slot-3 { right: 36px;  top: 150px; }
-#battle-field .enemy-slot-4 { right: 120px; top: 196px; }
-#battle-field .enemy-slot-5 { right: 188px; top: 138px; }
-/* 보스 단독 — 적 zone 중앙 상단 */
-#battle-field .enemy-slot-boss { right: 150px; top: 70px; }
+/* Living Battle Screen 04: 다수전도 최대한 우상단으로 — 오른쪽 컬럼 위주 spread.
+   leftmost(right≤120)도 x≥206으로 중앙(195) 우측에 머물러 중앙 무대를 비운다. */
+#battle-field .enemy-slot-0 { right: 10px;  top: 14px; }
+#battle-field .enemy-slot-1 { right: 86px;  top: 26px; }
+#battle-field .enemy-slot-2 { right: 22px;  top: 90px; }
+#battle-field .enemy-slot-3 { right: 100px; top: 104px; }
+#battle-field .enemy-slot-4 { right: 40px;  top: 168px; }
+#battle-field .enemy-slot-5 { right: 118px; top: 178px; }
+/* 보스 단독 — 우상단에 크게 버티는 구도(중앙 허수아비 아님) */
+#battle-field .enemy-slot-boss { right: 58px; top: 36px; }
 
 /* 정예/보스처럼 보이게 — 크기만 키운다(.unit.enemy scale 오버라이드, 발밑/머리 고정).
    임시 스타일: 정식 정예/보스 시스템 아님. */
@@ -191,7 +196,7 @@ body {
   z-index: 6;
 }
 #battle-field .unit.enemy.mon-boss {
-  transform: scale(2.4);
+  transform: scale(2.8); /* Living Battle Screen 04: 더 크게 우상단에서 버티는 보스 */
   transform-origin: center top;
   z-index: 6;
 }
