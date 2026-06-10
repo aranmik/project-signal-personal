@@ -166,7 +166,7 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
   - 프리뷰 미리보기 환경은 백그라운드 탭 타이머 스로틀링으로 3x+/MAX의 실제 tick 속도가 느리게 측정됨(코드 interval은 정확). **실제 MAX 호흡·다수전 FX 과밀은 나라 포그라운드 모바일에서 최종 확인 필요.**
   - 다수전(6체)에서 동시 행동선이 늘어 과밀할 수 있음 — 호흡 확인이 목적이라 의도된 노출. 정식화 시 동시 FX 상한/희석 검토.
   - MAX(60ms)에서 line fade(0.78s)·number 누적 가능 → 정식 채택 아니므로 이번엔 허용, 필요 시 fade 추가 단축 카드.
-- **push 안 함 / 나라님이 직접 GitHub push + 모바일 Pages 확인**
+- **push 완료 (commit 1a8c0ac) — 나라님 별도 승인 후 묶음 push (2026-06-10). 모바일 Pages 확인 예정.**
 
 ---
 
@@ -191,7 +191,7 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
   - **2x**: acting duration 0.34→0.26s, 동시 acting 최대 2(0개 62.6%/1개 35%/2개 2.4%) → 과밀 아님. 선/숫자 최대 4(이전과 동일) ✓
   - 행동선 4종 구분 유지(spawnLine 무변경), Stage 1→2 진행 정상, console error/warn 0
 - **WATCH**: 무기/활/지팡이 파츠 단위 "반짝"은 직업별 파츠 구조가 달라 이번엔 제외(전체 brightness pop로 대체) — 추후 파츠 flash 추가 여지. 2x에서 acting(0.26s)+line(0.62s fade)+number 겹침은 현재 무난하나 유닛 수 증가 시 재점검.
-- **push 안 함 / 나라님이 직접 GitHub push + 모바일 Pages 확인**
+- **push 완료 (commit 1a8c0ac) — 나라님 별도 승인 후 묶음 push (2026-06-10). 모바일 Pages 확인 예정.**
 
 ---
 
@@ -225,7 +225,7 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
   - Stage 1→성장→2→성장→3 **CLEAR** 완주(새 FX로 회귀 없음) ✓
   - console error/warn 0
 - **WATCH**: 2x에서 느린 fade(0.78s) + slash ghost로 동시 선이 드물게 3~4개까지. 현재 가독 무난하나 모바일에서 시끄러우면 2x fade 단축(0.78→0.7s) 또는 ghost 생략 카드. heal 입자(circle 2개)·enemy jitter가 모바일 작은 화면 가독성 해치지 않는지 확인 필요.
-- **push 안 함 / 나라님 모바일 확인 대기**
+- **push 완료 (commit 1a8c0ac) — 나라님 별도 승인 후 묶음 push (2026-06-10). 모바일 Pages 확인 예정.**
 
 ---
 
