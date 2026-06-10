@@ -142,7 +142,7 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 - (`styles.css`) 가장 아래 영웅 **전사 left 2→34(+32px)**, 우하단 영웅 **수호자 left 100→130(+30px)**. archer/priest 미변경.
 - 측정: 전사 cx 33→65, 수호자 cx 131→161. party maxRight 198 (<좌측60 경계 234) → **영역 철학 유지**(중앙으로 안 끌어옴). 박스 겹침 0(HP바/속도게이지 겹침 없음). 행동선은 적으로 향해 파티에 안 쌓임.
 - 적/보스/행동선/battle 계산 무변경. console error/warn 0.
-- **push 안 함 / 나라님이 직접 GitHub push + 모바일 Pages 확인 (LBS 04A 최종 PASS 전 미세 폴리시)**
+- **push 완료 (commit 3431261 "feat: refine asymmetric battle field") — 나라님 승인, 2026-06-10. LBS 04A + Micro Polish 묶음.**
 
 ---
 
@@ -173,7 +173,7 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 - 변경 파일: `src/core/battle.js`, `src/ui/styles.css`, `DEVLOG.md`, `NEXT.md` (state.js 기본 2x는 04에서 이미 적용 / render.js·행동선 무변경)
 - 검증 (프리뷰, 측정 + 스크린샷): 적 top-half·우측70 / 아군 bottom-half·좌측60 영역 비율 측정 일치 ✓, 구도 스크린샷(기본/보스/다수전/정예) 양호 ✓, 보스 영역 장악·클리핑 없음 ✓, 속도 2x↔MAX·MAX 60ms ✓, 정식 플로우(전멸→growth victory) 무결 ✓, console error/warn 0
 - **WATCH**: 좌하단 전사 박스 left x−4(scale 1.2)로 화면 끝 근접(아바타 안 잘림). 다수전 6체는 영역 내 spread지만 정예/다수에서 상단이 다소 빽빽 — 모바일 체감 보고 간격 미세조정 여지. 속도 단순화로 1x/3x/4x 제거됨(필요 시 SPEED_STEPS 복원 가능).
-- **push 안 함 / 나라님이 직접 GitHub push + 모바일 Pages 확인**
+- **push 완료 (commit 3431261 "feat: refine asymmetric battle field") — 나라님 승인, 2026-06-10. Micro Polish와 묶음.**
 
 ---
 
