@@ -134,6 +134,101 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 
 ---
 
+### Combat Breath Preview 01 — 배속 확장 + 장면 프리뷰 스테이지 완료
+
+> 정식 콘텐츠 추가 아님. 전투의 호흡·화면 밀도를 나라가 직접 보며 판단하기 위한 개발/프리뷰용 작업.
+> 배속을 늘려 호흡을, 프리뷰 장면으로 다수전/정예전/보스전 구도를 확인한다. 전투 계산 로직·정식 시스템 무변경.
+
+**1) 배속 확장 1x→2x→3x→4x→MAX** (`core/battle.js`, `state.js`)
+- `SPEED_STEPS`[1,2,3,4,MAX(배수10)] 순환(`cycleSpeed`, 기존 toggleSpeed 대체). `state.battle.speed`(배수)/`speedLabel`(표시)/`tickInterval` 추가.
+- **MAX 안전 상한**: interval = `max(MIN_TICK_INTERVAL 60ms, BASE 500 / speed)`. MAX(배수10)는 50ms이지만 60ms로 floor → 무제한 아님, 루프/FX 안 무너지고 연출도 보이는 빠른 모드. 계측: 1x=500 / 2x=250 / 3x=167 / 4x=125 / MAX=60ms.
+- `startTicking` 단일 진입점 유지(interval 중복 0), tick 간격만 조정 — **전투 계산식 무변경**.
+
+**2) 배속 정합 CSS** (`render.js`, `styles.css`)
+- renderHud: 버튼 라벨(1x~MAX) + `field.dataset.fast`(>1x="1") + `--tick`(현재 interval) CSS 변수.
+- 기존 `[data-speed="2"]` 오버라이드(tempo/FX/acting) → 일반 `[data-fast="1"]`로 일괄. tempo fill transition은 `var(--tick)`로 모든 배속 cadence에 자동 정합(1x~MAX 끊김 없음).
+
+**3) 프리뷰 장면 3종** (`state.js createPreviewEnemies`, `battle.js startPreview`, `index.html`, `render.js`)
+- 현재 몬스터 데이터 재사용, 수량/크기/HP만 조정(정식 스테이지/밸런스/보상/신규몬스터 없음). 적은 `slot`으로 배치(`enemy-slot-N`/`enemy-slot-boss`), `sizeClass`로 크기.
+  - **Normal Max**: 일반 몬스터 6체(slime/goblin/wolf 혼합) — 다수전 과밀 확인.
+  - **Elite Mix**: 정예처럼 보이는 큰 몬스터 2(scale 1.5 + 약한 붉은 오라, HP↑) + 일반 3 — 시선 중심/혼합 구도 확인.
+  - **Boss Solo**: 보스처럼 보이는 큰 몬스터 1체 단독(scale 2.4, HP 520, 중앙) — 단독 대형전이 비어 보이지 않는지 확인.
+- 개발용 `#preview-bar`(다수전/정예/보스/기본) — battle 화면 상단. main.js에서 `startPreview(kind)` 연결, "기본"=정식 startRun.
+- **프리뷰 종료 분기**(`checkBattleEnd`): `previewKind` 설정 시 전멸/클리어해도 성장/결과로 안 넘어가고 battle 화면 유지(나라가 바로 다른 장면 선택). 정식 런은 `resetBattle`에서 previewKind=null → 기존대로 victory→growth(무영향 확인).
+
+- 변경 파일: `index.html`, `src/core/state.js`, `src/core/battle.js`, `src/core/main.js`, `src/ui/render.js`, `src/ui/styles.css`, `DEVLOG.md`, `NEXT.md`
+- 검증 (프리뷰, 직접 import + computed style + 스크린샷):
+  - 배속 순환: 1x→2x→3x→4x→MAX→1x, interval/라벨/data-fast/--tick 모두 정확, MAX 60ms floor ✓
+  - 3종 장면: 6체 / 정예2(1.5)+일반3 / 보스1(2.4·HP520) 배치·크기·오라 스크린샷 확인 ✓
+  - 프리뷰 종료 → battle 화면 유지(growth/결과 안 뜸) / 정식 런 → victory→growth 정상 ✓
+  - 어떤 배속에서도 화면 안 깨짐, console error/warn 0
+- **WATCH**:
+  - 프리뷰 미리보기 환경은 백그라운드 탭 타이머 스로틀링으로 3x+/MAX의 실제 tick 속도가 느리게 측정됨(코드 interval은 정확). **실제 MAX 호흡·다수전 FX 과밀은 나라 포그라운드 모바일에서 최종 확인 필요.**
+  - 다수전(6체)에서 동시 행동선이 늘어 과밀할 수 있음 — 호흡 확인이 목적이라 의도된 노출. 정식화 시 동시 FX 상한/희석 검토.
+  - MAX(60ms)에서 line fade(0.78s)·number 누적 가능 → 정식 채택 아니므로 이번엔 허용, 필요 시 fade 추가 단축 카드.
+- **push 안 함 / 나라님이 직접 GitHub push + 모바일 Pages 확인**
+
+---
+
+### Action Emphasis 01 — Source Actor Acting Cue 완료
+
+> 새 기능 아님. Action Line Variety 01로 행동선 4종은 구분됐으나, source actor가 "내가 지금 행동한다" 선언 없이
+> idle 중에 선만 발사돼 전투가 비어 보임. 행동선은 결과 — 그 전에 행동자 선언을 넣어 3단계로 읽히게:
+> ① 행동자 선언 → ② 행동선 발사 → ③ 대상 반응. 시선 우선순위 acting > line > target reaction > idle.
+
+**구현** (`ui/render.js`, `ui/styles.css`)
+- **acting cue** (`cueActor`): 행동 시작 직전 source unit의 `.fig-react`(reaction 전용 transform 레이어)에 `acting`/`acting-soft` 클래스. 발밑 고정(`transform-origin: center bottom`) scale **1.12 pop + 살짝 들썩(-2px) + 짧은 brightness** → "나야 지금!". `.unit`(위치)·`.avatar`(idle)와 합성, 위치 안 밀림. unit-layer reconcile 이후(rAF) 적용 — idle 끊김 없음.
+  - 공격/몬스터 = `sig-act`(또렷, 0.34s) / 회복 = `sig-act-soft`(부드럽고 따뜻, 0.4s). 2x는 `data-speed="2"`로 0.26s/0.3s 단축(리듬만).
+- **선언 → 선 선행 간격** (`playActionFx`): cueActor 먼저 호출 후 line/pulse/number/target-reaction을 짧게 지연 발사(1x 120ms / 2x 80ms, `field.dataset.speed` 기반). → "선언이 먼저, 선은 결과"가 읽힘.
+- **우선순위 처리** (`actingUnits` Set): 행동 선언 중인 유닛 추적. ① cueActor가 진행 중이던 react-hit/heal 제거 후 acting 적용 ② 같은 유닛이 acting 중일 때 들어오는 target reaction은 `reactUnit`에서 **생략**(시선 충돌 방지). animationend에서 클래스·Set 정리.
+- 좌표는 `.unit` wrap rect 기준이라 acting scale(자식 `.fig-react`)이 행동선 s/t에 영향 없음 — anchor/source→target 구조 무변경.
+
+- 변경 파일: `src/ui/render.js`, `src/ui/styles.css`, `DEVLOG.md`, `NEXT.md` (battle.js/배속/anchor/DOM reconcile 무변경)
+- 검증 (프리뷰, MutationObserver 시퀀스 + computed style + 정적 캡처 + rAF 과밀):
+  - **순서**: 단일 행동에서 ACTING(t≈3ms) → LINE(t≈135ms) → REACT-HIT(t≈138ms) — 선언이 선보다 ~132ms 선행 ✓
+  - **우선순위**: 사제 자가회복(source=target) 시 source=`acting-soft`만, target react-heal **생략** 확인 ✓
+  - **시각**: 전사 acting 피크 고정 캡처 — 다른 유닛보다 크고 밝게 pop, 발밑 고정으로 위치 안 밀림 ✓
+  - **2x**: acting duration 0.34→0.26s, 동시 acting 최대 2(0개 62.6%/1개 35%/2개 2.4%) → 과밀 아님. 선/숫자 최대 4(이전과 동일) ✓
+  - 행동선 4종 구분 유지(spawnLine 무변경), Stage 1→2 진행 정상, console error/warn 0
+- **WATCH**: 무기/활/지팡이 파츠 단위 "반짝"은 직업별 파츠 구조가 달라 이번엔 제외(전체 brightness pop로 대체) — 추후 파츠 flash 추가 여지. 2x에서 acting(0.26s)+line(0.62s fade)+number 겹침은 현재 무난하나 유닛 수 증가 시 재점검.
+- **push 안 함 / 나라님이 직접 GitHub push + 모바일 Pages 확인**
+
+---
+
+### Action Line Variety 01 — 행동선 경로/성격 다양화 완료
+
+> 새 기능 아님. 기존 Signal R&D와 비교 시 본게임이 밋밋한 원인 = 배치가 이미 대각선인데
+> `spawnLine`이 모든 타입을 동일한 약한 Q곡선 + 동일 화살촉으로 그려 선의 성격이 비슷.
+> 목표: source→target·anchor·실제 유닛 위치 기준 유지하되, 행동 타입별로 경로/끝점 성격을 다르게 → 타격감·공간감.
+
+**구조** (`ui/render.js`)
+- `LINE_STYLE` 맵 신설: 타입별 `bowF`(길이비례 곡률)·`bowMin/Max`·`flip`(휘는 방향)·`head`·`draw`·`ghost`·`rough`. 좌표는 전부 실제 s,t·len·수직벡터에서 파생 — **하드코딩 좌표 없음**.
+- `appendHead(svg, type, t, ang)` + `makeNS` 헬퍼: arrow/slash/spark/claw 4종 끝점 장식을 SVG로 생성. 끝 접선 방향(t−control)으로 회전.
+- 시작 투명→끝 선명 linearGradient는 전 타입 공통 유지. dash-draw 타입만 `pathLength=1` 정규화(점선 타입은 실제 dash라 정규화 안 함).
+
+**타입별 표현**
+- **궁수 straight**: 거의 직선(bowF 0.05, 3~8px) + 날카로운 채운 화살촉(arrow) + dash 드로인 → "꽂혔다". 연두 `rgba(217,232,134,.92)`.
+- **전사/수호자 slash**: 큰 호(0.26, 16~36px) + 1.7배 더 휜 잔상 스트로크(`.fx-path--ghost`) + 가로지르는 베기 교차컷(`.fx-cut` 2획) → 칼자국(직선 빔 아님). amber, 본선 3px.
+- **사제 heal**: 반대로 휘는 부드러운 곡선(−0.30, 18~44px) + 점선(`stroke-dasharray:1 6`) + 따뜻한 +·입자 점(spark, opacity-only 부드러운 등장) → 회복(공격과 다른 결). 민트 `rgba(150,226,198,.9)`.
+- **몬스터 enemy**: 거친 흔들림 곡선(0.16, len기반 jitter) + 거친 점선(`5 3`) + 갈퀴 외곽선 쐐기(claw) → 어둡고 다른 결. 어두운 coral `rgba(208,96,84,.86)`.
+
+**공통 감각** (`ui/styles.css`)
+- 시작 투명→끝 선명, 끝점 impact 장식 유지. **disappearance 약간 느리게**: `fx-svg-life` 0.95→**1.1s**(키프레임 0/10/55/100), 2x override 0.62→**0.78s** → "팟! 꽂힘 → 스스슥" 잔상 강화.
+- base `.fx-path`에서 dash-draw 제거 → 궁수/전사에만. heal/enemy는 부모 opacity로 등장.
+- `fx-head-soft`(heal): SVG transform 속성으로 위치를 잡으므로 **CSS transform 애니메이션 금지**(translate 대체로 입자가 원점 튐) → opacity-only로 부드러운 등장.
+
+- 변경 파일: `src/ui/render.js`, `src/ui/styles.css`, `DEVLOG.md`, `NEXT.md` (battle.js/anchor/배속 무변경)
+- 검증 (프리뷰, MutationObserver 구조 수집 + computed style + 정적 시각 캡처 + rAF 과밀 측정):
+  - 4종 구조 확인: straight(arrow·pathLength=1·2px·연두) / slash(paths 2=본선+ghost·교차컷 2획·amber) / heal(점선 1 6·spark·민트) / enemy(거친 점선 5 3·claw·어두운 coral) ✓
+  - **정적 캡처 시각**: 화살촉(날카로운 쐐기)·베기 ✕컷·회복 +·점선이 육안으로 서로 다르게 읽힘 — 전사 슬래시가 직선 빔으로 안 보임 ✓
+  - **2x(250ms) 과밀**: 자연 플레이 700 rAF 샘플 분포 0:200 / 1:231 / 2:205 / 3:61 / 4:3 → **0~2개가 91%**, 3개 8.7%, 4개 0.4%(드문 순간). 이전 기준(최대 2)보다 약간↑ = 의도된 느린 fade(0.78s) 영향. 선이 타입별로 구분돼 같은 직선 2개보다 오히려 잘 읽힘.
+  - Stage 1→성장→2→성장→3 **CLEAR** 완주(새 FX로 회귀 없음) ✓
+  - console error/warn 0
+- **WATCH**: 2x에서 느린 fade(0.78s) + slash ghost로 동시 선이 드물게 3~4개까지. 현재 가독 무난하나 모바일에서 시끄러우면 2x fade 단축(0.78→0.7s) 또는 ghost 생략 카드. heal 입자(circle 2개)·enemy jitter가 모바일 작은 화면 가독성 해치지 않는지 확인 필요.
+- **push 안 함 / 나라님 모바일 확인 대기**
+
+---
+
 ### Combat Feel Polish 01 — 전투 속도/HUD/행동선 감각 정리 완료
 
 > 새 기능 아님. 오늘 들어간 4인 파티 + 배속 + HUD + 행동선의 전투 감각을 나라 취향으로 정리.

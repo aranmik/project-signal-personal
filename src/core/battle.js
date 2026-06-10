@@ -1,19 +1,38 @@
 import { gameState } from "./state.js";
-import { createInitialParty, createInitialEnemies } from "./state.js";
+import { createInitialParty, createInitialEnemies, createPreviewEnemies } from "./state.js";
 import { renderGame, playActionFx } from "../ui/render.js";
 
 let tickTimer = null;
-// Combat Feel Polish 01: 기본 전투 호흡 상향. 나라 체감상 기존 2x가 기본에 가까움.
-//   새 1x = 500ms / 새 2x = 250ms (BASE / speed). 계산식 무변경, tick 간격만.
+// Combat Feel Polish 01: 기본 전투 호흡 상향. 새 1x = 500ms (BASE / speed).
 const BASE_TICK_INTERVAL = 500; // 1x 기준 tick 간격
 
-// Battle Speed 01: interval을 단일 진입점에서 (재)무장한다.
-//   항상 기존 timer를 먼저 정리 → setInterval 중복 생성 0.
-//   배속은 tick "간격"만 줄인다(계산식 무변경) — 1x 500ms / 2x 250ms.
+// Combat Breath Preview 01: 배속 스텝 1x→2x→3x→4x→MAX 순환.
+//   MAX는 무제한이 아니라 "안전 상한"을 둔 빠른 모드 — interval을 MIN_TICK_INTERVAL로 floor한다.
+//   (배수만 크게 두고 interval을 캡 → FX/전투 루프가 무너지지 않고 연출도 보이는 빠른 모드)
+const SPEED_STEPS = [
+  { mult: 1, label: "1x" },
+  { mult: 2, label: "2x" },
+  { mult: 3, label: "3x" },
+  { mult: 4, label: "4x" },
+  { mult: 10, label: "MAX" },
+];
+const MIN_TICK_INTERVAL = 60; // MAX 안전 상한 — 이 밑으로는 내려가지 않는다(≈16 tick/s)
+
+function speedIndex() {
+  const i = SPEED_STEPS.findIndex((s) => s.label === gameState.battle.speedLabel);
+  return i >= 0 ? i : 0;
+}
+
+// interval을 단일 진입점에서 (재)무장한다. 항상 기존 timer를 먼저 정리 → setInterval 중복 0.
+//   배속은 tick "간격"만 줄인다(계산식 무변경). MAX는 MIN_TICK_INTERVAL로 floor.
 function startTicking() {
   clearInterval(tickTimer);
   tickTimer = null;
-  const interval = BASE_TICK_INTERVAL / gameState.battle.speed;
+  const interval = Math.max(
+    MIN_TICK_INTERVAL,
+    BASE_TICK_INTERVAL / gameState.battle.speed
+  );
+  gameState.battle.tickInterval = interval; // renderHud가 --tick CSS 변수로 반영
   tickTimer = setInterval(battleTick, interval);
 }
 
@@ -30,14 +49,48 @@ export function startBattle() {
   startTicking();
 }
 
-// Battle Speed 01: 1x ↔ 2x 토글. 전투 중이면 현재 cadence로 interval 재무장
+// Combat Breath Preview 01: 배속 순환(1x→2x→3x→4x→MAX→1x). 전투 중이면 즉시 cadence 재무장
 //   (startTicking이 기존 timer를 정리하므로 중복 없음). 비전투면 다음 startBattle에 반영.
-export function toggleSpeed() {
-  gameState.battle.speed = gameState.battle.speed === 1 ? 2 : 1;
+export function cycleSpeed() {
+  const next = SPEED_STEPS[(speedIndex() + 1) % SPEED_STEPS.length];
+  gameState.battle.speed = next.mult;
+  gameState.battle.speedLabel = next.label;
   if (gameState.battle.isRunning) {
     startTicking();
   }
   renderGame(gameState);
+}
+
+// Combat Breath Preview 01: 개발/프리뷰용 전투 장면 시작. 정식 스테이지/보상 아님.
+//   4직업 파티 유지 + kind별 프리뷰 적 구성으로 전투 화면 호흡/밀도를 본다.
+//   previewKind를 켜두면 전투 종료 시 성장/스테이지 진행으로 넘어가지 않고 장면에 머문다.
+export function startPreview(kind) {
+  clearInterval(tickTimer);
+  tickTimer = null;
+
+  gameState.run.stage = 1;
+  gameState.run.result = null;
+  gameState.run.bonuses = { atk: 0, maxHp: 0 };
+  gameState.screen = "battle";
+
+  gameState.party = createInitialParty();
+  gameState.enemies = createPreviewEnemies(kind);
+  gameState.battle.previewKind = kind;
+
+  gameState.battle.tick = 0;
+  gameState.battle.status = "ready";
+  gameState.battle.isRunning = false;
+  gameState.battle.result = null;
+
+  const labels = {
+    "normal-max": "프리뷰: 다수전(Normal Max)",
+    "elite-mix": "프리뷰: 정예 혼합(Elite Mix)",
+    "boss-solo": "프리뷰: 보스 단독(Boss Solo)",
+  };
+  gameState.logs = [labels[kind] || "프리뷰"];
+
+  renderGame(gameState);
+  startBattle();
 }
 
 // Shell 01: 타이틀 → 전투 진입 (스테이지 1부터 새 런 시작 후 자동 전투)
@@ -73,6 +126,7 @@ export function resetBattle() {
   gameState.battle.status = "ready";
   gameState.battle.isRunning = false;
   gameState.battle.result = null;
+  gameState.battle.previewKind = null; // 정식 런 — 프리뷰 모드 해제
 
   gameState.logs = ["Stage 1 — 처음부터 시작합니다."];
 
@@ -269,6 +323,15 @@ function performHeal(healer, target) {
 function checkBattleEnd() {
   const allEnemiesDead = gameState.enemies.every((u) => u.isDead);
   const allPartyDead = gameState.party.every((u) => u.isDead);
+
+  // Combat Breath Preview 01: 프리뷰 장면은 성장/결과로 넘어가지 않고 화면에 머문다
+  //   (나라가 프리뷰 바로 다른 장면을 다시 선택할 수 있게 battle 화면 유지).
+  if (gameState.battle.previewKind && (allEnemiesDead || allPartyDead)) {
+    gameState.battle.status = "ended";
+    gameState.run.result = null;
+    pushLog(allEnemiesDead ? "프리뷰 종료 — 다른 장면을 선택하세요." : "프리뷰 전멸 — 다시 선택하세요.");
+    return true;
+  }
 
   if (allEnemiesDead) {
     gameState.battle.status = "ended";

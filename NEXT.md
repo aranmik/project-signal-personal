@@ -21,6 +21,12 @@ Hit Reaction 01 + Combat Tempo 01 push 완료 (commit c7535c4) — 나라님 모
 Tempo Smooth 01 (전투 흐름 끊김 진단·완화: 유닛 DOM reconcile + idle 연속 + tempo 보간) push 완료 (commit ccb8039) — 나라님 모바일 PASS (2026-06-09). **Living Battle Screen 01 기준점.**
 Party Join 01 (4번째 동료 수호자 합류 — 2x2 완성) + Battle Speed 01 (1x/2x 배속) + Combat Feel Polish 01 (기본 호흡 500ms·게이지 폭/색 통일·행동선 SVG 곡선) push 완료 (commit 4d3a501) — 나라님 모바일 PASS (2026-06-10). **Living Battle Screen 02 기준점.**
   · 기본 호흡: 1x=500ms / 2x=250ms · HP=빨강·속도=파랑(폭 동일) · 행동선=SVG 곡선+그라데이션+화살촉+느린 fade.
+Action Line Variety 01 (행동선 경로/성격 다양화 — 타입별 변주) 완료 — 나라님 모바일 확인 후 push 예정.
+  · 궁수=거의 직선+화살촉 / 전사=큰 호+베기 잔상+교차컷 / 사제=반대 곡선+점선+따뜻한 입자 / 몬스터=거친 점선+갈퀴. fade 0.95→1.1s(2x 0.78s). source→target·anchor·하드코딩 좌표 없음 유지.
+Action Emphasis 01 (Source Actor Acting Cue — 행동자 선언) 완료 — 나라님이 직접 push + 모바일 확인 예정.
+  · 행동 직전 source unit이 발밑 고정 scale pop(1.12)+살짝 들썩으로 "나야 지금!" 선언 → 선 → 대상 반응. 시선 우선순위 acting>line>reaction>idle. 같은 유닛 acting 중 reaction 생략. battle.js/배속/anchor/reconcile 무변경.
+Combat Breath Preview 01 (배속 확장 3x/4x/MAX + 프리뷰 장면 3종) 완료 — 개발/확인용, 나라님이 직접 push + 모바일 확인 예정.
+  · 배속 1x→2x→3x→4x→MAX(안전 상한 60ms floor) 순환, tempo는 --tick 변수로 정합. 프리뷰: 다수전(6체)/정예혼합(정예2+일반3)/보스단독(1체). #preview-bar로 선택, 프리뷰는 종료해도 battle 화면 유지. 전투 계산/정식 시스템 무변경. (WATCH: 백그라운드 스로틀로 MAX 실속도는 모바일 포그라운드에서 최종 확인)
 
 ---
 

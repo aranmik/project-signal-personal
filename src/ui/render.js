@@ -64,16 +64,23 @@ function renderHud(state) {
   document.getElementById("status-label").textContent = state.battle.status;
   renderPartyBonus(state.run.bonuses);
 
-  // Battle Speed 01: 배속 버튼 라벨/강조 + 전장 data-speed
-  //   data-speed로 tempo fill transition 시간을 cadence에 맞춘다(CSS) → 2x에서도 끊김 없이.
+  // Combat Breath Preview 01: 배속 라벨(1x~MAX) + 강조 + 전장 --tick/data-fast
+  //   --tick(=현재 tick 간격)으로 tempo fill transition을 cadence에 자동 정합 → 모든 배속 부드럽게.
+  //   data-fast(>1x)로 FX/acting 지속시간 단축 오버라이드를 일괄 적용.
   const speed = state.battle.speed ?? 1;
+  const label = state.battle.speedLabel ?? `${speed}x`;
   const speedBtn = document.getElementById("speed-toggle");
   if (speedBtn) {
-    speedBtn.textContent = `${speed}x`;
-    speedBtn.classList.toggle("fast", speed === 2);
+    speedBtn.textContent = label;
+    speedBtn.classList.toggle("fast", speed > 1);
   }
   const field = document.getElementById("battle-field");
-  if (field) field.dataset.speed = String(speed);
+  if (field) {
+    field.dataset.speed = label;
+    field.dataset.fast = speed > 1 ? "1" : "0";
+    const tick = state.battle.tickInterval ?? 500;
+    field.style.setProperty("--tick", `${tick}ms`);
+  }
 }
 
 function renderPartyBonus(bonuses) {
@@ -179,8 +186,16 @@ function createFieldUnit(unit) {
   //   (미래: 상대 진영 영웅은 team과 무관하게 face-sw를 받을 수 있어야 함)
   const facingClass = isParty ? "face-ne" : "face-sw";
 
+  // Combat Breath Preview 01: 프리뷰 적은 slot으로 배치(enemy-slot-N), sizeClass로 정예/보스 크기.
+  //   정식 유닛은 기존 {id}-pos 그대로. 하드코딩 좌표는 모두 CSS(클래스)로만.
+  const posClass =
+    unit.team === "enemy" && unit.slot !== undefined
+      ? `enemy-slot-${unit.slot}`
+      : `${id}-pos`;
+  const sizeClass = unit.sizeClass ? ` ${unit.sizeClass}` : "";
+
   const wrap = document.createElement("div");
-  wrap.className = `unit ${unit.team} ${id}-pos ${facingClass}${deadClass}`;
+  wrap.className = `unit ${unit.team} ${posClass}${sizeClass} ${facingClass}${deadClass}`;
   wrap.dataset.instanceId = unit.instanceId;
 
   const figClass = isParty ? "avatar" : "monster";
@@ -247,6 +262,11 @@ function unitPoint(instanceId, frac, fieldRect) {
   };
 }
 
+// Action Emphasis 01: 시선 우선순위 = acting > line > target reaction > idle.
+//   현재 행동 중(acting cue 표시 중)인 유닛 추적 → 그 사이 들어오는
+//   target reaction은 생략(같은 유닛에 선언과 피격이 겹쳐 시선이 꼬이지 않게).
+const actingUnits = new Set();
+
 // battle.js에서 행동 발생 시 호출 (전투 계산과 분리된 FX 이벤트)
 export function playActionFx(event) {
   const { sourceInstanceId, sourceUnitId, targetInstanceId, lineType, isHeal, amount } = event;
@@ -258,21 +278,62 @@ export function playActionFx(event) {
   const srcFrac = SOURCE_ANCHORS[sourceUnitId] || { fx: 0.5, fy: 0.45 };
   const tgtFrac = isHeal ? TARGET_HEAL : TARGET_HIT;
 
+  // 좌표는 .unit wrap rect 기준 → acting scale(자식 .fig-react)에 영향받지 않음(안정)
   const s = unitPoint(sourceInstanceId, srcFrac, fieldRect);
   const t = unitPoint(targetInstanceId, tgtFrac, fieldRect);
   if (!s || !t) return;
 
-  spawnLine(layer, s, t, lineType);
-  spawnPulse(layer, t, isHeal);
-  spawnNumber(layer, t, targetInstanceId, isHeal, amount);
-  reactUnit(targetInstanceId, isHeal);
+  // 1) 행동자 선언("나야 지금!") — source unit이 먼저 짧게 보인다.
+  cueActor(sourceInstanceId, lineType);
+
+  // 2) 짧은 선행 뒤 행동선 발사 + 대상 반응. 배속이면 리듬만 살게 더 짧게.
+  const speed = Number(field.dataset.speed) || 1;
+  const lead = speed === 2 ? 80 : 120;
+  const fire = () => {
+    spawnLine(layer, s, t, lineType);
+    spawnPulse(layer, t, isHeal);
+    spawnNumber(layer, t, targetInstanceId, isHeal, amount);
+    reactUnit(targetInstanceId, isHeal);
+  };
+  setTimeout(fire, lead);
+}
+
+// Action Emphasis 01: source unit "행동 선언" cue.
+//   .fig-react(reaction 전용 transform 레이어)에 acting 클래스를 얹는다 —
+//   발밑 고정 scale pop + 살짝 들썩(위치는 .unit 기준이라 안 밀림).
+//   unit-layer는 매 tick reconcile되므로 이번 tick 렌더 이후(rAF) 적용.
+//   우선순위: 진행 중이던 target reaction을 지우고 acting을 올린다(acting > reaction).
+function cueActor(sourceInstanceId, lineType) {
+  requestAnimationFrame(() => {
+    const unit = document.querySelector(
+      `#unit-layer [data-instance-id="${sourceInstanceId}"]`
+    );
+    if (!unit) return;
+    const fig = unit.querySelector(".fig-react");
+    if (!fig) return;
+    const cls = lineType === "heal" ? "acting-soft" : "acting";
+    fig.classList.remove("react-hit", "react-heal", "acting", "acting-soft");
+    actingUnits.add(sourceInstanceId);
+    void fig.offsetWidth; // reflow — 재진입 시 애니메이션 재시작 보장
+    fig.classList.add(cls);
+    fig.addEventListener(
+      "animationend",
+      () => {
+        fig.classList.remove(cls);
+        actingUnits.delete(sourceInstanceId);
+      },
+      { once: true }
+    );
+  });
 }
 
 // Hit Reaction 01: 맞은/회복받은 유닛 본체가 짧게 반응
 //   unit-layer는 매 tick 재구성되므로, 이번 tick의 renderGame 이후(rAF)
 //   새로 그려진 .fig-react 요소에 반응 클래스를 얹는다.
+//   Action Emphasis 01: 그 유닛이 지금 행동 선언 중이면 reaction은 생략(acting 우선).
 function reactUnit(targetInstanceId, isHeal) {
   requestAnimationFrame(() => {
+    if (actingUnits.has(targetInstanceId)) return; // acting > target reaction
     const unit = document.querySelector(
       `#unit-layer [data-instance-id="${targetInstanceId}"]`
     );
@@ -291,12 +352,24 @@ function reactUnit(targetInstanceId, isHeal) {
   });
 }
 
-// Combat Feel Polish 01: 행동선을 직선 span → SVG 곡선 path로.
-//   source→target 문법/anchor 구조 유지(좌표는 동일하게 s,t에서 계산).
-//   약한 bow(곡선) + 시작 투명→끝 선명 그라데이션 + 끝점 쐐기(화살촉)
-//   + 빠른 draw-in 후 느린 fade("팟! 꽂혔다 → 스스슥 사라진다").
+// Action Line Variety 01: 행동선을 타입별로 경로/성격이 다르게.
+//   source→target 문법/anchor 구조 유지(좌표는 전부 실제 s,t·len·방향에서 파생,
+//   하드코딩 좌표 없음). 모든 선이 같은 직선처럼 보이지 않게 타입별 변주:
+//   - straight(궁수): 거의 직선 + 날카로운 화살촉 → "꽂혔다"
+//   - slash(전사/수호자): 큰 호 + 베기 잔상 + 교차 컷 → 칼자국(빔 아님)
+//   - heal(사제): 반대로 휘는 부드러운 점선 + 따뜻한 입자 → 회복
+//   - enemy(몬스터): 거친 흔들림 + 거친 점선 + 갈퀴 → 어둡고 다른 결
+//   공통: 시작 투명→끝 선명, 끝 impact 장식, 빠른 등장 후 느린 fade(스스슥).
 const SVG_NS = "http://www.w3.org/2000/svg";
 let __fxLineSeq = 0;
+
+// 타입별 경로/끝점 성격. bowF=길이비례 곡률, flip=휘는 방향, head=끝 장식.
+const LINE_STYLE = {
+  straight: { bowF: 0.05, bowMin: 3,  bowMax: 8,  flip: 1,  head: "arrow", draw: true },
+  slash:    { bowF: 0.26, bowMin: 16, bowMax: 36, flip: 1,  head: "slash", draw: true, ghost: true },
+  heal:     { bowF: 0.30, bowMin: 18, bowMax: 44, flip: -1, head: "spark", draw: false },
+  enemy:    { bowF: 0.16, bowMin: 8,  bowMax: 22, flip: 1,  head: "claw",  draw: false, rough: true },
+};
 
 function spawnLine(layer, s, t, lineType) {
   const w = layer.clientWidth || layer.offsetWidth;
@@ -305,13 +378,17 @@ function spawnLine(layer, s, t, lineType) {
   const dy = t.y - s.y;
   const len = Math.hypot(dx, dy) || 1;
 
-  // 수직 단위벡터로 중간점을 살짝 밀어 약한 곡선(arc)을 만든다.
-  //   길이에 비례하되 과하지 않게 clamp. heal은 반대로 휘어 공격선과 결을 구분.
+  const cfg = LINE_STYLE[lineType] || LINE_STYLE.straight;
+
+  // 수직 단위벡터로 중간점을 밀어 곡선(arc). 타입별 곡률/방향 변주.
   const px = -dy / len;
   const py = dx / len;
-  const bow = Math.min(20, Math.max(6, len * 0.12)) * (lineType === "heal" ? -1 : 1);
-  const mx = (s.x + t.x) / 2 + px * bow;
-  const my = (s.y + t.y) / 2 + py * bow;
+  const bow =
+    Math.min(cfg.bowMax, Math.max(cfg.bowMin, len * cfg.bowF)) * cfg.flip;
+  // enemy: 길이 기반의 약한 흔들림(거친 궤적) — 하드코딩 좌표 아님
+  const jitter = cfg.rough ? (Math.random() - 0.5) * Math.min(10, len * 0.06) : 0;
+  const mx = (s.x + t.x) / 2 + px * (bow + jitter);
+  const my = (s.y + t.y) / 2 + py * (bow + jitter);
 
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("class", `fx-svg fx-svg--${lineType}`);
@@ -336,26 +413,77 @@ function spawnLine(layer, s, t, lineType) {
   defs.appendChild(grad);
   svg.appendChild(defs);
 
+  // slash: 더 크게 휜 잔상 스트로크(베기 sweep 느낌) — 본선 뒤에 깔린다
+  if (cfg.ghost) {
+    const gbow = bow * 1.7;
+    const gx = (s.x + t.x) / 2 + px * gbow;
+    const gy = (s.y + t.y) / 2 + py * gbow;
+    const ghost = document.createElementNS(SVG_NS, "path");
+    ghost.setAttribute("class", "fx-path fx-path--ghost");
+    ghost.setAttribute("d", `M ${s.x} ${s.y} Q ${gx} ${gy} ${t.x} ${t.y}`);
+    ghost.setAttribute("stroke", `url(#${gid})`);
+    ghost.setAttribute("pathLength", "1");
+    svg.appendChild(ghost);
+  }
+
   const path = document.createElementNS(SVG_NS, "path");
   path.setAttribute("class", "fx-path");
   path.setAttribute("d", `M ${s.x} ${s.y} Q ${mx} ${my} ${t.x} ${t.y}`);
   path.setAttribute("stroke", `url(#${gid})`);
-  path.setAttribute("pathLength", "1"); // dash draw-in 정규화
+  // dash draw-in 타입만 pathLength 정규화로 "그려짐"(꽂힘).
+  //   점선 타입(heal/enemy)은 실제 dash 패턴이라 정규화하지 않는다.
+  if (cfg.draw) path.setAttribute("pathLength", "1");
   svg.appendChild(path);
 
-  // 끝점 쐐기 — 끝 접선 방향(t - control)으로 회전, "대상에 꽂혔다"
-  const tanAng = (Math.atan2(t.y - my, t.x - mx) * 180) / Math.PI;
-  const head = document.createElementNS(SVG_NS, "path");
-  head.setAttribute("class", "fx-head");
-  head.setAttribute("d", "M 0 0 L -9 -4.5 L -9 4.5 Z");
-  head.setAttribute("transform", `translate(${t.x} ${t.y}) rotate(${tanAng})`);
-  svg.appendChild(head);
+  // 끝점 장식 — 끝 접선 방향(t - control)으로 회전, 타입별 성격
+  const ang = (Math.atan2(t.y - my, t.x - mx) * 180) / Math.PI;
+  appendHead(svg, cfg.head, t, ang);
 
   // 제거는 svg 자체의 수명 애니메이션 종료에서만(자식 animationend 버블 제외)
   svg.addEventListener("animationend", (e) => {
     if (e.target === svg) svg.remove();
   });
   layer.appendChild(svg);
+}
+
+// 끝점 장식: 타입별로 다른 "꽂힘"의 결.
+function appendHead(svg, type, t, ang) {
+  const el =
+    type === "arrow"
+      ? makeNS("path", {
+          class: "fx-head fx-head--arrow",
+          d: "M 0 0 L -10 -5 L -10 5 Z",
+          transform: `translate(${t.x} ${t.y}) rotate(${ang})`,
+        })
+      : type === "slash"
+      ? makeNS("g", {
+          class: "fx-head fx-head--slash",
+          transform: `translate(${t.x} ${t.y}) rotate(${ang})`,
+        },
+          '<path class="fx-cut fx-cut--a" d="M -2 -10 Q 3 0 -1 10"></path>' +
+          '<path class="fx-cut fx-cut--b" d="M -10 -5 Q -1 1 7 -3"></path>')
+      : type === "spark"
+      ? makeNS("g", {
+          class: "fx-head fx-head--spark",
+          transform: `translate(${t.x} ${t.y})`,
+        },
+          '<path class="fx-plus" d="M 0 -7 L 0 7 M -7 0 L 7 0"></path>' +
+          '<circle class="fx-mote" cx="6.5" cy="-5.5" r="1.7"></circle>' +
+          '<circle class="fx-mote" cx="-6" cy="4.5" r="1.4"></circle>')
+      : makeNS("g", {
+          class: "fx-head fx-head--claw",
+          transform: `translate(${t.x} ${t.y}) rotate(${ang})`,
+        },
+          '<path class="fx-claw" d="M -11 -7 L 0 0 L -11 7"></path>' +
+          '<path class="fx-claw fx-claw--dim" d="M -13 -1 L -2 1"></path>');
+  svg.appendChild(el);
+}
+
+function makeNS(tag, attrs, innerHTML) {
+  const el = document.createElementNS(SVG_NS, tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  if (innerHTML != null) el.innerHTML = innerHTML;
+  return el;
 }
 
 function spawnPulse(layer, t, isHeal) {

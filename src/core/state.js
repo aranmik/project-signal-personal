@@ -31,6 +31,43 @@ export function createInitialEnemies() {
   ];
 }
 
+// Combat Breath Preview 01: 개발/프리뷰용 전투 장면.
+//   정식 스테이지/밸런스/보상/몬스터 시스템 아님 — 현재 몬스터 데이터를 재사용해
+//   수량/크기/HP만 조정한다. slot으로 배치, sizeClass로 정예/보스처럼 보이게.
+export function createPreviewEnemies(kind) {
+  const mk = (tmplKey, idx, over = {}) => {
+    const u = createUnit(UNIT_TEMPLATES.enemies[tmplKey], `prev-${tmplKey}-${idx}`);
+    return { ...u, slot: idx, ...over };
+  };
+
+  if (kind === "normal-max") {
+    // 일반 몬스터를 화면 허용 최대 근사(6체)로 배치 → 다수전 과밀 확인
+    return ["slime", "goblin", "wolf", "goblin", "slime", "wolf"].map((k, i) =>
+      mk(k, i)
+    );
+  }
+
+  if (kind === "elite-mix") {
+    // 정예처럼 보이는 큰 몬스터 1~2 + 일반 혼합 (임시 — 크기/HP만)
+    return [
+      mk("goblin", 0, { sizeClass: "mon-elite", name: "정예 고블린", maxHp: 170, hp: 170, atk: 12, speed: 5 }),
+      mk("wolf", 1, { sizeClass: "mon-elite", name: "정예 늑대", maxHp: 140, hp: 140, atk: 13, speed: 7 }),
+      mk("slime", 2),
+      mk("slime", 3),
+      mk("goblin", 4),
+    ];
+  }
+
+  if (kind === "boss-solo") {
+    // 보스처럼 보이는 큰 몬스터 1체 단독 (정식 보스 패턴/시스템 없음)
+    return [
+      mk("goblin", "boss", { sizeClass: "mon-boss", name: "보스 고블린", maxHp: 520, hp: 520, atk: 15, speed: 5 }),
+    ];
+  }
+
+  return createInitialEnemies();
+}
+
 export const gameState = {
   project: {
     id: "SIGNAL_PERSONAL",
@@ -54,9 +91,14 @@ export const gameState = {
     tick: 0,
     isRunning: false,
     result: null,
-    // Battle Speed 01: 전투 배속(1x/2x). 기본 1x. 세션 내 사용자 선택으로 유지된다
-    //   (스테이지/재시작에서 reset하지 않음 — battle 객체를 재생성하지 않으므로 보존).
+    // Battle Speed 01 → Combat Breath Preview 01: 전투 배속. 기본 1x.
+    //   speed = interval 계산용 배수, speedLabel = 표시(1x/2x/3x/4x/MAX).
+    //   세션 내 사용자 선택으로 유지(스테이지/재시작에서 reset 안 함).
     speed: 1,
+    speedLabel: "1x",
+    tickInterval: 500, // 현재 tick 간격(ms) — renderHud가 --tick CSS 변수로 반영
+    // Combat Breath Preview 01: 프리뷰 장면 활성 시 종류(null=정식 런)
+    previewKind: null,
   },
 
   logs: [
