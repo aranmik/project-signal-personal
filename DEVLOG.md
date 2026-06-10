@@ -170,7 +170,7 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
   - Stage 1→2→3 / 성장(수호자 포함) / 전체 클리어("전체 클리어!"·"처음부터") / 재시작(Stage1·보너스 0·4인 full HP·gauge 0) ✓
   - console error/warn 0
 - **WATCH**: 2x 동시 행동선/숫자 최대 2로 현재는 무난하나, 향후 적/파티 수가 늘면 fx-number(0.9s) 누적 가능 → 그때 숫자 duration 배속 연동 재검토.
-- **push 안 함 / 나라님 모바일 확인 대기 → 확인 후 오늘 묶음(Party Join 01 + Battle Speed 01 + Combat Feel Polish 01) push 예정**
+- **push 완료 (commit 4d3a501) — 나라님 모바일 PASS (2026-06-10).** 오늘 묶음(Party Join 01 + Battle Speed 01 + Combat Feel Polish 01) = "Living Battle Screen 02" 기준점.
 
 ---
 
@@ -206,7 +206,7 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
   - 재시작: Stage1 복귀·보너스 0·4인 full HP·gauge 0·interval 1개 ✓
   - console error/warn 0
 - **WATCH**: 2x(tick 500ms)에서 fx-number(0.9s)가 다음 틱과 일부 겹칠 수 있음. 현재 단일 행동/틱이라 과밀하진 않으나, 후속에서 FX duration 배속 연동 검토 여지(이번 범위 제외).
-- **push 안 함 / 나라님 모바일 확인 대기**
+- **push 완료 (commit 4d3a501) — 나라님 모바일 PASS (2026-06-10).** Living Battle Screen 02 묶음으로 함께 push.
 
 ---
 
