@@ -115,6 +115,12 @@ const AVATAR_PARTS = {
 //   변하는 값(HP/속도 게이지/사망 상태)만 기존 요소에 갱신 → 전투 흐름이 끊기지 않음.
 //   instanceId는 스테이지/재시작 간에도 안정(hero-warrior-1 / enemy-slime-1 …)이라
 //   요소가 그대로 재사용되고, FX/리액션 계산(getBoundingClientRect)도 영향 없음.
+// Combat Lifecycle Polish 01: 사망 생명주기 추적(전투 계산과 분리된 "표시" 상태).
+//   dyingUnits  = 사망 연출(.dying) 진행 중 instanceId
+//   cleanedDead = 사망 연출 끝 + 전장에서 제거됨(Field Cleanup) instanceId — 다시 안 그림
+const dyingUnits = new Set();
+const cleanedDead = new Set();
+
 function renderUnits(state) {
   const layer = document.getElementById("unit-layer");
   if (!layer) return;
@@ -123,11 +129,23 @@ function renderUnits(state) {
   const seen = new Set();
 
   all.forEach((unit) => {
-    seen.add(unit.instanceId);
-    let el = layer.querySelector(
-      `[data-instance-id="${unit.instanceId}"]`
-    );
+    const iid = unit.instanceId;
+    seen.add(iid);
+
+    // 같은 instanceId가 "살아있는 새 유닛"으로 재사용됨(스테이지/재시작) → 사망 추적 초기화.
+    //   (reconcile 키가 안정적이라 battle.js와 결합 없이 여기서 자동 복구)
+    if (!unit.isDead && (cleanedDead.has(iid) || dyingUnits.has(iid))) {
+      cleanedDead.delete(iid);
+      dyingUnits.delete(iid);
+      const stale = layer.querySelector(`[data-instance-id="${iid}"]`);
+      if (stale) stale.remove();
+    }
+
+    if (cleanedDead.has(iid)) return; // 이미 정리됨 — 다시 만들지 않음(Field Cleanup)
+
+    let el = layer.querySelector(`[data-instance-id="${iid}"]`);
     if (!el) {
+      if (unit.isDead) return; // 죽은 채로 요소가 없으면 새로 만들지 않음(방어)
       layer.appendChild(createFieldUnit(unit));
     } else {
       updateFieldUnit(el, unit);
@@ -143,7 +161,13 @@ function renderUnits(state) {
 
 // 기존 요소의 변하는 값만 갱신 (DOM 재생성 없음 → idle 연속)
 function updateFieldUnit(el, unit) {
-  el.classList.toggle("dead", !!unit.isDead);
+  // Combat Lifecycle Polish 01: HP 0 → 사망 연출 시작(한 번만). 이후 HP/게이지 갱신 정지.
+  if (unit.isDead) {
+    if (!dyingUnits.has(unit.instanceId) && !el.classList.contains("dying")) {
+      startDeath(el, unit);
+    }
+    return;
+  }
 
   const hpFill = el.querySelector(".hp-bar-fill");
   if (hpFill) {
@@ -172,6 +196,43 @@ function updateFieldUnit(el, unit) {
       tempoBar.classList.toggle("ready-soon", (unit.actionGauge ?? 0) >= 88);
     }
   }
+}
+
+// Combat Lifecycle Polish 01 — Death Reaction + Field Cleanup.
+//   HP 0 유닛에 .dying 부여 → CSS 짧은 퇴장 연출(.unit opacity fade + .fig-react 무너짐).
+//   진행 중이던 반응(hit/heal/acting)은 죽음이 우선이라 제거. 작은 dust로 "정리" 감각.
+//   .unit 자체 애니메이션(opacity fade) 종료 시 DOM 제거 + cleanedDead 등록 → 다시 안 그림.
+function startDeath(el, unit) {
+  dyingUnits.add(unit.instanceId);
+  el.classList.add("dying");
+
+  const fig = el.querySelector(".fig-react");
+  if (fig) fig.classList.remove("react-hit", "react-heal", "acting", "acting-soft");
+
+  spawnDeathDust(unit.instanceId, unit.team === "party");
+
+  el.addEventListener("animationend", function done(e) {
+    if (e.target !== el) return; // .unit 본체(opacity fade) 종료에서만 (자식 transform 제외)
+    el.removeEventListener("animationend", done);
+    dyingUnits.delete(unit.instanceId);
+    cleanedDead.add(unit.instanceId);
+    el.remove();
+  });
+}
+
+// 사망 지점에 약한 dust 한 번 — "쓰러져 정리됐다" 감각(과하지 않게).
+function spawnDeathDust(instanceId, isParty) {
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  const p = unitPoint(instanceId, { fx: 0.5, fy: 0.62 }, field.getBoundingClientRect());
+  if (!p) return;
+  const d = document.createElement("span");
+  d.className = `fx-dust${isParty ? " fx-dust--party" : ""}`;
+  d.style.left = `${p.x}px`;
+  d.style.top = `${p.y}px`;
+  d.addEventListener("animationend", () => d.remove());
+  layer.appendChild(d);
 }
 
 function createFieldUnit(unit) {
@@ -334,6 +395,8 @@ function cueActor(sourceInstanceId, lineType) {
 function reactUnit(targetInstanceId, isHeal) {
   requestAnimationFrame(() => {
     if (actingUnits.has(targetInstanceId)) return; // acting > target reaction
+    // Combat Lifecycle Polish 01: 죽는 중/정리된 유닛은 hit 반응 생략(죽음 연출 우선·중복 방지).
+    if (dyingUnits.has(targetInstanceId) || cleanedDead.has(targetInstanceId)) return;
     const unit = document.querySelector(
       `#unit-layer [data-instance-id="${targetInstanceId}"]`
     );
@@ -373,7 +436,15 @@ const LINE_STYLE = {
   enemy:    { bowF: 0.16, bowMin: 8,  bowMax: 22, flip: 1,  head: "claw",  draw: false, rough: true },
 };
 
+// FX Density Guard 01: 동시에 떠 있는 행동선/숫자 상한 — 다수전·MAX 누적 방지.
+const MAX_FX_LINES = 7;
+const MAX_FX_NUMBERS = 8;
+
 function spawnLine(layer, s, t, lineType) {
+  // 상한 초과 시 가장 오래된 선 제거(읽힘 우선, 화면이 무너지지 않게)
+  const lines = layer.querySelectorAll(".fx-svg");
+  if (lines.length >= MAX_FX_LINES) lines[0].remove();
+
   const w = layer.clientWidth || layer.offsetWidth;
   const h = layer.clientHeight || layer.offsetHeight;
   const dx = t.x - s.x;
@@ -498,6 +569,10 @@ function spawnPulse(layer, t, isHeal) {
 }
 
 function spawnNumber(layer, t, targetInstanceId, isHeal, amount) {
+  // FX Density Guard 01: 숫자 상한 초과 시 가장 오래된 것 제거(MAX/다수전 누적 방지)
+  const nums = layer.querySelectorAll(".fx-number");
+  if (nums.length >= MAX_FX_NUMBERS) nums[0].remove();
+
   const now = performance.now();
   const last = recentNumberAt.get(targetInstanceId) || 0;
   const overlap = now - last < 700; // 같은 대상에 거의 동시 → queue offset

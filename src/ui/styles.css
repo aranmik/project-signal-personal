@@ -638,6 +638,66 @@ body {
 }
 
 /* ===================================================================
+   Combat Lifecycle Polish 01 — 사망 연출(Death Reaction) + Field Cleanup
+   -------------------------------------------------------------------
+   HP 0 → .unit.dying: 짧은 퇴장(opacity fade) + .fig-react 무너짐(아래로 꺼지며 작아짐).
+   .unit 자체 fade 애니메이션 종료 시 JS가 DOM 제거(전장 정리). 0.5s(2x) / MAX 0.34s.
+   =================================================================== */
+#battle-field .unit.dying {
+  pointer-events: none;
+  animation: sig-death-fade 0.5s ease-in forwards;
+}
+#battle-field .unit.dying .fig-react {
+  animation: sig-death 0.5s ease-in forwards;
+}
+/* 사망 중 idle/게이지 정지 + HP/속도바 즉시 정리(판독 방해 방지) */
+#battle-field .unit.dying .avatar,
+#battle-field .unit.dying .monster { animation: none; }
+#battle-field .unit.dying .hp-bar,
+#battle-field .unit.dying .tempo-bar { opacity: 0; }
+/* FX Density Guard: MAX에선 더 짧게 */
+#battle-field[data-speed="MAX"] .unit.dying,
+#battle-field[data-speed="MAX"] .unit.dying .fig-react { animation-duration: 0.34s; }
+
+@keyframes sig-death-fade {
+  0%   { opacity: 1; }
+  65%  { opacity: 0.55; }
+  100% { opacity: 0; }
+}
+/* 무너짐: 짧은 흔들림 → 발밑 고정으로 아래로 꺼지며 작아짐 */
+@keyframes sig-death {
+  0%   { transform: translateX(0) translateY(0) scale(1); }
+  14%  { transform: translateX(-2.5px) translateY(0) scale(1); }
+  30%  { transform: translateX(2px) translateY(1px) scale(0.97); }
+  100% { transform: translateX(0) translateY(11px) scale(0.8); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #battle-field .unit.dying,
+  #battle-field .unit.dying .fig-react { animation-duration: 0.01s; }
+}
+
+/* 사망 dust — 쓰러진 자리 약한 먼지 한 번(과하지 않게) */
+.fx-dust {
+  position: absolute;
+  width: 28px; height: 13px;
+  margin: -6px 0 0 -14px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(176, 178, 188, 0.30), transparent 72%);
+  opacity: 0;
+  pointer-events: none;
+  animation: fx-dust 0.5s ease-out forwards;
+}
+.fx-dust--party {
+  background: radial-gradient(ellipse at center, rgba(158, 180, 212, 0.28), transparent 72%);
+}
+#battle-field[data-speed="MAX"] .fx-dust { animation-duration: 0.34s; }
+@keyframes fx-dust {
+  0%   { opacity: 0; transform: scale(0.5); }
+  35%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.55); }
+}
+
+/* ===================================================================
    Combat HUD 01 — HP 게이지 (01a: 이름/HP 숫자 제거 후 아바타 바로 아래로 정렬)
    얇은 트랙. 캐릭터·행동선·숫자를 가리지 않게.
    =================================================================== */
@@ -746,6 +806,10 @@ body {
 #battle-field[data-fast="1"] .fx-svg {
   animation-duration: 0.78s;
 }
+/* FX Density Guard 01: MAX에선 한 단계 더 짧게(누적 방지). data-fast와 동일 특이도라 뒤에 둔다. */
+#battle-field[data-speed="MAX"] .fx-svg {
+  animation-duration: 0.5s;
+}
 
 /* base path: 공통 stroke만. 그리기 방식(dash-draw / 점선)은 타입별로. */
 .fx-svg .fx-path {
@@ -853,6 +917,8 @@ body {
   pointer-events: none;
   animation: fx-number 0.9s ease-out forwards;
 }
+/* FX Density Guard 01: MAX에선 숫자도 더 빨리 사라지게(누적 방지) */
+#battle-field[data-speed="MAX"] .fx-number { animation-duration: 0.55s; }
 .fx-number--dmg { color: #f4b1a6; }
 .fx-number--heal { color: #9fe6cf; }
 /* 같은 대상 동시 숫자 — queue offset (늦게, 우상단으로) */

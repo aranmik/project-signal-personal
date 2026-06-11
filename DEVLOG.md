@@ -134,6 +134,54 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 
 ---
 
+### Combat Lifecycle Polish 01 — Death Exit / Field Cleanup / Victory Finish / FX Density Guard 완료
+
+> 핵심 문장 추가: "쓰러진다 → 전장에서 정리된다 → 전투가 끝난다."
+> 전투를 "맞고 끝나는 화면"이 아니라 "행동·피격·사망·정리·승리가 하나의 호흡으로 닫히는 화면"으로.
+> 전투 계산식(데미지/타겟/사망 판정) 무변경 — 표시/타이밍 레이어만. LBS 04A 구도·2x·MAX·행동선 유지.
+
+**구조 (사망 생명주기, `render.js`)**
+- `dyingUnits`/`cleanedDead` Set으로 "표시 상태" 추적(전투 계산과 분리). reconcile 키(instanceId)는 그대로.
+- `renderUnits`: `cleanedDead`는 스킵(다시 안 그림). 같은 id가 "살아있는 새 유닛"으로 재사용되면(스테이지/재시작) dying/cleaned 자동 초기화 + 잔여 요소 제거 → **DOM reconcile/tick 구조 보존, battle.js와 결합 없음**.
+- `updateFieldUnit`: HP 0 감지 시 `startDeath` 1회, 이후 HP/게이지 갱신 정지.
+
+**1) Death Reaction 01** (`render.js startDeath` + `styles.css`)
+- `.unit.dying`: opacity fade(sig-death-fade) + `.fig-react` 무너짐(sig-death: 짧은 흔들림 → 발밑 고정으로 아래로 꺼지며 scale 0.8). 0.5s(2x) / MAX 0.34s. idle/게이지 정지, HP·속도바 즉시 정리.
+- 작은 dust 한 번(`spawnDeathDust`, 적 회색/아군 푸른빛) → "정리됐다" 감각. 과한 파티클 없음.
+- 적/아군 동일 연출(아군은 쓰러짐/흐려짐 — 부활·패배 전용 연출 없음). 보스도 같은 연출로 안 깨짐(scale 2.8에서도 fade/sink 정상).
+
+**2) Field Cleanup 01**
+- `.unit` 자체 fade 애니메이션 종료 → JS가 DOM 제거 + `cleanedDead` 등록. 다수전에서 적이 하나씩 사라져 전장이 비워짐. 죽은 유닛이 행동선/HP/숫자 판독 방해 안 함.
+
+**3) Victory Finish 01** (`battle.js`)
+- `checkBattleEnd`를 "감지(status=ended)만" 하고 결과/화면 전환은 `scheduleFinish`→`applyFinish`로 **짧은 호흡 뒤** 적용(2x 640ms / MAX 420ms, 사망 연출보다 살짝 길게). renderGame을 먼저 호출해 마지막 사망 연출 노출.
+- 정식 런 victory→growth / clear·defeat→오버레이 흐름 유지(타이밍만 지연). preview는 전환 없이 battle 유지. 전환 함수(start/reset/goTitle/preview)에 `clearFinish` 추가(지연 잔여 방지) + applyFinish status 가드.
+
+**4) FX Density Guard 01** (`render.js` + `styles.css`)
+- 동시 상한: 행동선 ≤7 / 숫자 ≤8(초과 시 가장 오래된 것 제거). 스트레스 30연타에도 7/8 유지 확인.
+- MAX 전용 단축: 행동선 fade 0.78→0.5s, 숫자 0.9→0.55s, dust/death 0.34s.
+- death 우선순위: 죽는 중 유닛은 hit 반응 생략(`reactUnit` 가드) — 단 killing blow의 라인·숫자는 그대로 표시.
+
+- 변경 파일: `src/core/battle.js`, `src/ui/render.js`, `src/ui/styles.css`, `DEVLOG.md`, `NEXT.md`
+- 검증 (프리뷰, MutationObserver + 측정 + 정적 스크린샷):
+  - 다수전: 사망 적 연출 후 DOM 제거(생존수=DOM수 일치, dying 0) → 하나씩 정리 ✓
+  - Victory: status ended → 지연(계측 gap, 백그라운드 스로틀로 ~1s, 포그라운드 ~640ms) → growth, result victory ✓
+  - **스테이지1 사망 정리 → 스테이지2 같은 id 새 적 3체 정상 재생성**(reconcile 자동 복구) ✓
+  - 보스 사망: 연출 후 제거, preview battle 유지, 파티 온전, 안 깨짐 ✓
+  - death 우선순위: dying 타겟 hit 반응 false / 라인·숫자 true ✓
+  - FX 상한: 라인7/숫자8 유지 ✓
+  - 정식 플로우(전멸→growth victory) 무결, console error/warn 0
+- **DOM reconcile / tick 구조 영향**: tick마다 DOM 재생성 없음(기존 reconcile 유지). 사망 정리는 reconcile 안에서 Set 기반으로 안전 처리 — 구조 훼손 없음.
+- **전투 계산식 변경**: 없음(데미지/타겟/사망 판정/배속/게이지 무변경). 전환 "타이밍"만 지연.
+- **WATCH / 다음 폴리시 후보**:
+  - 사망 연출(렌더 트리거)이 killing 라인(+lead 80~120ms)보다 살짝 먼저 시작 — 초반 phase가 미세 흔들림이라 체감상 자연스러우나, 모바일에서 어색하면 death 시작을 +lead에 정렬 검토.
+  - 보스 전용 거대 사망 연출은 미구현(이번 범위 아님) — 추후 보스 폴리시 후보.
+  - finishDelay 고정값(640/420) — 모바일 체감 보고 미세조정 여지.
+  - 아군 전멸(defeat) 연출도 기본 death 공유 — 추후 패배 전용 연출 후보(이번엔 금지).
+- **push 안 함 / 나라님이 직접 최종 확인 후 GitHub push + 모바일 Pages 확인**
+
+---
+
 ### LBS 04A Micro Polish — Hero Formation Right Shift 완료
 
 > LBS 04A 모바일 PASS 방향. 영웅 진형 하단부가 살짝 좌측에 치우쳐 보여 무게중심만 미세 보정.

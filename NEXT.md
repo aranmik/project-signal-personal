@@ -35,8 +35,11 @@ Living Battle Screen 04A (Asymmetric Field Partition + Formation Layout) + Micro
   · 좌표계 unit-layer 390×560. 적=상단절반(top0~280)·우측70(x≥117) spread / 아군=하단절반·좌측60(x≤234) 사선 spread. 중앙 mid밴드=행동선 통로(허전하지 않게).
   · 속도 UI 단순화: SPEED_STEPS=[2x,MAX](1x/3x/4x 제거). 보스 우측70 영역 장악(클리핑 없음). 행동선/battle계산/정식 시스템 무변경.
   · Micro Polish: 전사 left2→34 / 수호자 left100→130(우측 보정), 좌측60 영역·사선 유지.
-
----
+Combat Lifecycle Polish 01 (Death Exit / Field Cleanup / Victory Finish / FX Density Guard) 완료 — 나라님이 직접 최종 확인 후 push 예정.
+  · 핵심: "쓰러진다 → 전장에서 정리된다 → 전투가 끝난다." 행동·피격·사망·정리·승리를 하나의 호흡으로.
+  · Death: HP0 → .dying(무너짐+fade+dust, 0.5s/MAX 0.34s) → DOM 제거. dyingUnits/cleanedDead Set, reconcile 자동 복구(스테이지 재사용 안전).
+  · Victory Finish: 마지막 사망 후 짧은 호흡(2x 640ms/MAX 420ms) 뒤 growth/결과 전환(checkBattleEnd→scheduleFinish). preview는 battle 유지.
+  · FX Guard: 라인≤7/숫자≤8 상한, MAX 단축, dying 유닛 hit 반응 생략. 전투 계산식·reconcile·tick 구조 무변경.
 
 ## 화면 Flow (Shell 01 확정)
 

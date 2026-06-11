@@ -38,6 +38,7 @@ function startTicking() {
 export function startBattle() {
   if (gameState.battle.isRunning) return;
 
+  clearFinish(); // 이전 전투의 지연 전환 잔여 취소
   gameState.battle.status = "running";
   gameState.battle.isRunning = true;
   gameState.battle.result = null;
@@ -66,6 +67,7 @@ export function cycleSpeed() {
 export function startPreview(kind) {
   clearInterval(tickTimer);
   tickTimer = null;
+  clearFinish();
 
   gameState.run.stage = 1;
   gameState.run.result = null;
@@ -102,6 +104,7 @@ export function startRun() {
 export function goTitle() {
   clearInterval(tickTimer);
   tickTimer = null;
+  clearFinish();
   gameState.battle.isRunning = false;
   gameState.battle.status = "ready";
   gameState.run.result = null;
@@ -112,6 +115,7 @@ export function goTitle() {
 export function resetBattle() {
   clearInterval(tickTimer);
   tickTimer = null;
+  clearFinish();
 
   gameState.run.stage = 1;
   gameState.run.result = null;
@@ -198,11 +202,17 @@ function battleTick() {
     performAction(ready[0]);
   }
 
-  if (checkBattleEnd()) {
-    stopBattle();
-  }
+  const end = checkBattleEnd();
 
+  // renderGame을 먼저 — 이 시점 화면은 아직 battle이라 마지막 사망 연출이 보인다.
   renderGame(gameState);
+
+  if (end) {
+    stopBattle();
+    // Victory Finish 01: 정식 런/패배는 짧은 마무리 호흡 뒤 전환(사망 연출 노출).
+    //   preview는 기존대로 battle 화면에 머문다(전환 없음).
+    if (end.outcome !== "preview") scheduleFinish(end.outcome);
+  }
 }
 
 function performAction(unit) {
@@ -319,41 +329,66 @@ function performHeal(healer, target) {
   });
 }
 
+// Combat Lifecycle Polish 01: 전투 종료를 "감지"만 하고(상태=ended), 결과/화면 전환은
+//   짧은 마무리 호흡 뒤 applyFinish에서 적용한다(마지막 사망 연출이 씹히지 않게).
+//   반환: null(계속) | { outcome: "preview"|"victory"|"clear"|"defeat" }
+//   전투 계산식(데미지/타겟/사망 판정)은 무변경 — 전환 "타이밍"만 조정.
 function checkBattleEnd() {
   const allEnemiesDead = gameState.enemies.every((u) => u.isDead);
   const allPartyDead = gameState.party.every((u) => u.isDead);
+  if (!allEnemiesDead && !allPartyDead) return null;
 
-  // Combat Breath Preview 01: 프리뷰 장면은 성장/결과로 넘어가지 않고 화면에 머문다
-  //   (나라가 프리뷰 바로 다른 장면을 다시 선택할 수 있게 battle 화면 유지).
-  if (gameState.battle.previewKind && (allEnemiesDead || allPartyDead)) {
-    gameState.battle.status = "ended";
+  gameState.battle.status = "ended";
+
+  // 프리뷰는 성장/결과로 넘어가지 않고 화면에 머문다(전환 없음 → 즉시 로그만).
+  if (gameState.battle.previewKind) {
     gameState.run.result = null;
     pushLog(allEnemiesDead ? "프리뷰 종료 — 다른 장면을 선택하세요." : "프리뷰 전멸 — 다시 선택하세요.");
-    return true;
+    return { outcome: "preview" };
   }
 
   if (allEnemiesDead) {
-    gameState.battle.status = "ended";
-    if (gameState.run.stage < gameState.run.maxStage) {
-      gameState.run.result = "victory";
-      gameState.screen = "growth";
-      pushLog(`Stage ${gameState.run.stage} 클리어! 성장을 선택하세요.`);
-    } else {
-      gameState.run.result = "clear";
-      pushLog("전체 클리어! ▶ 처음부터");
-    }
-    return true;
+    return { outcome: gameState.run.stage < gameState.run.maxStage ? "victory" : "clear" };
   }
+  return { outcome: "defeat" };
+}
 
-  if (allPartyDead) {
-    gameState.battle.status = "ended";
+// Victory Finish 01: 마지막 적/아군 사망 연출이 보일 짧은 호흡 뒤 전환.
+//   2x≈640ms / MAX≈420ms (사망 연출보다 살짝 길게). 너무 긴 지연 금지.
+let finishTimer = null;
+
+function finishDelay() {
+  return gameState.battle.speed >= 10 ? 420 : 640;
+}
+
+function scheduleFinish(outcome) {
+  clearTimeout(finishTimer);
+  finishTimer = setTimeout(() => applyFinish(outcome), finishDelay());
+}
+
+function clearFinish() {
+  clearTimeout(finishTimer);
+  finishTimer = null;
+}
+
+// 마무리 호흡 뒤 결과/성장 전환. 기존 outcome별 흐름(victory→growth / clear·defeat→오버레이) 유지.
+function applyFinish(outcome) {
+  finishTimer = null;
+  if (gameState.battle.status !== "ended") return; // 그 사이 새 전투 시작 시 무시(방어)
+
+  if (outcome === "victory") {
+    gameState.run.result = "victory";
+    gameState.screen = "growth";
+    pushLog(`Stage ${gameState.run.stage} 클리어! 성장을 선택하세요.`);
+  } else if (outcome === "clear") {
+    gameState.run.result = "clear";
+    pushLog("전체 클리어! ▶ 처음부터");
+  } else if (outcome === "defeat") {
     gameState.battle.result = "defeat";
     gameState.run.result = "defeat";
     pushLog("전투 패배... ▶ 다시 시작");
-    return true;
   }
-
-  return false;
+  renderGame(gameState);
 }
 
 function pushLog(text) {
