@@ -18,8 +18,9 @@ SIGNAL_PERSONAL 하나다. 다른 프로젝트 작업은 하지 않는다.
 1. AGENTS.md (이 파일)
 2. docs/03_TEAM_ROLES.md — 팀 역할 및 협업 규칙
 3. docs/07_LUDA_ROLE.md — 루다 역할 정의 및 본게임/연출실 경계
-4. NEXT.md — 현재 다음 작업 확인
-5. DEVLOG.md — 최근 완료 작업 확인
+4. docs/08_LUDA_OPERATING_RULES.md — 루다 단일 모드 운영 규칙
+5. NEXT.md — 현재 다음 작업 확인
+6. DEVLOG.md — 최근 완료 작업 확인
 
 ---
 
