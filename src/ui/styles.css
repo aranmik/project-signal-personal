@@ -1062,6 +1062,8 @@ body {
 #battle-field[data-speed="MAX"] .fx-number { animation-duration: 0.55s; }
 .fx-number--dmg { color: #f4b1a6; }
 .fx-number--heal { color: #9fe6cf; }
+/* Status & Effect Foundation 01: 상태 tick 숫자(poison) — 작고 약하게, 행동 숫자와 결 구분 */
+.fx-number--poison { color: #a8d98a; font-size: 11px; opacity: 0.9; }
 /* 같은 대상 동시 숫자 — queue offset (늦게, 우상단으로) */
 .fx-number--queued {
   animation-name: fx-number-queued;

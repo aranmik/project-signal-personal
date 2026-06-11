@@ -170,12 +170,14 @@ function updateFieldUnit(el, unit) {
   }
 
   // Combat Readability Foundation 01: 상태 마커는 변경 시에만 갱신(매 tick 재생성 방지).
+  //   Status & Effect Foundation 01: 마커는 실제 상태(statuses) + 표시 전용(statusMarkers) 파생.
   const slots = el.querySelector(".status-slots");
   if (slots) {
-    const key = (unit.statusMarkers || []).join(",");
+    const markers = displayMarkers(unit);
+    const key = markers.join(",");
     if (slots.dataset.markers !== key) {
       slots.dataset.markers = key;
-      slots.innerHTML = statusMarkersHTML(unit.statusMarkers);
+      slots.innerHTML = statusMarkersHTML(markers);
     }
   }
 
@@ -297,6 +299,15 @@ function statusMarkersHTML(markers) {
     .join("");
 }
 
+// Status & Effect Foundation 01 — 표시 마커 파생.
+//   실제 상태(unit.statuses)에서 마커를 파생하고, statusMarkers(표시 전용 — preview 등)는
+//   뒤에 합친다(중복 제거, 최대 3 유지). 실데이터와 표시 데이터가 여기서만 합류한다.
+function displayMarkers(unit) {
+  const derived = (unit.statuses || []).map((s) => s.type);
+  const displayOnly = (unit.statusMarkers || []).filter((m) => !derived.includes(m));
+  return [...derived, ...displayOnly].slice(0, 3);
+}
+
 function createFieldUnit(unit) {
   const id = unit.id || "unknown";
   const isParty = unit.team === "party";
@@ -346,7 +357,8 @@ function createFieldUnit(unit) {
   //   - role-pip: 아군 직업 역할 보조 신호(작은 pip, 좌상단, 아바타 안 가림). 이름/숫자 아님.
   //   - status-slots: 상태 마커가 올라갈 자리(상단 중앙). 비어 있으면 표시 없음.
   const rolePip = isParty ? `<span class="role-pip role-${id}" aria-hidden="true"></span>` : "";
-  const markersKey = (unit.statusMarkers || []).join(",");
+  const markers = displayMarkers(unit);
+  const markersKey = markers.join(",");
   // Boss Presence Foundation 01: 정예/보스만 약한 존재감 aura(느린 호흡). 아바타 뒤(낮은 z).
   const presenceAura = unit.tier ? `<span class="presence-aura" aria-hidden="true"></span>` : "";
 
@@ -354,7 +366,7 @@ function createFieldUnit(unit) {
   wrap.innerHTML = `
     ${presenceAura}
     ${rolePip}
-    <div class="status-slots" data-markers="${markersKey}">${statusMarkersHTML(unit.statusMarkers)}</div>
+    <div class="status-slots" data-markers="${markersKey}">${statusMarkersHTML(markers)}</div>
     <div class="fig-react">
       <div class="${figClass} ${id}">${parts}</div>
     </div>
@@ -434,6 +446,19 @@ export function playActionFx(event) {
     reactUnit(targetInstanceId, isHeal);
   };
   setTimeout(fire, lead);
+}
+
+// Status & Effect Foundation 01 — 상태 tick FX(poison 등).
+//   행동선/펄스/리액션 없이 작은 숫자만 — 기존 숫자 상한(MAX_FX_NUMBERS)을 공유해
+//   MAX/다수전에서도 과밀해지지 않는다. 죽는 중/정리된 유닛은 생략.
+export function playStatusTickFx({ targetInstanceId, amount, kind }) {
+  if (dyingUnits.has(targetInstanceId) || cleanedDead.has(targetInstanceId)) return;
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  const t = unitPoint(targetInstanceId, TARGET_HIT, field.getBoundingClientRect());
+  if (!t) return;
+  spawnNumber(layer, t, targetInstanceId, false, amount, kind);
 }
 
 // Action Emphasis 01: source unit "행동 선언" cue.
@@ -645,7 +670,7 @@ function spawnPulse(layer, t, isHeal) {
   layer.appendChild(p);
 }
 
-function spawnNumber(layer, t, targetInstanceId, isHeal, amount) {
+function spawnNumber(layer, t, targetInstanceId, isHeal, amount, variant) {
   // FX Density Guard 01: 숫자 상한 초과 시 가장 오래된 것 제거(MAX/다수전 누적 방지)
   const nums = layer.querySelectorAll(".fx-number");
   if (nums.length >= MAX_FX_NUMBERS) nums[0].remove();
@@ -658,6 +683,7 @@ function spawnNumber(layer, t, targetInstanceId, isHeal, amount) {
   const n = document.createElement("span");
   n.className =
     `fx-number ${isHeal ? "fx-number--heal" : "fx-number--dmg"}` +
+    (variant ? ` fx-number--${variant}` : "") + // 상태 tick 변주(poison 등)
     (overlap ? " fx-number--queued" : "");
   n.textContent = `${isHeal ? "+" : "-"}${amount}`;
   n.style.left = `${t.x}px`;

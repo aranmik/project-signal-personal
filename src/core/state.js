@@ -10,6 +10,9 @@ function createUnit(template, instanceId, bonuses = { atk: 0, maxHp: 0 }) {
     hp: maxHp,
     actionGauge: 0,
     isDead: false,
+    // Status & Effect Foundation 01: 실제 상태 데이터({ type, duration } 배열).
+    //   duration은 "그 유닛의 행동 횟수" 기준(배속 영향 없음). statusMarkers(표시 전용)와 분리.
+    statuses: [],
   };
 }
 
@@ -67,13 +70,14 @@ export function createPreviewEnemies(kind) {
   }
 
   // Combat Readability Foundation 01: 신호(Target/Status/Role) 확인용 프리뷰 장면.
-  //   statusMarkers는 "표시용" 임시 데이터일 뿐 — 실제 상태 이상/효과 계산은 없다.
+  //   Status & Effect Foundation 01: poison/guard는 실제 상태(statuses)로 부여 — 마커는 파생.
+  //   mark/buff는 아직 효과 미구현이라 statusMarkers(표시 전용)로만 올린다.
   if (kind === "signal") {
     return [
       mk("goblin", 0, { statusMarkers: ["mark"] }),
-      mk("slime", 1, { statusMarkers: ["poison"] }),
-      mk("wolf", 2, { statusMarkers: ["poison", "mark"] }),
-      mk("goblin", 3, { sizeClass: "mon-elite", tier: "elite", name: "정예 고블린", maxHp: 170, hp: 170, atk: 12, speed: 5, statusMarkers: ["guard", "buff"] }),
+      mk("slime", 1, { statuses: [{ type: "poison", duration: 4 }] }),
+      mk("wolf", 2, { statuses: [{ type: "poison", duration: 4 }], statusMarkers: ["mark"] }),
+      mk("goblin", 3, { sizeClass: "mon-elite", tier: "elite", name: "정예 고블린", maxHp: 170, hp: 170, atk: 12, speed: 5, statuses: [{ type: "guard", duration: 4 }], statusMarkers: ["buff"] }),
     ];
   }
 

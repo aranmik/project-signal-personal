@@ -1,6 +1,6 @@
 import { gameState } from "./state.js";
 import { createInitialParty, createInitialEnemies, createPreviewEnemies } from "./state.js";
-import { renderGame, playActionFx } from "../ui/render.js";
+import { renderGame, playActionFx, playStatusTickFx } from "../ui/render.js";
 
 let tickTimer = null;
 // Combat Feel Polish 01: 기본 전투 호흡 상향. 새 1x = 500ms (BASE / speed).
@@ -78,15 +78,15 @@ export function startPreview(kind) {
   gameState.enemies = createPreviewEnemies(kind);
   gameState.battle.previewKind = kind;
 
-  // Combat Readability Foundation 01: 신호 프리뷰에선 아군에도 표시용 마커를 얹는다(계산 무관).
+  // Combat Readability Foundation 01: 신호 프리뷰 아군 신호.
+  //   Status & Effect Foundation 01: guard는 실제 상태로 부여(전사 — front라 실제로 맞아 확인 가능).
+  //   buff/mark는 효과 미구현 — statusMarkers(표시 전용) 유지.
   if (kind === "signal") {
-    const setM = (jobId, markers) => {
-      const u = gameState.party.find((x) => x.id === jobId);
-      if (u) u.statusMarkers = markers;
-    };
-    setM("warrior", ["buff"]);
-    setM("guardian", ["guard"]);
-    setM("priest", ["mark"]);
+    const u = (jobId) => gameState.party.find((x) => x.id === jobId);
+    u("warrior").statuses = [{ type: "guard", duration: 4 }];
+    u("warrior").statusMarkers = ["buff"];
+    u("guardian").statuses = [{ type: "guard", duration: 4 }];
+    u("priest").statusMarkers = ["mark"];
   }
 
   gameState.battle.tick = 0;
@@ -227,7 +227,45 @@ function battleTick() {
   }
 }
 
+// Status & Effect Foundation 01 — 최소 상태 시스템(poison/guard).
+//   실제 상태 데이터 = unit.statuses [{ type, duration }]. statusMarkers는 계속 표시 전용.
+//   duration은 "그 유닛의 행동 횟수" 기준(자기 행동마다 1 감소) → 배속(tick 간격)과 무관해
+//   2x/MAX에서 체감이 동일하다. 죽은 유닛은 performAction에 오지 않으므로 tick 처리도 없다.
+const POISON_TICK_DAMAGE = 2; // 작게 고정 — 밸런스를 흔들지 않는 기반 수치
+const GUARD_DAMAGE_REDUCTION = 3; // 받는 피해 -3 (최소 1 보장)
+
+function hasStatus(unit, type) {
+  return Array.isArray(unit.statuses) && unit.statuses.some((s) => s.type === type);
+}
+
+// 행동 직전 상태 처리: poison 고정 피해 → duration 1 감소 → 만료 제거.
+//   poison으로 죽으면 행동하지 않는다(호출부에서 isDead 확인).
+function processStatusesBeforeAction(unit) {
+  if (!Array.isArray(unit.statuses) || unit.statuses.length === 0) return;
+
+  if (hasStatus(unit, "poison")) {
+    unit.hp -= POISON_TICK_DAMAGE;
+    pushLog(`${unit.name}${josa(unit.name, "이가")} 중독 피해. ${POISON_TICK_DAMAGE} 피해.`);
+    // FX 과밀 방지: 행동선/펄스 없이 작은 숫자만 (기존 숫자 상한 공유)
+    playStatusTickFx({ targetInstanceId: unit.instanceId, amount: POISON_TICK_DAMAGE, kind: "poison" });
+    if (unit.hp <= 0) {
+      unit.hp = 0;
+      unit.isDead = true;
+      pushLog(`${unit.name}${josa(unit.name, "이가")} 쓰러졌다.`);
+    }
+  }
+
+  unit.statuses.forEach((s) => { s.duration -= 1; });
+  unit.statuses = unit.statuses.filter((s) => s.duration > 0);
+}
+
 function performAction(unit) {
+  processStatusesBeforeAction(unit);
+  if (unit.isDead) {
+    unit.actionGauge = 0; // poison으로 행동 전 사망 — 이번 행동은 소멸
+    return;
+  }
+
   const isParty = gameState.party.includes(unit);
 
   if (isParty && unit.id === "priest") {
@@ -296,7 +334,10 @@ function attackLineType(attacker) {
 }
 
 function performAttack(attacker, target) {
-  const damage = attacker.atk;
+  // Status & Effect Foundation 01: guard — 받는 피해 최소 보정(음수/0 방지, 최소 1).
+  const damage = hasStatus(target, "guard")
+    ? Math.max(1, attacker.atk - GUARD_DAMAGE_REDUCTION)
+    : attacker.atk;
   target.hp -= damage;
 
   const verb = attackVerb(attacker);
