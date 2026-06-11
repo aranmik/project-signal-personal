@@ -78,6 +78,17 @@ export function startPreview(kind) {
   gameState.enemies = createPreviewEnemies(kind);
   gameState.battle.previewKind = kind;
 
+  // Combat Readability Foundation 01: 신호 프리뷰에선 아군에도 표시용 마커를 얹는다(계산 무관).
+  if (kind === "signal") {
+    const setM = (jobId, markers) => {
+      const u = gameState.party.find((x) => x.id === jobId);
+      if (u) u.statusMarkers = markers;
+    };
+    setM("warrior", ["buff"]);
+    setM("guardian", ["guard"]);
+    setM("priest", ["mark"]);
+  }
+
   gameState.battle.tick = 0;
   gameState.battle.status = "ready";
   gameState.battle.isRunning = false;
@@ -87,6 +98,7 @@ export function startPreview(kind) {
     "normal-max": "프리뷰: 다수전(Normal Max)",
     "elite-mix": "프리뷰: 정예 혼합(Elite Mix)",
     "boss-solo": "프리뷰: 보스 단독(Boss Solo)",
+    "signal": "프리뷰: 신호 확인(Target/Status/Role)",
   };
   gameState.logs = [labels[kind] || "프리뷰"];
 

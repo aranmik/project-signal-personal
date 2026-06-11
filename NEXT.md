@@ -40,8 +40,17 @@ Combat Lifecycle Polish 01 (Death Exit / Field Cleanup / Victory Finish / FX Den
   · Death: HP0 → .dying(무너짐+fade+dust, 0.5s/MAX 0.34s) → DOM 제거. dyingUnits/cleanedDead Set, reconcile 자동 복구(스테이지 재사용 안전).
   · Victory Finish: 마지막 사망 후 짧은 호흡(2x 640ms/MAX 420ms) 뒤 growth/결과 전환(checkBattleEnd→scheduleFinish). preview는 battle 유지.
   · FX Guard: 라인≤7/숫자≤8 상한, MAX 단축, dying 유닛 hit 반응 생략. 전투 계산식·reconcile·tick 구조 무변경.
-
-## 화면 Flow (Shell 01 확정)
+Combat Readability Foundation 01 (Target / Status / Role Signal Layer) 완료 — 나라님이 직접 최종 확인 후 push 예정.
+  · 핵심: "누가 누구를 노리고, 어떤 상태/역할인지 읽힌다." 새 전투 계산 없이 신호 표시 레이어 기반.
+  · Target Signal: 대상에 짧은 lock-on ring(공격 coral/회복 mint, 유닛 비례·상한124, 상한5·MAX 단축, death 생략). actor cue보다 약한 보조.
+  · Status Slot: 유닛 상단 .status-slots(최대3, statusMarkers 표시용·계산 무관, 변경 시만 reconcile). 마커 poison/guard/mark/buff.
+  · Role Signal: 아군 좌상단 role-pip(전사 원/수호자 사각/궁수 화살촉/사제 금빛). 이름·숫자 없음, 아바타 안 가림.
+  · Readability Preview: #preview-bar "신호" 버튼(아군+적 표시 마커 장면). 전투 계산/생명주기/LBS04A 무변경.
+Boss Presence Foundation 01 (정예/보스 존재감 기반) 완료 — 나라님이 직접 최종 확인 후 push 예정.
+  · 핵심: "일반 적은 전장의 일부, 정예/보스는 전장의 중심 사건." 정식 보스 시스템 아님 — "묵직함" 기반.
+  · tier hook: unit.tier(elite/boss) → data-tier. 크기(sizeClass)와 분리. 일반 적/아군 영향 없음.
+  · Presence: .presence-aura 느린 호흡 glow(보스 4.6s/정예 3.6s, 약하게). Hit: sig-hit-heavy(덜 튕기고 묵직, 보스 0.46s). Death: 살짝 느림(보스 0.6s)+aura 먼저 꺼짐.
+  · preview: 보스/정예/신호에서 확인(새 버튼 없음). 전투 계산/Lifecycle/Readability/reconcile 무변경.
 
 타이틀(시작) → 전투(자동) → 승리 시 성장 선택 → 다음 스테이지 → 최종 클리어/패배 시 결과 오버레이(처음부터·다시 시작 / 타이틀로)
 

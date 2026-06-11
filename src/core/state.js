@@ -48,10 +48,11 @@ export function createPreviewEnemies(kind) {
   }
 
   if (kind === "elite-mix") {
-    // 정예처럼 보이는 큰 몬스터 1~2 + 일반 혼합 (임시 — 크기/HP만)
+    // 정예처럼 보이는 큰 몬스터 1~2 + 일반 혼합 (임시 — 크기/HP만).
+    //   Boss Presence Foundation 01: tier="elite"로 존재감 레이어 hook(크기와 분리).
     return [
-      mk("goblin", 0, { sizeClass: "mon-elite", name: "정예 고블린", maxHp: 170, hp: 170, atk: 12, speed: 5 }),
-      mk("wolf", 1, { sizeClass: "mon-elite", name: "정예 늑대", maxHp: 140, hp: 140, atk: 13, speed: 7 }),
+      mk("goblin", 0, { sizeClass: "mon-elite", tier: "elite", name: "정예 고블린", maxHp: 170, hp: 170, atk: 12, speed: 5 }),
+      mk("wolf", 1, { sizeClass: "mon-elite", tier: "elite", name: "정예 늑대", maxHp: 140, hp: 140, atk: 13, speed: 7 }),
       mk("slime", 2),
       mk("slime", 3),
       mk("goblin", 4),
@@ -59,9 +60,20 @@ export function createPreviewEnemies(kind) {
   }
 
   if (kind === "boss-solo") {
-    // 보스처럼 보이는 큰 몬스터 1체 단독 (정식 보스 패턴/시스템 없음)
+    // 보스처럼 보이는 큰 몬스터 1체 단독 (정식 보스 패턴/시스템 없음). tier="boss".
     return [
-      mk("goblin", "boss", { sizeClass: "mon-boss", name: "보스 고블린", maxHp: 520, hp: 520, atk: 15, speed: 5 }),
+      mk("goblin", "boss", { sizeClass: "mon-boss", tier: "boss", name: "보스 고블린", maxHp: 520, hp: 520, atk: 15, speed: 5, statusMarkers: ["mark"] }),
+    ];
+  }
+
+  // Combat Readability Foundation 01: 신호(Target/Status/Role) 확인용 프리뷰 장면.
+  //   statusMarkers는 "표시용" 임시 데이터일 뿐 — 실제 상태 이상/효과 계산은 없다.
+  if (kind === "signal") {
+    return [
+      mk("goblin", 0, { statusMarkers: ["mark"] }),
+      mk("slime", 1, { statusMarkers: ["poison"] }),
+      mk("wolf", 2, { statusMarkers: ["poison", "mark"] }),
+      mk("goblin", 3, { sizeClass: "mon-elite", tier: "elite", name: "정예 고블린", maxHp: 170, hp: 170, atk: 12, speed: 5, statusMarkers: ["guard", "buff"] }),
     ];
   }
 

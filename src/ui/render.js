@@ -169,6 +169,16 @@ function updateFieldUnit(el, unit) {
     return;
   }
 
+  // Combat Readability Foundation 01: 상태 마커는 변경 시에만 갱신(매 tick 재생성 방지).
+  const slots = el.querySelector(".status-slots");
+  if (slots) {
+    const key = (unit.statusMarkers || []).join(",");
+    if (slots.dataset.markers !== key) {
+      slots.dataset.markers = key;
+      slots.innerHTML = statusMarkersHTML(unit.statusMarkers);
+    }
+  }
+
   const hpFill = el.querySelector(".hp-bar-fill");
   if (hpFill) {
     const hpPct = unit.maxHp > 0
@@ -235,6 +245,58 @@ function spawnDeathDust(instanceId, isParty) {
   layer.appendChild(d);
 }
 
+// Combat Readability Foundation 01 — Target Signal: 행동 대상에 짧은 "잡혔다" ring.
+//   actor cue보다 약한 보조 신호(연결 강화). FX 레이어 ring이라 유닛 transform과 충돌 없음.
+//   ring 크기는 대상 rect에 비례(보스 scale 2.8에서도 안정). 죽는 중/정리됨은 생략.
+//   상한(MAX_FX_TARGETS) + MAX 단축으로 과밀 방지.
+const MAX_FX_TARGETS = 5;
+function spawnTargetCue(targetInstanceId, isHeal) {
+  if (dyingUnits.has(targetInstanceId) || cleanedDead.has(targetInstanceId)) return;
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  const el = document.querySelector(`#unit-layer [data-instance-id="${targetInstanceId}"]`);
+  if (!layer || !field || !el) return;
+
+  const cues = layer.querySelectorAll(".fx-target");
+  if (cues.length >= MAX_FX_TARGETS) cues[0].remove();
+
+  const r = el.getBoundingClientRect();
+  const fieldRect = field.getBoundingClientRect();
+  const cx = r.left - fieldRect.left + r.width / 2;
+  const cy = r.top - fieldRect.top + r.height * 0.46; // 몸통 중앙 약간 위
+  const size = Math.max(34, Math.min(124, r.width * 0.92));
+
+  const c = document.createElement("span");
+  c.className = `fx-target${isHeal ? " fx-target--heal" : ""}`;
+  c.style.left = `${cx}px`;
+  c.style.top = `${cy}px`;
+  c.style.width = `${size}px`;
+  c.style.height = `${size}px`;
+  c.addEventListener("animationend", () => c.remove());
+  layer.appendChild(c);
+}
+
+// Combat Readability Foundation 01 — Status Slot Foundation.
+//   유닛 위에 작은 상태 마커(최대 3)를 올릴 자리. 실제 상태 계산과 결합하지 않음 —
+//   unit.statusMarkers(표시용 배열)만 읽는다. preview/test 용도.
+const STATUS_MARKERS = {
+  poison: "sm-poison", // 중독 후보 — 초록 점
+  guard: "sm-guard",   // 보호 후보 — 파란 사각
+  mark: "sm-mark",     // 표식 후보 — 호박 점
+  buff: "sm-buff",     // 강화 후보 — 보라 마름모
+};
+
+function statusMarkersHTML(markers) {
+  if (!Array.isArray(markers) || markers.length === 0) return "";
+  return markers
+    .slice(0, 3)
+    .map((m) => {
+      const cls = STATUS_MARKERS[m];
+      return cls ? `<span class="status-marker ${cls}" aria-label="${m}"></span>` : "";
+    })
+    .join("");
+}
+
 function createFieldUnit(unit) {
   const id = unit.id || "unknown";
   const isParty = unit.team === "party";
@@ -258,6 +320,8 @@ function createFieldUnit(unit) {
   const wrap = document.createElement("div");
   wrap.className = `unit ${unit.team} ${posClass}${sizeClass} ${facingClass}${deadClass}`;
   wrap.dataset.instanceId = unit.instanceId;
+  // Boss Presence Foundation 01: 정예/보스 존재감 hook(일반 적/아군엔 없음). 크기와 분리된 tier.
+  if (unit.tier) wrap.dataset.tier = unit.tier;
 
   const figClass = isParty ? "avatar" : "monster";
   const parts = (AVATAR_PARTS[id] || [])
@@ -278,8 +342,19 @@ function createFieldUnit(unit) {
   // Hit Reaction 01: 아바타를 .fig-react로 감싼다.
   //   transform 충돌 회피용 전용 레이어 — .unit(scale) / .fig-react(피격·회복 반응) / .avatar(idle)
   //   세 요소가 각자 transform을 가져 곱연산으로 합성된다.
+  // Combat Readability Foundation 01:
+  //   - role-pip: 아군 직업 역할 보조 신호(작은 pip, 좌상단, 아바타 안 가림). 이름/숫자 아님.
+  //   - status-slots: 상태 마커가 올라갈 자리(상단 중앙). 비어 있으면 표시 없음.
+  const rolePip = isParty ? `<span class="role-pip role-${id}" aria-hidden="true"></span>` : "";
+  const markersKey = (unit.statusMarkers || []).join(",");
+  // Boss Presence Foundation 01: 정예/보스만 약한 존재감 aura(느린 호흡). 아바타 뒤(낮은 z).
+  const presenceAura = unit.tier ? `<span class="presence-aura" aria-hidden="true"></span>` : "";
+
   wrap.setAttribute("aria-label", unit.name);
   wrap.innerHTML = `
+    ${presenceAura}
+    ${rolePip}
+    <div class="status-slots" data-markers="${markersKey}">${statusMarkersHTML(unit.statusMarkers)}</div>
     <div class="fig-react">
       <div class="${figClass} ${id}">${parts}</div>
     </div>
@@ -346,6 +421,8 @@ export function playActionFx(event) {
 
   // 1) 행동자 선언("나야 지금!") — source unit이 먼저 짧게 보인다.
   cueActor(sourceInstanceId, lineType);
+  // 1b) 대상 신호("잡혔다") — actor보다 약한 보조 신호. 선이 도착하기 전 대상을 가리킨다.
+  spawnTargetCue(targetInstanceId, isHeal);
 
   // 2) 짧은 선행 뒤 행동선 발사 + 대상 반응. 배속이면 리듬만 살게 더 짧게.
   const speed = Number(field.dataset.speed) || 1;

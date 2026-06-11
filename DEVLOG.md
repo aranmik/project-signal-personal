@@ -134,6 +134,89 @@ Scope: 세로형 모바일 HTML/PWA 자동전투 개인 작업물
 
 ---
 
+### Boss Presence Foundation 01 — 정예/보스 존재감 기반 완료
+
+> 핵심 문장: "일반 적은 전장의 일부이고, 정예/보스는 전장의 중심 사건으로 읽혀야 한다."
+> 목표 문장: "강한 적은 등장 순간부터, 피격 중에도, 사망 순간에도 일반 적과 다르게 읽힌다."
+> 정식 보스 시스템 아님 — "보스다!"가 아니라 "묵직하다" 수준의 존재감 기반. 전투 계산식·밸런스·LBS04A·Lifecycle·Readability 유지.
+
+**구조 (tier hook)**: `unit.tier`("elite"/"boss") → createFieldUnit이 `data-tier` 부여. 크기(sizeClass)와 분리.
+일반 적/아군엔 tier 없음 → presence 미적용. 프리뷰 정예/보스/신호 장면에 tier 부여(표시용).
+
+**1) Boss / Elite Presence Layer** (`render.js` + `styles.css`)
+- tier 유닛에만 `.presence-aura`(아바타 뒤, z0 / `.fig-react` z1) — 약한 따뜻한 호흡 glow. 번쩍이는 테두리·대형 UI 아님.
+- 느린 존재감 호흡(presence-breathe): **보스 4.6s(더 느림=더 묵직) / 정예 3.6s**, opacity 0.34↔0.62·미세 scale. reduced-motion은 정지.
+- 검증: 정예 2(aura O)/일반 3(aura X)/아군(tier·aura X) 구분, 보스 aura 스크린샷 확인.
+
+**2) Boss Hit Reaction Foundation** (`styles.css`)
+- tier 유닛 react-hit를 `sig-hit-heavy`로 교체(구조 유지 — 클래스만 tier별 애니 교체): 흔들림 ±1px(일반 ±2px)·duration 보스 0.46s/정예 0.4s(일반 0.32s) → "덜 튕기고 더 묵직". MAX 0.3s 단축.
+- 일반 적은 기존 sig-hit 0.32s 그대로(회귀 없음). target cue/라인/숫자/death 우선순위와 충돌 없음.
+
+**3) Boss Death Foundation** (`styles.css`)
+- tier 사망은 살짝 느리고 묵직: death duration 보스 0.6s/정예 0.56s(일반 0.5s, finishDelay 640ms 안에 들어옴). MAX 0.36s.
+- 사망 시작과 함께 존재감 aura가 먼저 빠르게 꺼짐(presence-out 0.18s) → "aura 먼저 꺼지고 몸체 정리". Field Cleanup/Victory Finish 흐름·DOM 제거 구조 그대로.
+- 검증: 보스 death→cleanup(DOM 제거), preview battle 유지, 파티 온전.
+
+**4) Boss Preview 보강**: 새 버튼 없이 기존 "보스"(존재감+무거운 hit+묵직 death) / "정예"(정예 2 aura) / "신호"(정예 1 aura)에서 확인 가능.
+
+- 변경 파일: `src/core/state.js`, `src/ui/render.js`, `src/ui/styles.css`, `DEVLOG.md`, `NEXT.md` (battle.js·index.html 무변경)
+- 검증 (프리뷰, 구조 측정 + 스크린샷):
+  - 보스: data-tier=boss·aura(4.6s)·fig z1, hit sig-hit-heavy 0.46s(MAX 0.3s)·death 0.6s·aura presence-out ✓
+  - 정예 2 aura / 일반 3·아군 aura 없음 ✓, 일반 적 hit 기존 sig-hit 0.32s 유지 ✓
+  - 보스 death→cleanup·preview battle 유지·파티 온전 ✓, console error/warn 0
+- **DOM reconcile / tick 영향**: presence-aura는 tier 유닛 createFieldUnit에 1회 생성, 매 tick 갱신 없음. death 시 .unit과 함께 제거. reconcile/tick 구조 무변경.
+- **전투 계산식 변경**: 없음(presence/hit/death 전부 표시 레이어, tier는 표시용). 데미지/타겟/사망 판정/밸런스 무변경.
+- **WATCH / 다음 폴리시 후보**:
+  - presence aura 강도/색 1차안(따뜻한 coral) — 모바일에서 과하면 opacity 더 낮출 여지. 테마 보스별 색 분기는 차기.
+  - 보스가 정식 런 마지막 적이 되는 날엔 death 0.6s vs finishDelay 640ms 여유 20ms — 그때 finishDelay를 tier 인지로 늘리는 것 검토(현재 보스는 preview 전용이라 무관).
+  - 보스 전용 대형 사망 연출/등장 연출/중간보스 단계는 미구현(존재감 기반만) — 차기 후보.
+  - MAX 다수+정예 동시 aura 호흡 총량 실기기 체감 확인 권장.
+- **push 안 함 / 나라님이 직접 최종 확인 후 GitHub push + 모바일 Pages 확인**
+
+---
+
+### Combat Readability Foundation 01 — Target / Status / Role Signal Layer 완료
+
+> 핵심 문장: "전투의 재미는 선택에서 나오고, 선택은 읽히는 정보에서 시작된다."
+> 새 전투 계산 없이, 앞으로 직업/스킬/버프/디버프/보스 패턴을 올릴 수 있는 "신호 표시 레이어" 기반.
+> 추가 문장: "누가 누구를 노리고, 어떤 상태이며, 어떤 역할인지 읽힌다." 전투 계산식·LBS04A·Lifecycle 유지.
+
+**1) Target Signal 01** (`render.js spawnTargetCue` + `styles.css .fx-target`)
+- 행동 대상에 짧은 "잡혔다" ring(FX 레이어 — 유닛 transform과 충돌 없음). 바깥(1.38배)에서 좁혀 들어와 lock 되는 느낌 → **actor cue보다 약한 보조 신호**.
+- `playActionFx`에서 actor cue 직후·선 발사(+lead) 전에 발생 → "A가 B를 잡음 → 선 도착 → 피격" 연결 강화.
+- 공격=따뜻한 coral / 회복=부드러운 민트. ring 크기는 대상 rect에 비례(보스 scale 2.8도 안정, 상한 124px). **죽는 중/정리된 유닛은 생략**. 상한(MAX_FX_TARGETS 5) + MAX 0.45→0.3s 단축.
+- 우선순위: acting > line/target-cue > target reaction > idle. death 중엔 hit 반응뿐 아니라 target cue도 생략.
+
+**2) Status Slot Foundation 01** (`render.js` + `styles.css .status-slots`)
+- 유닛 상단 중앙에 `.status-slots`(최대 3개 마커) 자리 마련 — HP바/속도게이지/행동선/숫자와 안 겹침(상단, z7).
+- `unit.statusMarkers`(표시용 배열)만 읽음 — **실제 상태 계산과 결합 안 함**. 변경 시에만 reconcile(매 tick 재생성 없음, dataset.markers 비교).
+- 마커 후보(표시만): poison(초록 점)/guard(파란 사각)/mark(호박 점)/buff(보라 마름모). 실제 중독/보호/표식 계산은 미구현(요청대로).
+
+**3) Role Signal 01** (`render.js` + `styles.css .role-pip`)
+- 아군 직업 역할 보조 pip(좌상단 7px, 아바타 안 가림, 이름/숫자 아님): 전사=붉은 원(근접) / 수호자=파란 사각(보호) / 궁수=연두 화살촉(원거리) / 사제=금빛 원+후광(지원).
+- 적은 pip 없음(아군 역할 판독 보조에 집중). 기존 아바타 실루엣 유지.
+
+**4) Readability Preview 01** (`index.html` "신호" 버튼 + `state.js`/`battle.js`)
+- `#preview-bar`에 "신호"(`data-preview="signal"`) 추가 — 아군 4(role pip + 표시 마커) + 적 4(표시 마커: mark/poison/poison+mark/정예 guard+buff)로 신호 확인 장면. 기타 프리뷰(boss=mark)에도 표시 마커 일부 부여(표시용).
+
+- 변경 파일: `src/core/state.js`, `src/core/battle.js`, `src/ui/render.js`, `src/ui/styles.css`, `index.html`, `DEVLOG.md`, `NEXT.md`
+- 검증 (프리뷰, 구조 측정 + 스크린샷):
+  - signal 장면: 아군 role pip 4종 + 상태 마커, 적 상태 마커 — 작게·상단·아바타 안 가림·HP바 안 겹침 ✓
+  - Target cue: 공격(coral, w≈59/유닛 비례) / 회복(mint, w≈68) / 보스(w 124 상한) 발생·색·비례 확인 ✓
+  - 마커 변경 reconcile("buff"→"poison,buff,guard" 3개, 최대 3 적용) ✓
+  - 정식 런 victory→growth 무결(신호 추가 후에도) ✓, 보스 target ring 안 깨짐 ✓
+  - console error/warn 0
+- **DOM reconcile / tick 영향**: status-slots/role-pip은 createFieldUnit에 1회 생성, 마커는 변경 시에만 갱신(매 tick 재생성 없음). death/cleanup·reconcile 구조 그대로 — .unit 제거 시 마커/pip 함께 정리.
+- **전투 계산식 변경**: 없음(target cue·마커·pip 전부 표시 레이어, statusMarkers는 표시용). 배속/게이지/사망/타겟 판정 무변경.
+- **WATCH / 다음 폴리시 후보**:
+  - target cue가 actor cue 직후 발생(선 도착 ~+lead 전) — 2x 자연스러우나 모바일에서 빠르면 미세 지연 조정 여지.
+  - status marker는 표시용 자리만 — 실제 상태 시스템(중독/보호/표식 계산)은 차기 작업.
+  - role pip 색/모양은 1차안 — 색약/소형 화면 가독성 모바일 확인 후 조정 여지. 적 진영 역할 신호는 미적용(후보).
+  - MAX 다수전에서 target cue+마커+선+숫자 총량 — 상한/단축으로 억제했으나 실기기 체감 확인 권장.
+- **push 안 함 / 나라님이 직접 최종 확인 후 GitHub push + 모바일 Pages 확인**
+
+---
+
 ### Combat Lifecycle Polish 01 — Death Exit / Field Cleanup / Victory Finish / FX Density Guard 완료
 
 > 핵심 문장 추가: "쓰러진다 → 전장에서 정리된다 → 전투가 끝난다."

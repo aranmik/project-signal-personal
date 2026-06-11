@@ -698,6 +698,147 @@ body {
 }
 
 /* ===================================================================
+   Combat Readability Foundation 01 — 신호 레이어
+   Target Signal(대상 ring) / Status Slot(상태 마커) / Role Signal(역할 pip)
+   전투 계산 무관 — "누구를 노리고 어떤 상태/역할인지" 읽히는 표시 기반.
+   =================================================================== */
+
+/* Target Signal — 대상에 짧게 "잡혔다" ring. 크게 빨간 경고가 아니라 보조 신호(약하게).
+   바깥에서 좁혀 들어오며 lock 되는 느낌 → actor cue보다 약하다. 색은 currentColor. */
+.fx-target {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  box-sizing: border-box;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0;
+  color: rgba(240, 150, 110, 0.82);              /* 공격 대상 — 따뜻한 coral */
+  animation: fx-target 0.45s ease-out forwards;
+}
+.fx-target--heal { color: rgba(150, 226, 198, 0.78); } /* 회복 대상 — 부드러운 민트 */
+#battle-field[data-speed="MAX"] .fx-target { animation-duration: 0.3s; }
+@keyframes fx-target {
+  0%   { opacity: 0;    transform: translate(-50%, -50%) scale(1.38); }
+  32%  { opacity: 0.85; transform: translate(-50%, -50%) scale(1.0); }
+  100% { opacity: 0;    transform: translate(-50%, -50%) scale(0.9); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-target { animation-duration: 0.01s; }
+}
+
+/* Status Slot — 유닛 상단 중앙, 작은 마커 최대 3개(가로 행). HP/속도바/숫자와 안 겹침. */
+#battle-field .unit .status-slots {
+  position: absolute;
+  top: -7px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 3px;
+  z-index: 7;
+  pointer-events: none;
+}
+#battle-field .unit .status-marker {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.55);
+}
+.status-marker.sm-poison { background: #7ec96b; }                     /* 중독 — 초록 점 */
+.status-marker.sm-guard  { background: #6fa8e0; border-radius: 2px; } /* 보호 — 파란 사각 */
+.status-marker.sm-mark   { background: #e6b455; }                    /* 표식 — 호박 점 */
+.status-marker.sm-buff   { background: #d3a4ef; border-radius: 1px; transform: rotate(45deg); } /* 강화 — 보라 마름모 */
+
+/* Role Signal — 아군 직업 역할 보조 pip(좌상단, 7px, 아바타 안 가림). 이름/숫자 아님. */
+#battle-field .unit .role-pip {
+  position: absolute;
+  top: 1px;
+  left: 3px;
+  width: 7px;
+  height: 7px;
+  z-index: 7;
+  opacity: 0.92;
+  pointer-events: none;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+}
+.role-pip.role-warrior  { background: #e0795f; border-radius: 50%; }                 /* 근접/전열 — 붉은 원 */
+.role-pip.role-guardian { background: #6fa8e0; border-radius: 2px; }                 /* 보호 — 파란 사각(방패) */
+.role-pip.role-archer   { background: #c3e07a; clip-path: polygon(0 0, 100% 50%, 0 100%); } /* 원거리 — 화살촉 */
+.role-pip.role-priest   { background: #f0d36a; border-radius: 50%; box-shadow: 0 0 0 1.5px rgba(240,211,106,0.35); } /* 지원 — 금빛 원+후광 */
+
+/* ===================================================================
+   Boss Presence Foundation 01 — 정예/보스 존재감 기반
+   "일반 적은 전장의 일부, 정예/보스는 전장의 중심 사건." UI 늘리지 않고 묵직함만.
+   data-tier="elite"/"boss"에만 적용 — 일반 적/아군 영향 없음.
+   =================================================================== */
+
+/* 존재감 aura — 아바타 뒤 약한 호흡 glow. "보스다!"가 아니라 "묵직하다" 정도(낮은 강도). */
+#battle-field .unit .presence-aura {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  width: 70%;
+  height: 56%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  z-index: 0;            /* fig-react(이하)보다 뒤 */
+  pointer-events: none;
+  opacity: 0;
+}
+#battle-field .unit[data-tier] .fig-react { position: relative; z-index: 1; } /* 아바타를 aura 위로 */
+
+#battle-field .unit[data-tier="elite"] .presence-aura {
+  background: radial-gradient(ellipse at center, rgba(239, 125, 106, 0.22), transparent 70%);
+  animation: presence-breathe 3.6s ease-in-out infinite;
+}
+#battle-field .unit[data-tier="boss"] .presence-aura {
+  width: 78%; height: 62%;
+  background: radial-gradient(ellipse at center, rgba(239, 110, 92, 0.30), transparent 72%);
+  animation: presence-breathe 4.6s ease-in-out infinite; /* 보스는 더 느린 호흡 = 더 묵직 */
+}
+/* 느린 존재감 호흡 — 미세한 scale + opacity pulse(번쩍임 아님) */
+@keyframes presence-breathe {
+  0%, 100% { opacity: 0.34; transform: translate(-50%, -50%) scale(0.94); }
+  50%      { opacity: 0.62; transform: translate(-50%, -50%) scale(1.06); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #battle-field .unit .presence-aura { animation: none; opacity: 0.4; }
+}
+
+/* Boss Hit Reaction Foundation — 정예/보스는 덜 튕기고 더 묵직하게(이동 작게·duration 길게).
+   기존 hit reaction 구조 유지: react-hit 클래스에 tier별 애니메이션만 교체. */
+#battle-field .unit[data-tier="elite"] .fig-react.react-hit { animation: sig-hit-heavy 0.4s ease-out; }
+#battle-field .unit[data-tier="boss"] .fig-react.react-hit  { animation: sig-hit-heavy 0.46s ease-out; }
+/* MAX에선 묵직 반응도 단축(억제) */
+#battle-field[data-speed="MAX"] .unit[data-tier] .fig-react.react-hit { animation-duration: 0.3s; }
+/* 작은 흔들림(±1px) + 부드러운 flash — 일반(±2px, 0.32s)보다 묵직 */
+@keyframes sig-hit-heavy {
+  0%   { transform: translateX(0);     filter: brightness(1); }
+  22%  { transform: translateX(-1px);  filter: brightness(1.4); }
+  55%  { transform: translateX(0.6px); filter: brightness(1.16); }
+  100% { transform: translateX(0);     filter: brightness(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #battle-field .unit[data-tier] .fig-react.react-hit { animation: none; }
+}
+
+/* Boss Death Foundation — 정예/보스 사망은 살짝 더 느리고 묵직하게. aura가 먼저 꺼지고 몸체 정리.
+   Field Cleanup/Victory Finish 흐름 유지(duration만 소폭↑, finishDelay 640ms 안에 들어옴). */
+#battle-field .unit[data-tier="elite"].dying,
+#battle-field .unit[data-tier="elite"].dying .fig-react { animation-duration: 0.56s; }
+#battle-field .unit[data-tier="boss"].dying,
+#battle-field .unit[data-tier="boss"].dying .fig-react { animation-duration: 0.6s; }
+/* 사망 시작과 함께 존재감 aura 먼저 빠르게 꺼짐 */
+#battle-field .unit[data-tier].dying .presence-aura { animation: presence-out 0.18s ease-in forwards; }
+@keyframes presence-out {
+  to { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+}
+/* MAX에선 보스/정예 사망도 단축 */
+#battle-field[data-speed="MAX"] .unit[data-tier].dying,
+#battle-field[data-speed="MAX"] .unit[data-tier].dying .fig-react { animation-duration: 0.36s; }
+
+/* ===================================================================
    Combat HUD 01 — HP 게이지 (01a: 이름/HP 숫자 제거 후 아바타 바로 아래로 정렬)
    얇은 트랙. 캐릭터·행동선·숫자를 가리지 않게.
    =================================================================== */
