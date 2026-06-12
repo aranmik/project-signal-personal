@@ -15,12 +15,65 @@
         <div id="title-inner">
           <p id="title-kicker">개인 공방 / Auto-Battle</p>
           <h1 id="title-name">Project Signal Personal</h1>
-          <p id="title-tagline">너의 선택으로 강해진다.</p>
-          <button id="title-start" type="button">시작</button>
+          <p id="title-tagline">초보자의 길 — 너의 선택으로 강해진다.</p>
+          <button id="title-start" type="button">시작하기</button>
         </div>
       </section>
 
-      <!-- 성장 선택 화면 -->
+      <!-- Game Flow 01 → Fusion Flow 01: 직업 선택 + 배치 화면
+           기본 6직업 중 3명 선택 → 전열2/후열2 슬롯 배치 → 모험 시작.
+           30종 확장은 카드 추가만으로 가능. 배치 상태는 main.js가 관리. -->
+      <section id="job-select" hidden>
+        <div id="job-select-inner">
+          <p id="job-kicker">초보자의 길</p>
+          <h2 id="job-heading">동료 3명을 선택하세요</h2>
+          <div id="job-grid">
+            <button type="button" class="job-card" data-job="warrior">
+              <span class="job-name">전사</span><span class="job-role">전열 공격</span>
+            </button>
+            <button type="button" class="job-card" data-job="guardian">
+              <span class="job-name">수호자</span><span class="job-role">보호 담당</span>
+            </button>
+            <button type="button" class="job-card" data-job="archer">
+              <span class="job-name">궁수</span><span class="job-role">후열 저격</span>
+            </button>
+            <button type="button" class="job-card" data-job="priest">
+              <span class="job-name">사제</span><span class="job-role">회복 지원</span>
+            </button>
+            <button type="button" class="job-card" data-job="cleric">
+              <span class="job-name">신관</span><span class="job-role">후열 지원</span>
+            </button>
+            <button type="button" class="job-card" data-job="trickster">
+              <span class="job-name">교란꾼</span><span class="job-role">후열 교란</span>
+            </button>
+          </div>
+          <p id="formation-hint">배치 — 슬롯을 눌러 위치를 바꿀 수 있어요</p>
+          <div id="formation-grid">
+            <button type="button" class="form-slot-box" data-slot="f0"><span class="slot-name">전열 1</span><span class="slot-job">—</span></button>
+            <button type="button" class="form-slot-box" data-slot="f1"><span class="slot-name">전열 2</span><span class="slot-job">—</span></button>
+            <button type="button" class="form-slot-box" data-slot="b0"><span class="slot-name">후열 1</span><span class="slot-job">—</span></button>
+            <button type="button" class="form-slot-box" data-slot="b1"><span class="slot-name">후열 2</span><span class="slot-job">—</span></button>
+          </div>
+          <button id="job-start" type="button" disabled>모험 시작</button>
+        </div>
+      </section>
+
+      <!-- Fusion Flow Foundation 01: 합체 화면 (S3/S8 클리어 후) -->
+      <section id="fusion-panel" class="flow-panel" hidden>
+        <div id="fusion-body"></div>
+      </section>
+
+      <!-- Fusion Flow Foundation 01: 동료 영입 화면 (S3 합체 후 / S5 클리어 후) -->
+      <section id="recruit-panel" class="flow-panel" hidden>
+        <div id="recruit-body"></div>
+      </section>
+
+      <!-- Party & Formation Integrity 01 보강: 재배치 화면 (합체+영입/4인 확장 후) -->
+      <section id="arrange-panel" class="flow-panel" hidden>
+        <div id="arrange-body"></div>
+      </section>
+
+      <!-- 보상 선택 화면 (Game Flow 01: 스테이지 클리어 → 보상) -->
       <section id="growth-panel" hidden>
         <div id="growth-stage-label"></div>
         <div id="growth-subtitle"></div>
@@ -28,6 +81,7 @@
         <div id="growth-choices">
           <button id="growth-atk">공격 훈련 — 파티 공격력 +1</button>
           <button id="growth-maxhp">체력 훈련 — 파티 최대 HP +5</button>
+          <button id="growth-heal">회복 훈련 — 회복량 +2</button>
         </div>
       </section>
 

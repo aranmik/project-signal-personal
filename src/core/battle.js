@@ -1,5 +1,7 @@
 import { gameState } from "./state.js";
-import { createInitialParty, createInitialEnemies, createPreviewEnemies } from "./state.js";
+import { createInitialParty, createPreviewEnemies, createStageEnemies, SLOT_ORDER, DEFAULT_FORMATION } from "./state.js";
+import { FUSION_RECIPES, BASE_JOBS, prefersFront, slotPreference } from "../data/jobs.js";
+import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
 import { renderGame, playActionFx, playStatusTickFx } from "../ui/render.js";
 
 let tickTimer = null;
@@ -35,9 +37,34 @@ function startTicking() {
   tickTimer = setInterval(battleTick, interval);
 }
 
+// Party & Formation Integrity 01 — 전투 시작 직전 formation/파티 검증.
+//   계약: 슬롯당 최대 1명 / 파티 내 동일 job id 중복 없음.
+//   formation은 슬롯 키 객체라 구조적으로 슬롯 중복이 불가능하지만, 미래 코드 실수를
+//   대비해 유닛 slotKey 중복·누락을 감지하면 빈 슬롯으로 자동 보정 + console.warn.
+function validateParty(context) {
+  const f = gameState.run.formation || {};
+  const jobs = SLOT_ORDER.map((k) => f[k]).filter(Boolean);
+  const dupJob = jobs.find((j, i) => jobs.indexOf(j) !== i);
+  if (dupJob) {
+    console.warn(`[party-validation] 동일 직업 중복: ${dupJob} (${context})`);
+  }
+
+  const seen = new Set();
+  gameState.party.forEach((u) => {
+    if (!u.slotKey || seen.has(u.slotKey)) {
+      const free = SLOT_ORDER.find((k) => !seen.has(k));
+      console.warn(`[party-validation] 슬롯 중복/누락 보정: ${u.id} → ${free} (${context})`);
+      u.slotKey = free;
+      u.role = free && free.startsWith("f") ? "front" : "back";
+    }
+    seen.add(u.slotKey);
+  });
+}
+
 export function startBattle() {
   if (gameState.battle.isRunning) return;
 
+  validateParty("startBattle");
   clearFinish(); // 이전 전투의 지연 전환 잔여 취소
   gameState.battle.status = "running";
   gameState.battle.isRunning = true;
@@ -106,8 +133,23 @@ export function startPreview(kind) {
   startBattle();
 }
 
-// Shell 01: 타이틀 → 전투 진입 (스테이지 1부터 새 런 시작 후 자동 전투)
-export function startRun() {
+// Game Flow Foundation 01: 타이틀 → 직업 선택 화면.
+export function showJobSelect() {
+  clearInterval(tickTimer);
+  tickTimer = null;
+  clearFinish();
+  gameState.battle.isRunning = false;
+  gameState.battle.status = "ready";
+  gameState.screen = "jobSelect";
+  renderGame(gameState);
+}
+
+// Shell 01 → Fusion Flow Foundation 01: 새 런 시작(스테이지 1부터 자동 전투).
+//   formation을 주면 그 배치로(직업 선택 화면), 없으면 직전 시작 배치 유지(다시 시작).
+export function startRun(formation) {
+  if (formation && typeof formation === "object") {
+    gameState.run.startFormation = { ...formation };
+  }
   resetBattle();
   startBattle();
 }
@@ -131,45 +173,170 @@ export function resetBattle() {
 
   gameState.run.stage = 1;
   gameState.run.result = null;
-  gameState.run.bonuses = { atk: 0, maxHp: 0 };
+  gameState.run.bonuses = { atk: 0, maxHp: 0, heal: 0 };
   gameState.screen = "battle";
 
-  gameState.party = createInitialParty();
-  gameState.enemies = createInitialEnemies();
+  // Fusion Flow 01: 런 시작 배치 복원(합체/영입으로 바뀐 formation을 초기화).
+  gameState.run.formation = gameState.run.startFormation
+    ? { ...gameState.run.startFormation }
+    : { ...DEFAULT_FORMATION };
+  gameState.party = createInitialParty(gameState.run.bonuses, gameState.run.formation);
+  gameState.enemies = createStageEnemies(1); // Game Flow 01: 초보자 테마 스테이지 플랜
 
   gameState.battle.tick = 0;
   gameState.battle.status = "ready";
   gameState.battle.isRunning = false;
   gameState.battle.result = null;
   gameState.battle.previewKind = null; // 정식 런 — 프리뷰 모드 해제
+  gameState.run.recruitOffer = null;
 
-  gameState.logs = ["Stage 1 — 처음부터 시작합니다."];
+  gameState.logs = ["초보자의 길 1 / 10 — 모험 시작!"];
 
   renderGame(gameState);
 }
 
-export function applyGrowth(type) {
+// Game Flow Foundation 01: 보상 선택(공격/체력/회복 훈련) → 다음 스테이지.
+//   회복 훈련은 사제 회복량에 작은 고정치(+2)를 더한다 — 복잡한 성장 시스템 아님.
+export function applyReward(type) {
   const b = gameState.run.bonuses;
   let logMsg = "";
 
   if (type === "atk") {
     b.atk += 1;
-    logMsg = "성장 선택: 공격 훈련 — 파티 공격력 +1";
+    logMsg = "보상: 공격 훈련 — 파티 공격력 +1";
+  } else if (type === "heal") {
+    b.heal += 2;
+    logMsg = "보상: 회복 훈련 — 회복량 +2";
   } else {
     b.maxHp += 5;
-    logMsg = "성장 선택: 체력 훈련 — 파티 최대 HP +5";
+    logMsg = "보상: 체력 훈련 — 파티 최대 HP +5";
   }
 
-  gameState.screen = "battle";
   gameState.logs = [logMsg];
+
+  // Fusion Flow 01: 보상 후 스테이지 클리어 이벤트(S3/S8 합체, S5 영입) 라우팅.
+  //   이벤트 타이밍은 STAGE_CLEAR_EVENTS(stage data)로 관리 — 테마/층수가 바뀌면 데이터만 수정.
+  const ev = STAGE_CLEAR_EVENTS[gameState.run.stage];
+  if (ev) {
+    if (ev.type === "recruit") rollRecruitOffer(); // 영입 후보는 진입 시 1회 확정
+    gameState.screen = ev.type; // "fusion" | "recruit"
+    renderGame(gameState);
+    return;
+  }
+
+  proceedNextStage();
+}
+
+// Fusion Flow Foundation 01 — 합체/영입 Flow.
+//   모든 판단은 run.formation(슬롯→jobId)과 데이터(FUSION_RECIPES/BASE_JOBS) 기반.
+//   파티 유닛은 다음 스테이지 진입 시 formation에서 재구성된다(전투 중 변경 없음).
+function proceedNextStage() {
+  gameState.screen = "battle";
   advanceStage();
+}
+
+export function partyJobIds() {
+  const f = gameState.run.formation || {};
+  return SLOT_ORDER.map((k) => f[k]).filter(Boolean);
+}
+
+// 합체 실행: 재료 2명 제거 → 결과 1차 직업을 첫 재료 슬롯에 배치.
+//   공통 규칙: 합체는 2명을 소모해 1명을 얻는다 — 인원이 1명 줄어드므로
+//   "실행"한 경우 반드시 동료 영입으로 보충한다(스테이지/테마와 무관한 공통 Flow).
+//   합체 없음/스킵은 영입 없이 다음 스테이지(skipFusion).
+export function applyFusion(resultId) {
+  const recipe = FUSION_RECIPES.find((r) => r.result === resultId);
+  if (!recipe) return;
+  const f = gameState.run.formation;
+  if (partyJobIds().includes(recipe.result)) return; // 동일 직업 중복 금지 — 방어
+  const slots = SLOT_ORDER.filter((k) => recipe.materials.includes(f[k]));
+  if (slots.length < 2) return; // 재료 부족 — 방어
+
+  // 슬롯 계승: 결과 직업의 선호(전열/후열)와 맞는 재료 슬롯 우선, 없으면 첫 재료 슬롯.
+  //   계승하지 않은 재료 슬롯은 비워져 이어지는 영입에서 채워진다.
+  const wantFront = prefersFront(recipe.result);
+  const inherit =
+    slots.find((k) => (wantFront ? k.startsWith("f") : k.startsWith("b"))) || slots[0];
+  const freed = slots.find((k) => k !== inherit);
+  f[inherit] = recipe.result;
+  f[freed] = null;
+  gameState.logs.push(`합체! ${recipe.result === "rogue" ? "전사 + 궁수 → 도적" : "사제 + 신관 → 성직자"}`);
+
+  // 공통 규칙: 합체 실행 = 인원 1명 감소 → 반드시 영입으로 보충.
+  rollRecruitOffer();
+  gameState.screen = "recruit";
+  renderGame(gameState);
+}
+
+export function skipFusion() {
+  proceedNextStage();
+}
+
+// 영입 후보 풀: 현재 파티에 없는 기본 직업(빈 슬롯이 없으면 영입 불가).
+//   동일 직업 중복 금지 — 합체 재료로 사라진 기본 직업은 다시 후보가 될 수 있다.
+export function recruitCandidates() {
+  const f = gameState.run.formation || {};
+  const hasEmpty = SLOT_ORDER.some((k) => !f[k]);
+  if (!hasEmpty) return [];
+  const owned = partyJobIds();
+  return BASE_JOBS.filter((id) => !owned.includes(id));
+}
+
+// 영입 화면 진입 시 후보 풀에서 랜덤 3종을 1회 확정(화면 재렌더에도 고정).
+//   후보가 3보다 적으면 가능한 만큼만. 희귀도/가중치는 이번 단계에서 없음(균등).
+function rollRecruitOffer() {
+  const pool = recruitCandidates();
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  gameState.run.recruitOffer = pool.slice(0, 3);
+}
+
+// 영입 실행: 직업 슬롯 선호(전열/후열) 순서로 첫 빈 슬롯에 배치 — 점유 슬롯 배치 불가.
+export function applyRecruit(jobId) {
+  const f = gameState.run.formation;
+  const offered = gameState.run.recruitOffer || recruitCandidates();
+  if (!offered.includes(jobId) || !recruitCandidates().includes(jobId)) return;
+  const empty = slotPreference(jobId).find((k) => !f[k]);
+  if (!empty) return;
+  f[empty] = jobId;
+  gameState.run.recruitOffer = null;
+  gameState.logs.push(`새 동료 영입 완료.`);
+  showArrange(); // 파티 구성 변경 → 재배치 확인
+}
+
+export function skipRecruit() {
+  gameState.run.recruitOffer = null;
+  showArrange(); // 영입 단계까지 온 경우 파티가 변했거나 확인이 필요 — 재배치 확인
+}
+
+// Party & Formation Integrity 01 보강 — 재배치 확인 화면.
+//   파티 구성이 바뀌는 모든 경로(합체+영입, 4인 확장 영입)는 여기를 거친다.
+//   합체 스킵/불가처럼 구성이 안 바뀐 경로는 거치지 않는다(proceedNextStage 직행).
+function showArrange() {
+  gameState.screen = "arrange";
+  renderGame(gameState);
+}
+
+// 재배치 슬롯 교환(빈 슬롯 이동 포함). formation만 수정 — 검증은 startBattle에서.
+export function swapFormationSlots(a, b) {
+  const f = gameState.run.formation;
+  if (!f || !SLOT_ORDER.includes(a) || !SLOT_ORDER.includes(b)) return;
+  [f[a], f[b]] = [f[b], f[a]];
+  renderGame(gameState);
+}
+
+export function confirmArrange() {
+  proceedNextStage();
 }
 
 export function advanceStage() {
   gameState.run.stage += 1;
 
-  gameState.party = createInitialParty(gameState.run.bonuses);
-  gameState.enemies = createInitialEnemies();
+  // Fusion Flow 01: 현재 배치(합체/영입 반영) 기준으로 파티 재구성.
+  gameState.party = createInitialParty(gameState.run.bonuses, gameState.run.formation || undefined);
+  gameState.enemies = createStageEnemies(gameState.run.stage); // 스테이지 플랜(5 정예/10 보스)
 
   gameState.battle.tick = 0;
   gameState.battle.status = "ready";
@@ -177,7 +344,7 @@ export function advanceStage() {
   gameState.battle.result = null;
   gameState.run.result = null;
 
-  gameState.logs.push(`Stage ${gameState.run.stage} — 전투 시작!`);
+  gameState.logs.push(`초보자의 길 ${gameState.run.stage} / ${gameState.run.maxStage} — 전투 시작!`);
 
   startBattle();
 }
@@ -234,18 +401,16 @@ function battleTick() {
 const POISON_TICK_DAMAGE = 2; // 작게 고정 — 밸런스를 흔들지 않는 기반 수치
 const GUARD_DAMAGE_REDUCTION = 3; // 받는 피해 -3 (최소 1 보장)
 
-// Job Identity / Skill Grammar Foundation 01 — 직업 행동 문법.
-//   직업은 이름이 아니라 반복되는 행동 문법으로 읽힌다. kind는 FX/로그/미래 스킬 확장용
-//   분류일 뿐 — 계산식이 아니다. 적은 공통 "attack"(직업 문법 없음).
-const JOB_ACTION_KIND = {
-  warrior: "strike",   // 전열 기본 공격자 — 기준점
-  guardian: "protect", // 보호 담당 — guard 부여 + 공격 유지
-  archer: "snipe",     // 후열 마무리 — 최저 HP 저격(기존 문법)
-  priest: "heal",      // 회복 담당(기존 문법)
-};
+// Job Identity / Skill Grammar Foundation 01 → Fusion Flow 01 — 직업 행동 문법.
+//   직업은 이름이 아니라 반복되는 행동 문법으로 읽힌다. 문법은 직업 템플릿의
+//   grammar 필드(strike/protect/snipe/heal/harass)에서 온다 — 직업이 늘어나도
+//   battle.js 분기는 그대로(데이터만 추가). 적은 공통 "attack"(직업 문법 없음).
+function grammarOf(unit) {
+  return unit.grammar || "strike";
+}
 
 function actionKindOf(unit, isParty) {
-  return isParty ? JOB_ACTION_KIND[unit.id] || "attack" : "attack";
+  return isParty ? grammarOf(unit) : "attack";
 }
 
 // 수호자 protect: 행동 시 가장 위태로운(HP 비율 최저) 아군에게 짧은 guard 1행동.
@@ -298,12 +463,12 @@ function performAction(unit) {
 
   const isParty = gameState.party.includes(unit);
 
-  // Job Grammar 01 — guardian protect: 공격 전에 보호 부여(공격은 아래에서 그대로).
-  if (isParty && unit.id === "guardian") {
+  // Job Grammar 01 → Fusion Flow 01: 문법(grammar) 기반 분기 — 직업이 늘어도 여기 그대로.
+  if (isParty && grammarOf(unit) === "protect") {
     grantGuard(unit);
   }
 
-  if (isParty && unit.id === "priest") {
+  if (isParty && grammarOf(unit) === "heal") {
     const healTarget = selectHealTarget(gameState.party);
     if (healTarget) {
       performHeal(unit, healTarget);
@@ -314,7 +479,7 @@ function performAction(unit) {
 
   const targetPool = isParty ? gameState.enemies : gameState.party;
 
-  const attackTarget = isParty && unit.id === "archer"
+  const attackTarget = isParty && grammarOf(unit) === "snipe"
     ? selectArcherTarget(targetPool)
     : selectAttackTarget(targetPool);
 
@@ -360,13 +525,14 @@ function attackVerb(unit) {
   if (unit.id === "archer") return "저격했다";
   if (unit.id === "warrior") return "베었다";
   if (unit.id === "guardian") return "찔렀다"; // Job Grammar 01 — 창(lance) 문법
+  if (unit.id === "rogue") return "급습했다";  // Fusion Flow 01 — 1차 직업 문법
   return "공격했다";
 }
 
 function attackLineType(attacker) {
   if (attacker.team === "enemy") return "enemy";
-  if (attacker.id === "archer") return "straight";
-  return "slash"; // 전사(및 근접) — source→target connector
+  if (grammarOf(attacker) === "snipe") return "straight"; // 저격 계열(궁수/도적)
+  return "slash"; // 근접/기타 — source→target connector
 }
 
 function performAttack(attacker, target) {
@@ -402,7 +568,8 @@ function performAttack(attacker, target) {
 }
 
 function performHeal(healer, target) {
-  const healAmount = Math.round(healer.atk * 1.5);
+  // Game Flow 01: 회복 훈련 보상(run.bonuses.heal) — 작은 고정 가산만.
+  const healAmount = Math.round(healer.atk * 1.5) + (gameState.run.bonuses.heal || 0);
   const hpBefore = target.hp;
   target.hp = Math.min(target.maxHp, target.hp + healAmount);
   const actualHeal = target.hp - hpBefore;
@@ -470,15 +637,15 @@ function applyFinish(outcome) {
 
   if (outcome === "victory") {
     gameState.run.result = "victory";
-    gameState.screen = "growth";
-    pushLog(`Stage ${gameState.run.stage} 클리어! 성장을 선택하세요.`);
+    gameState.screen = "reward"; // Game Flow 01: 클리어 → 보상 선택 화면
+    pushLog(`초보자의 길 ${gameState.run.stage} 클리어! 보상을 선택하세요.`);
   } else if (outcome === "clear") {
     gameState.run.result = "clear";
-    pushLog("전체 클리어! ▶ 처음부터");
+    pushLog("초보자의 길 클리어! ▶ 다시 시작");
   } else if (outcome === "defeat") {
     gameState.battle.result = "defeat";
     gameState.run.result = "defeat";
-    pushLog("전투 패배... ▶ 다시 시작");
+    pushLog("모험 실패... ▶ 다시 시작");
   }
   renderGame(gameState);
 }

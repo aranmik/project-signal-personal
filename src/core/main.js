@@ -1,22 +1,131 @@
-import { gameState } from "./state.js";
+import { gameState, SLOT_ORDER } from "./state.js";
+import { slotPreference } from "../data/jobs.js";
 import { renderGame } from "../ui/render.js";
-import { startRun, goTitle, applyGrowth, cycleSpeed, startPreview } from "./battle.js";
+import {
+  startRun, goTitle, applyReward, cycleSpeed, startPreview, showJobSelect,
+  applyFusion, skipFusion, applyRecruit, skipRecruit,
+  swapFormationSlots, confirmArrange,
+} from "./battle.js";
 
 console.log("Project Signal Personal — init", gameState);
 
 renderGame(gameState);
 
-// 타이틀 → 전투 시작
-document.getElementById("title-start").addEventListener("click", startRun);
+// Game Flow Foundation 01: 타이틀 → 직업 선택 → 런 시작.
+document.getElementById("title-start").addEventListener("click", showJobSelect);
 
-// 결과 오버레이 → 처음부터 / 다시 시작 (둘 다 새 런)
-document.getElementById("result-restart").addEventListener("click", startRun);
+/* =========================================================
+   Fusion Flow Foundation 01 — 직업 선택 + 배치(전열2/후열2)
+   기본 6직업 중 정확히 3명 선택, 클릭 기반 슬롯 배치.
+   draft는 UI 전용 상태 — 시작 시 formation으로 넘긴다.
+   ========================================================= */
+const jobCards = [...document.querySelectorAll("#job-grid .job-card")];
+const slotBoxes = [...document.querySelectorAll("#formation-grid .form-slot-box")];
+const jobNames = { warrior: "전사", guardian: "수호자", archer: "궁수", priest: "사제", cleric: "신관", trickster: "교란꾼" };
+
+const draft = { f0: null, f1: null, b0: null, b1: null };
+let pickedSlot = null; // 슬롯 교환용(첫 클릭 슬롯)
+
+function draftCount() {
+  return SLOT_ORDER.filter((k) => draft[k]).length;
+}
+
+function refreshJobSelectUI() {
+  const placed = SLOT_ORDER.map((k) => draft[k]).filter(Boolean);
+  jobCards.forEach((c) => c.classList.toggle("selected", placed.includes(c.dataset.job)));
+  slotBoxes.forEach((box) => {
+    const job = draft[box.dataset.slot];
+    box.querySelector(".slot-job").textContent = job ? jobNames[job] : "—";
+    box.classList.toggle("filled", !!job);
+    box.classList.toggle("picked", pickedSlot === box.dataset.slot);
+  });
+  document.getElementById("job-start").disabled = draftCount() !== 3;
+}
+
+jobCards.forEach((card) => {
+  card.addEventListener("click", () => {
+    const job = card.dataset.job;
+    const inSlot = SLOT_ORDER.find((k) => draft[k] === job);
+    if (inSlot) {
+      draft[inSlot] = null; // 선택 해제
+    } else if (draftCount() < 3) {
+      // Party & Formation Integrity 01: 직업 슬롯 선호(전열/후열) 순서로 빈 슬롯 배치.
+      //   하나의 슬롯엔 최대 1명 — 점유 슬롯은 건너뛴다. (같은 직업 카드는 1장뿐 — 중복 불가)
+      const empty = slotPreference(job).find((k) => !draft[k]);
+      if (empty) draft[empty] = job;
+    }
+    pickedSlot = null;
+    refreshJobSelectUI();
+  });
+});
+
+// 슬롯 클릭: 첫 클릭 = 집기, 두 번째 클릭 = 자리 교환(빈 슬롯 이동 포함)
+slotBoxes.forEach((box) => {
+  box.addEventListener("click", () => {
+    const k = box.dataset.slot;
+    if (pickedSlot === null) {
+      if (draft[k]) pickedSlot = k;
+    } else {
+      [draft[pickedSlot], draft[k]] = [draft[k], draft[pickedSlot]];
+      pickedSlot = null;
+    }
+    refreshJobSelectUI();
+  });
+});
+
+document.getElementById("job-start").addEventListener("click", () => {
+  if (draftCount() !== 3) return;
+  startRun({ ...draft });
+});
+
+// Fusion Flow 01: 합체/영입 패널 — 동적 버튼은 위임으로 처리
+document.getElementById("fusion-panel").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.fusion) applyFusion(b.dataset.fusion);
+  else if ("fusionSkip" in b.dataset) skipFusion();
+});
+
+document.getElementById("recruit-panel").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.recruit) applyRecruit(b.dataset.recruit);
+  else if ("recruitSkip" in b.dataset) skipRecruit();
+});
+
+// Party & Formation Integrity 01 보강: 재배치 화면 — 슬롯 집기 → 교환.
+//   picked 상태는 패널 dataset에 둬서 재렌더에도 하이라이트가 유지된다.
+const arrangePanel = document.getElementById("arrange-panel");
+arrangePanel.addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if ("arrangeDone" in b.dataset) {
+    arrangePanel.dataset.picked = "";
+    confirmArrange();
+    return;
+  }
+  const slot = b.dataset.arrSlot;
+  if (!slot) return;
+  const picked = arrangePanel.dataset.picked || "";
+  if (!picked) {
+    if (b.classList.contains("filled")) {
+      arrangePanel.dataset.picked = slot;
+      b.classList.add("picked");
+    }
+  } else {
+    arrangePanel.dataset.picked = "";
+    swapFormationSlots(picked, slot); // 같은 슬롯 클릭이면 교환해도 동일(집기 해제)
+  }
+});
+
+// 결과 오버레이 → 다시 시작 (시작 배치 유지로 새 런)
+document.getElementById("result-restart").addEventListener("click", () => startRun());
 
 // 결과 오버레이 / 상단 → 타이틀로
 document.getElementById("result-title-btn").addEventListener("click", goTitle);
 document.getElementById("to-title-btn").addEventListener("click", goTitle);
 
-// Combat Breath Preview 01: 상단 HUD 배속 순환 (1x→2x→3x→4x→MAX)
+// Combat Breath Preview 01: 상단 HUD 배속 순환 (2x/MAX)
 document.getElementById("speed-toggle").addEventListener("click", cycleSpeed);
 
 // Combat Breath Preview 01: 개발/프리뷰용 전투 장면 버튼
@@ -28,11 +137,7 @@ document.querySelectorAll("#preview-bar [data-preview]").forEach((btn) => {
   });
 });
 
-// 성장 선택
-document.getElementById("growth-atk").addEventListener("click", () => {
-  applyGrowth("atk");
-});
-
-document.getElementById("growth-maxhp").addEventListener("click", () => {
-  applyGrowth("maxHp");
-});
+// Game Flow Foundation 01: 보상 선택 (공격 / 체력 / 회복 훈련)
+document.getElementById("growth-atk").addEventListener("click", () => applyReward("atk"));
+document.getElementById("growth-maxhp").addEventListener("click", () => applyReward("maxHp"));
+document.getElementById("growth-heal").addEventListener("click", () => applyReward("heal"));

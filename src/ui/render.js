@@ -1,10 +1,27 @@
+import { stagePlan, BEGINNER_THEME } from "../data/stages.js";
+import { availableFusions, slotPreference } from "../data/jobs.js";
+import { UNIT_TEMPLATES } from "../data/units.js";
+import { SLOT_ORDER, SLOT_NAMES } from "../core/state.js";
+
+function jobName(id) {
+  return UNIT_TEMPLATES.party[id]?.name || id;
+}
+
 export function renderGame(state) {
   const titleScreen = document.getElementById("title-screen");
+  const jobSelect = document.getElementById("job-select");
   const growthPanel = document.getElementById("growth-panel");
+  const fusionPanel = document.getElementById("fusion-panel");
+  const recruitPanel = document.getElementById("recruit-panel");
+  const arrangePanel = document.getElementById("arrange-panel");
   const battleView = document.getElementById("battle-view");
 
   titleScreen.hidden = true;
+  jobSelect.hidden = true;
   growthPanel.hidden = true;
+  fusionPanel.hidden = true;
+  recruitPanel.hidden = true;
+  arrangePanel.hidden = true;
   battleView.hidden = true;
 
   if (state.screen === "title") {
@@ -12,9 +29,35 @@ export function renderGame(state) {
     return;
   }
 
-  if (state.screen === "growth") {
+  // Game Flow Foundation 01: 직업 선택 화면 (정적 카드 — 선택 상태는 main.js가 관리)
+  if (state.screen === "jobSelect") {
+    jobSelect.hidden = false;
+    return;
+  }
+
+  if (state.screen === "reward") {
     growthPanel.hidden = false;
-    renderGrowthPanel(state);
+    renderRewardPanel(state);
+    return;
+  }
+
+  // Fusion Flow Foundation 01: 합체 / 영입 화면
+  if (state.screen === "fusion") {
+    fusionPanel.hidden = false;
+    renderFusionPanel(state);
+    return;
+  }
+
+  if (state.screen === "recruit") {
+    recruitPanel.hidden = false;
+    renderRecruitPanel(state);
+    return;
+  }
+
+  // Party & Formation Integrity 01 보강: 파티 구성 변경 후 재배치 확인 화면
+  if (state.screen === "arrange") {
+    arrangePanel.hidden = false;
+    renderArrangePanel(state);
     return;
   }
 
@@ -26,11 +69,94 @@ export function renderGame(state) {
   renderResultOverlay(state);
 }
 
-function renderGrowthPanel(state) {
+// Fusion Flow Foundation 01 — 현재 배치 한 줄 표시 (전열/후열이 읽히게).
+function formationLineHTML(formation, highlightSlot) {
+  return SLOT_ORDER.map((k) => {
+    const job = formation?.[k];
+    const hl = k === highlightSlot ? " hl" : "";
+    return `<span class="form-slot${job ? "" : " empty"}${hl}">${SLOT_NAMES[k]}<b>${job ? jobName(job) : "—"}</b></span>`;
+  }).join("");
+}
+
+// 합체 화면: 현재 파티 / 가능한 조합(재료 2 → 결과 1) / 실행·넘김.
+function renderFusionPanel(state) {
+  const f = state.run.formation || {};
+  const jobs = SLOT_ORDER.map((k) => f[k]).filter(Boolean);
+  const fusions = availableFusions(jobs);
+
+  const rows = fusions.length
+    ? fusions.map((r) =>
+        `<div class="fusion-row">
+          <span class="fusion-formula">${jobName(r.materials[0])} + ${jobName(r.materials[1])} → <b>${jobName(r.result)}</b></span>
+          <button type="button" data-fusion="${r.result}">합체한다</button>
+        </div>`
+      ).join("")
+    : `<p class="flow-note">합체 가능한 조합이 없습니다.</p>`;
+
+  document.getElementById("fusion-body").innerHTML = `
+    <div class="flow-kicker">${BEGINNER_THEME.name} ${state.run.stage} 클리어 — 합체의 기운</div>
+    <h2 class="flow-heading">합체</h2>
+    <div class="flow-formation">${formationLineHTML(f)}</div>
+    <div id="fusion-list">${rows}</div>
+    <button type="button" class="flow-next" data-fusion-skip>이번에는 넘긴다</button>
+  `;
+}
+
+// 영입 화면: 랜덤 후보(진입 시 확정, 최대 3) / 후보별 배치 예정 슬롯(선호 규칙) 안내.
+function renderRecruitPanel(state) {
+  const f = state.run.formation || {};
+  const emptySlot = SLOT_ORDER.find((k) => !f[k]);
+  // 후보는 battle.js가 진입 시 굴려둔 recruitOffer(랜덤 3) — 재렌더에도 고정.
+  const candidates = emptySlot ? state.run.recruitOffer || [] : [];
+
+  const targetSlot = (id) => slotPreference(id).find((k) => !f[k]);
+  const rows = candidates.length
+    ? candidates.map((id) =>
+        `<button type="button" class="recruit-card" data-recruit="${id}">
+          <span class="job-name">${jobName(id)}</span>
+          <span class="recruit-slot">${SLOT_NAMES[targetSlot(id)] || ""} 배치</span>
+        </button>`
+      ).join("")
+    : `<p class="flow-note">영입 가능한 동료가 없습니다.</p>`;
+
+  document.getElementById("recruit-body").innerHTML = `
+    <div class="flow-kicker">새 동료의 기척</div>
+    <h2 class="flow-heading">새 동료를 영입하세요</h2>
+    <div class="flow-formation">${formationLineHTML(f, emptySlot)}</div>
+    <div id="recruit-list">${rows}</div>
+    ${candidates.length ? "" : `<button type="button" class="flow-next" data-recruit-skip>다음으로</button>`}
+  `;
+}
+
+// 재배치 화면: 슬롯 클릭(집기 → 놓기)으로 위치 교환. 직업은 위치를 강제하지 않는다 —
+//   플레이어 선택이 주 규칙, 직업 선호는 자동 배치 임시값일 뿐. 확정 후 다음 스테이지.
+//   pickedSlot은 main.js가 데이터셋으로 관리(재렌더 시 하이라이트 복원).
+export function renderArrangePanel(state) {
+  const f = state.run.formation || {};
+  const picked = document.getElementById("arrange-panel").dataset.picked || "";
+
+  const boxes = SLOT_ORDER.map((k) => {
+    const job = f[k];
+    return `<button type="button" class="form-slot-box${job ? " filled" : ""}${picked === k ? " picked" : ""}" data-arr-slot="${k}">
+      <span class="slot-name">${SLOT_NAMES[k]}</span>
+      <span class="slot-job">${job ? jobName(job) : "—"}</span>
+    </button>`;
+  }).join("");
+
+  document.getElementById("arrange-body").innerHTML = `
+    <div class="flow-kicker">전열은 적과 가깝고, 후열은 적과 멀다</div>
+    <h2 class="flow-heading">파티 배치 확인</h2>
+    <p class="flow-note">슬롯을 눌러 위치를 바꿀 수 있어요</p>
+    <div id="arrange-grid">${boxes}</div>
+    <button type="button" id="arrange-done" data-arrange-done>다음 스테이지</button>
+  `;
+}
+
+function renderRewardPanel(state) {
   document.getElementById("growth-stage-label").textContent =
-    `Stage ${state.run.stage} 클리어!`;
+    `${BEGINNER_THEME.name} ${state.run.stage} / ${state.run.maxStage} 클리어!`;
   document.getElementById("growth-subtitle").textContent =
-    "파티를 강화하세요.";
+    "보상을 선택하세요.";
   document.getElementById("growth-log").textContent =
     state.logs[state.logs.length - 1] ?? "";
 }
@@ -46,11 +172,12 @@ function renderResultOverlay(state) {
   const result = state.run.result;
 
   if (ended && (result === "clear" || result === "defeat")) {
+    // Game Flow Foundation 01: Run Clear / 모험 실패
     if (result === "clear") {
-      titleEl.textContent = "전체 클리어!";
-      restartBtn.textContent = "처음부터";
+      titleEl.textContent = "초보자의 길 클리어!";
+      restartBtn.textContent = "다시 시작";
     } else {
-      titleEl.textContent = "전투 패배...";
+      titleEl.textContent = "모험 실패";
       restartBtn.textContent = "다시 시작";
     }
     overlay.hidden = false;
@@ -60,7 +187,16 @@ function renderResultOverlay(state) {
 }
 
 function renderHud(state) {
-  document.getElementById("stage-label").textContent = `Stage ${state.run.stage}`;
+  // Game Flow Foundation 01: "초보자의 길 3 / 10 · 일반 전투" — 스테이지 위치/타입이 읽힌다.
+  //   프리뷰 장면은 정식 런이 아니므로 PREVIEW 표기.
+  const stageEl = document.getElementById("stage-label");
+  if (state.battle.previewKind) {
+    stageEl.textContent = "PREVIEW";
+  } else {
+    const plan = stagePlan(state.run.stage);
+    stageEl.textContent =
+      `${BEGINNER_THEME.name} ${state.run.stage} / ${state.run.maxStage} · ${plan.label}`;
+  }
   document.getElementById("status-label").textContent = state.battle.status;
   renderPartyBonus(state.run.bonuses);
 
@@ -146,6 +282,15 @@ function renderUnits(state) {
     let el = layer.querySelector(`[data-instance-id="${iid}"]`);
     if (!el) {
       if (unit.isDead) return; // 죽은 채로 요소가 없으면 새로 만들지 않음(방어)
+      layer.appendChild(createFieldUnit(unit));
+    } else if (
+      unit.team === "party" &&
+      (el.dataset.slotKey || "") !== (unit.slotKey || "")
+    ) {
+      // Party & Formation Integrity 01: 같은 instanceId가 다른 슬롯으로 재배치됨
+      //   (새 런/합체/영입). 위치 클래스는 생성 시에만 박히므로 요소를 재생성해야
+      //   슬롯-좌표 계약이 유지된다 — 이것이 "두 영웅 겹침" 버그의 원인이었다.
+      el.remove();
       layer.appendChild(createFieldUnit(unit));
     } else {
       updateFieldUnit(el, unit);
@@ -321,21 +466,28 @@ function createFieldUnit(unit) {
   const facingClass = isParty ? "face-ne" : "face-sw";
 
   // Combat Breath Preview 01: 프리뷰 적은 slot으로 배치(enemy-slot-N), sizeClass로 정예/보스 크기.
-  //   정식 유닛은 기존 {id}-pos 그대로. 하드코딩 좌표는 모두 CSS(클래스)로만.
+  //   Fusion Flow 01: 아군은 배치 슬롯(slotKey → hero-slot-*) 기준 — 전열/후열이 화면에서 읽힌다.
+  //   slotKey 없는 구버전 경로는 기존 {id}-pos 유지. 하드코딩 좌표는 모두 CSS(클래스)로만.
   const posClass =
     unit.team === "enemy" && unit.slot !== undefined
       ? `enemy-slot-${unit.slot}`
+      : isParty && unit.slotKey
+      ? `hero-slot-${unit.slotKey}`
       : `${id}-pos`;
   const sizeClass = unit.sizeClass ? ` ${unit.sizeClass}` : "";
 
   const wrap = document.createElement("div");
   wrap.className = `unit ${unit.team} ${posClass}${sizeClass} ${facingClass}${deadClass}`;
   wrap.dataset.instanceId = unit.instanceId;
+  // Party & Formation Integrity 01: 슬롯-좌표 계약 추적 키(reconcile에서 재배치 감지용)
+  if (unit.team === "party") wrap.dataset.slotKey = unit.slotKey || "";
   // Boss Presence Foundation 01: 정예/보스 존재감 hook(일반 적/아군엔 없음). 크기와 분리된 tier.
   if (unit.tier) wrap.dataset.tier = unit.tier;
 
+  // Fusion Flow 01: 신규 직업은 전용 실루엣 전까지 비주얼 donor(visual) 파츠 + CSS 틴트 재사용.
+  const visual = unit.visual || id;
   const figClass = isParty ? "avatar" : "monster";
-  const parts = (AVATAR_PARTS[id] || [])
+  const parts = (AVATAR_PARTS[visual] || [])
     .map((p) => `<span class="part ${p}"></span>`)
     .join("");
   const hpPct = unit.maxHp > 0
@@ -368,7 +520,7 @@ function createFieldUnit(unit) {
     ${rolePip}
     <div class="status-slots" data-markers="${markersKey}">${statusMarkersHTML(markers)}</div>
     <div class="fig-react">
-      <div class="${figClass} ${id}">${parts}</div>
+      <div class="${figClass} ${visual} job-${id}">${parts}</div>
     </div>
     <span class="hp-bar"><span class="hp-bar-fill" style="width:${hpPct}%"></span></span>
     <span class="tempo-bar${readyClass}"><span class="tempo-bar-fill" style="width:${gaugePct}%"></span></span>
@@ -388,6 +540,11 @@ const SOURCE_ANCHORS = {
   priest: { fx: 0.82, fy: 0.30 },  // staff tip
   warrior: { fx: 0.70, fy: 0.50 }, // weapon/front
   guardian: { fx: 0.74, fy: 0.26 }, // lance tip (우상단)
+  // Fusion Flow 01: 신규 직업은 비주얼 donor의 anchor 재사용
+  cleric: { fx: 0.82, fy: 0.30 },   // = priest (staff)
+  trickster: { fx: 0.18, fy: 0.42 }, // = archer (bow)
+  rogue: { fx: 0.70, fy: 0.50 },    // = warrior (front)
+  saint: { fx: 0.82, fy: 0.30 },    // = priest (staff)
   wolf: { fx: 0.16, fy: 0.52 },    // snout (적은 좌측 대면)
   slime: { fx: 0.5, fy: 0.55 },    // body front
   goblin: { fx: 0.5, fy: 0.52 },

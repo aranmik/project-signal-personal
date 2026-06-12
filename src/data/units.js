@@ -1,3 +1,7 @@
+// Fusion Flow Foundation 01:
+//   grammar = 직업 행동 문법(strike/protect/snipe/heal/harass) — battle.js가 이 필드로 분기.
+//   visual  = 아바타 비주얼 donor(전용 실루엣이 생기기 전까지 기존 파츠 + CSS 틴트 재사용).
+//   role은 기본값일 뿐 — 실제 전열/후열은 배치(formation slot)가 덮어쓴다.
 export const UNIT_TEMPLATES = {
   party: {
     warrior: {
@@ -6,6 +10,7 @@ export const UNIT_TEMPLATES = {
       team: "party",
       job: "warrior",
       role: "front",
+      grammar: "strike",
       maxHp: 120,
       atk: 14,
       speed: 8,
@@ -17,6 +22,7 @@ export const UNIT_TEMPLATES = {
       team: "party",
       job: "priest",
       role: "back",
+      grammar: "heal",
       maxHp: 80,
       atk: 8,
       speed: 7,
@@ -28,6 +34,7 @@ export const UNIT_TEMPLATES = {
       team: "party",
       job: "archer",
       role: "back",
+      grammar: "snipe",
       maxHp: 75,
       atk: 16,
       speed: 9,
@@ -42,9 +49,65 @@ export const UNIT_TEMPLATES = {
       team: "party",
       job: "guardian",
       role: "back",
+      grammar: "protect",
       maxHp: 105,
       atk: 11,
       speed: 6,
+    },
+
+    // Fusion Flow Foundation 01 — 기본 직업 6종 확보(신관/교란꾼).
+    //   수치/문법은 임시 최소 구현 — 최종 개성 문법은 추후 작업.
+    cleric: {
+      id: "cleric",
+      name: "신관",
+      team: "party",
+      job: "cleric",
+      role: "back",
+      grammar: "heal", // 임시: 사제와 같은 회복 문법(수치만 약하게)
+      visual: "priest",
+      maxHp: 82,
+      atk: 7,
+      speed: 7,
+    },
+
+    trickster: {
+      id: "trickster",
+      name: "교란꾼",
+      team: "party",
+      job: "trickster",
+      role: "back",
+      grammar: "harass", // 임시: 일반 공격(방해 효과는 추후 — mark/debuff 미연결)
+      visual: "archer",
+      maxHp: 72,
+      atk: 13,
+      speed: 9,
+    },
+
+    // 1차 직업 (합체 결과 전용 — 수치 임시)
+    rogue: {
+      id: "rogue",
+      name: "도적",
+      team: "party",
+      job: "rogue",
+      role: "front",
+      grammar: "snipe", // 전사+궁수 — 빠르고 약점을 노리는 마무리
+      visual: "warrior",
+      maxHp: 110,
+      atk: 19,
+      speed: 9,
+    },
+
+    saint: {
+      id: "saint",
+      name: "성직자",
+      team: "party",
+      job: "saint",
+      role: "back",
+      grammar: "heal", // 사제+신관 — 더 단단한 회복 담당
+      visual: "priest",
+      maxHp: 100,
+      atk: 11,
+      speed: 7,
     },
   },
 

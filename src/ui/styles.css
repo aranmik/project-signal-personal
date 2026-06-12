@@ -171,6 +171,14 @@ body {
 #battle-field .archer-pos { left: 30px;  bottom: 108px; }   /* 중간-좌 (유지) */
 #battle-field .priest-pos { left: 122px; bottom: 172px; }   /* 위-우 (유지) */
 
+/* Party & Formation Integrity 01 보강: 전열/후열 = "적과의 거리" 기준.
+   적은 우상단 — 전열(f0/f1)은 상단 밴드(적과 가까움), 후열(b0/b1)은 하단 밴드(적과 멂).
+   기존 4자리 좌표 재사용, 의미만 거리 기준으로 고정. */
+#battle-field .hero-slot-f0 { left: 122px; bottom: 172px; } /* 전열 1 — 적과 최근접 */
+#battle-field .hero-slot-f1 { left: 30px;  bottom: 108px; } /* 전열 2 */
+#battle-field .hero-slot-b0 { left: 130px; bottom: 44px; }  /* 후열 1 */
+#battle-field .hero-slot-b1 { left: 34px;  bottom: 8px; }   /* 후열 2 — 적과 최원거리 */
+
 /* 적은 상단 "우측 70(x 117~390)" 영역 전체를 넓게 사용(우상 한 점 정렬 아님).
    top 10~150으로 상단 절반의 폭·높이를 활용해 영역감을 살린다. */
 #battle-field .goblin-pos { right: 24px;  top: 10px; }   /* 우-상 */
@@ -1172,6 +1180,303 @@ body {
 #title-start:active {
   background: #c73652;
 }
+
+/* === Game Flow Foundation 01: 직업 선택 화면 === */
+#job-select {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 100dvh;
+  padding: 32px 24px;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(90, 130, 175, 0.10), transparent 60%),
+    #0a0d14;
+}
+
+#job-select-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 340px;
+}
+
+#job-kicker {
+  color: #5a82af;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+#job-heading {
+  font-size: 19px;
+  font-weight: 800;
+  color: #eef3f8;
+}
+
+#job-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.job-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 18px 10px;
+  background: #131a26;
+  border: 2px solid #243245;
+  border-radius: 10px;
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.job-card.selected {
+  border-color: #3a6ea8;
+  background: #16213e;
+  opacity: 1;
+}
+
+.job-card .job-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: #eef3f8;
+}
+
+.job-card .job-role {
+  font-size: 11px;
+  color: #8aa0b4;
+}
+
+#job-start {
+  margin-top: 16px;
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: bold;
+  color: #fff;
+  background: #e94560;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+#job-start:active {
+  background: #c73652;
+}
+
+#job-start:disabled {
+  background: #3a2733;
+  color: #8a7480;
+  cursor: default;
+}
+
+/* Fusion Flow Foundation 01: 배치(전열2/후열2) 그리드 */
+#formation-hint {
+  margin-top: 10px;
+  font-size: 11px;
+  color: #8aa0b4;
+}
+
+#formation-grid,
+#arrange-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+}
+
+/* 재배치 화면 확정 버튼 */
+#arrange-done {
+  margin-top: 14px;
+  width: 100%;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: bold;
+  color: #fff;
+  background: #e94560;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.form-slot-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 8px;
+  background: #10161f;
+  border: 1px dashed #2a3a4a;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.form-slot-box .slot-name {
+  font-size: 10px;
+  color: #5a82af;
+  letter-spacing: 0.08em;
+}
+
+.form-slot-box .slot-job {
+  font-size: 13px;
+  font-weight: 800;
+  color: #eef3f8;
+}
+
+.form-slot-box.filled { border-style: solid; border-color: #3a6ea8; }
+.form-slot-box.picked { border-color: #e94560; box-shadow: 0 0 0 1px #e94560 inset; }
+
+/* === Fusion Flow Foundation 01: 합체 / 영입 화면 === */
+.flow-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 100dvh;
+  padding: 32px 24px;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(233, 69, 96, 0.06), transparent 60%),
+    #0a0d14;
+}
+
+.flow-panel > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 340px;
+}
+
+.flow-kicker {
+  color: #5a82af;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+
+.flow-heading {
+  font-size: 20px;
+  font-weight: 800;
+  color: #eef3f8;
+}
+
+.flow-formation {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  width: 100%;
+}
+
+.flow-formation .form-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 7px 6px;
+  font-size: 10px;
+  color: #5a82af;
+  background: #10161f;
+  border: 1px solid #2a3a4a;
+  border-radius: 7px;
+}
+
+.flow-formation .form-slot b { font-size: 12px; color: #eef3f8; }
+.flow-formation .form-slot.empty { border-style: dashed; opacity: 0.6; }
+.flow-formation .form-slot.hl { border-color: #e94560; }
+
+.flow-note {
+  font-size: 12px;
+  color: #9aa8b8;
+  text-align: center;
+}
+
+#fusion-list, #recruit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.fusion-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 14px;
+  background: #16213e;
+  border: 2px solid #3a6ea8;
+  border-radius: 10px;
+}
+
+.fusion-row .fusion-formula { font-size: 13px; color: #cdd9e5; }
+.fusion-row .fusion-formula b { color: #f0d36a; }
+
+.fusion-row button {
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: bold;
+  color: #fff;
+  background: #e94560;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.recruit-card {
+  width: 100%;
+  padding: 15px;
+  font-size: 14px;
+  font-weight: bold;
+  color: #eee;
+  background: #16213e;
+  border: 2px solid #3a6ea8;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.recruit-card:active { background: #1e3a5f; }
+
+.recruit-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.recruit-card .recruit-slot { font-size: 11px; font-weight: normal; color: #8aa0b4; }
+
+.flow-next {
+  margin-top: 6px;
+  width: 100%;
+  padding: 12px;
+  font-size: 13px;
+  color: #8aa0b4;
+  background: transparent;
+  border: 1px solid #2a3a4a;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* Fusion Flow 01: 신규 직업 비주얼 — donor 파츠 + 틴트(전용 실루엣 전 임시) */
+#battle-field .avatar.job-cleric { filter: hue-rotate(150deg) brightness(1.05); }
+#battle-field .avatar.job-trickster { filter: hue-rotate(255deg) saturate(1.15); }
+#battle-field .avatar.job-rogue { filter: hue-rotate(-45deg) saturate(1.25) brightness(0.95); }
+#battle-field .avatar.job-saint { filter: saturate(1.35) brightness(1.22); }
+
+/* Fusion Flow 01: 신규 직업 role-pip */
+#battle-field .unit .role-pip.role-cleric { background: #7fd4c1; border-radius: 50%; }
+#battle-field .unit .role-pip.role-trickster { background: #b07fe0; border-radius: 1px; transform: rotate(45deg); }
+#battle-field .unit .role-pip.role-rogue { background: #e0605f; clip-path: polygon(0 0, 100% 50%, 0 100%); }
+#battle-field .unit .role-pip.role-saint { background: #f6e7a8; border-radius: 50%; }
 
 /* === Shell 01: 상단 HUD 우측 (상태 + 배속 + 타이틀로) === */
 #hud-right {
