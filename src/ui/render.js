@@ -1,5 +1,6 @@
 import { stagePlan, BEGINNER_THEME } from "../data/stages.js";
 import { availableFusions, slotPreference } from "../data/jobs.js";
+import { REWARDS } from "../data/rewards.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { SLOT_ORDER, SLOT_NAMES } from "../core/state.js";
 
@@ -12,6 +13,7 @@ export function renderGame(state) {
   const jobSelect = document.getElementById("job-select");
   const growthPanel = document.getElementById("growth-panel");
   const fusionPanel = document.getElementById("fusion-panel");
+  const fusionResultPanel = document.getElementById("fusion-result-panel");
   const recruitPanel = document.getElementById("recruit-panel");
   const arrangePanel = document.getElementById("arrange-panel");
   const battleView = document.getElementById("battle-view");
@@ -20,6 +22,7 @@ export function renderGame(state) {
   jobSelect.hidden = true;
   growthPanel.hidden = true;
   fusionPanel.hidden = true;
+  fusionResultPanel.hidden = true;
   recruitPanel.hidden = true;
   arrangePanel.hidden = true;
   battleView.hidden = true;
@@ -45,6 +48,13 @@ export function renderGame(state) {
   if (state.screen === "fusion") {
     fusionPanel.hidden = false;
     renderFusionPanel(state);
+    return;
+  }
+
+  // Fusion Moment 01: 합체 결과(탄생) 확인 화면
+  if (state.screen === "fusionResult") {
+    fusionResultPanel.hidden = false;
+    renderFusionResultPanel(state);
     return;
   }
 
@@ -78,7 +88,8 @@ function formationLineHTML(formation, highlightSlot) {
   }).join("");
 }
 
-// 합체 화면: 현재 파티 / 가능한 조합(재료 2 → 결과 1) / 실행·넘김.
+// 합체 화면: "두 영웅의 힘이 하나로 모인다" — 재료 2 → 결과 탄생이 읽히게.
+//   합체 실행 시 동료 영입이 이어진다는 점, 스킵 시 영입이 없다는 점을 문구로 안내.
 function renderFusionPanel(state) {
   const f = state.run.formation || {};
   const jobs = SLOT_ORDER.map((k) => f[k]).filter(Boolean);
@@ -87,18 +98,52 @@ function renderFusionPanel(state) {
   const rows = fusions.length
     ? fusions.map((r) =>
         `<div class="fusion-row">
-          <span class="fusion-formula">${jobName(r.materials[0])} + ${jobName(r.materials[1])} → <b>${jobName(r.result)}</b></span>
+          <span class="fusion-formula">${jobName(r.materials[0])} + ${jobName(r.materials[1])} <span class="fusion-arrow">→</span> <b>${jobName(r.result)} 탄생</b></span>
           <button type="button" data-fusion="${r.result}">합체한다</button>
         </div>`
       ).join("")
-    : `<p class="flow-note">합체 가능한 조합이 없습니다.</p>`;
+    : "";
+
+  const guide = fusions.length
+    ? `<p class="flow-note">두 영웅의 힘이 하나로 모입니다.<br>합체하면 빈자리를 채울 동료를 영입합니다.</p>`
+    : `<p class="flow-note">지금 파티에는 합체 가능한 조합이 없습니다.<br>이번에는 합체 없이 다음 스테이지로 진행합니다.</p>`;
+
+  const skipLabel = fusions.length ? "이번에는 합체하지 않는다" : "다음 스테이지로";
+  const skipNote = fusions.length
+    ? `<p class="flow-note flow-note--dim">합체하지 않으면 동료 영입은 발생하지 않습니다.</p>`
+    : "";
 
   document.getElementById("fusion-body").innerHTML = `
     <div class="flow-kicker">${BEGINNER_THEME.name} ${state.run.stage} 클리어 — 합체의 기운</div>
     <h2 class="flow-heading">합체</h2>
     <div class="flow-formation">${formationLineHTML(f)}</div>
+    ${guide}
     <div id="fusion-list">${rows}</div>
-    <button type="button" class="flow-next" data-fusion-skip>이번에는 넘긴다</button>
+    ${skipNote}
+    <button type="button" class="flow-next" data-fusion-skip>${skipLabel}</button>
+  `;
+}
+
+// Fusion Moment 01 — 합체 결과(탄생) 확인 화면.
+//   재료 2 카드 → 결과 카드 강조. "소실"이 아니라 "탄생"으로 읽히게. 1클릭으로 영입 진행.
+function renderFusionResultPanel(state) {
+  const fusion = state.run.lastFusion;
+  if (!fusion) return;
+  const [m1, m2] = fusion.materials;
+
+  document.getElementById("fusion-result-body").innerHTML = `
+    <div class="flow-kicker">합체 성공</div>
+    <h2 class="flow-heading">${jobName(fusion.result)} 탄생!</h2>
+    <div class="fusion-cast">
+      <span class="cast-card cast-mat">${jobName(m1)}</span>
+      <span class="cast-plus">+</span>
+      <span class="cast-card cast-mat">${jobName(m2)}</span>
+      <span class="cast-arrow">→</span>
+      <span class="cast-card cast-result">${jobName(fusion.result)}</span>
+    </div>
+    <p class="flow-note">${fusion.birthLine || "두 영웅의 힘이 하나로 모였다."}<br>새로운 영웅 <b>${jobName(fusion.result)}</b> — 파티에 합류했다.</p>
+    <p class="flow-note flow-note--dim">빈자리를 채울 새 동료를 영입하세요.</p>
+    <button type="button" id="fusion-continue" data-fusion-continue>동료 영입하기</button>
   `;
 }
 
@@ -119,9 +164,17 @@ function renderRecruitPanel(state) {
       ).join("")
     : `<p class="flow-note">영입 가능한 동료가 없습니다.</p>`;
 
+  // Fusion Moment 01: 문맥별 문구 — 합체 후(빈자리 보충) vs 4인 확장 영입.
+  const isFusionFill = state.run.recruitContext === "fusion";
+  const heading = isFusionFill ? "빈자리를 채울 동료를 선택하세요" : "새 동료를 영입하세요";
+  const note = isFusionFill
+    ? "합체로 파티의 한 자리가 비었습니다.<br>현재 파티에 없는 동료가 찾아왔습니다."
+    : "현재 파티에 없는 기본 직업 동료가 찾아왔습니다.";
+
   document.getElementById("recruit-body").innerHTML = `
     <div class="flow-kicker">새 동료의 기척</div>
-    <h2 class="flow-heading">새 동료를 영입하세요</h2>
+    <h2 class="flow-heading">${heading}</h2>
+    <p class="flow-note">${note}</p>
     <div class="flow-formation">${formationLineHTML(f, emptySlot)}</div>
     <div id="recruit-list">${rows}</div>
     ${candidates.length ? "" : `<button type="button" class="flow-next" data-recruit-skip>다음으로</button>`}
@@ -144,21 +197,39 @@ export function renderArrangePanel(state) {
   }).join("");
 
   document.getElementById("arrange-body").innerHTML = `
-    <div class="flow-kicker">전열은 적과 가깝고, 후열은 적과 멀다</div>
-    <h2 class="flow-heading">파티 배치 확인</h2>
-    <p class="flow-note">슬롯을 눌러 위치를 바꿀 수 있어요</p>
+    <div class="flow-kicker">전열은 적과 가까운 자리, 후열은 먼 자리</div>
+    <h2 class="flow-heading">새 파티를 배치하세요</h2>
+    <p class="flow-note">슬롯을 눌러 위치를 바꾸고, 다음 전투를 준비하세요.</p>
     <div id="arrange-grid">${boxes}</div>
     <button type="button" id="arrange-done" data-arrange-done>다음 스테이지</button>
   `;
 }
 
+// Reward & Growth 01: 누적 성장 요약("공격 훈련 Lv.2 · 회복 훈련 Lv.1") — 선택이 남아 있음을 보여준다.
+function growthSummaryText(state) {
+  const lv = state.run.rewardLevels || {};
+  const parts = REWARDS.filter((r) => lv[r.id]).map((r) => `${r.name} Lv.${lv[r.id]}`);
+  return parts.join(" · ");
+}
+
 function renderRewardPanel(state) {
   document.getElementById("growth-stage-label").textContent =
     `${BEGINNER_THEME.name} ${state.run.stage} / ${state.run.maxStage} 클리어!`;
-  document.getElementById("growth-subtitle").textContent =
-    "보상을 선택하세요.";
+  document.getElementById("growth-subtitle").innerHTML =
+    "훈련을 하나 선택하세요.<br><span class='growth-hint'>선택한 훈련은 이번 모험 동안 유지되고, 다음 전투부터 적용됩니다.</span>";
+
+  // 보상 버튼은 REWARDS 데이터에서 렌더 — 보상 추가는 데이터만 늘리면 된다.
+  document.getElementById("growth-choices").innerHTML = REWARDS.map(
+    (r) =>
+      `<button type="button" data-reward="${r.id}">
+        <span class="reward-name">${r.name}</span>
+        <span class="reward-desc">${r.description}</span>
+      </button>`
+  ).join("");
+
+  const summary = growthSummaryText(state);
   document.getElementById("growth-log").textContent =
-    state.logs[state.logs.length - 1] ?? "";
+    summary ? `현재 성장 — ${summary}` : "";
 }
 
 // 결과 오버레이 — 전투 종료(클리어/패배)에서만 노출
@@ -221,14 +292,15 @@ function renderHud(state) {
 
 function renderPartyBonus(bonuses) {
   const el = document.getElementById("party-bonus");
-  const { atk, maxHp } = bonuses;
-  if (atk === 0 && maxHp === 0) {
+  const { atk = 0, maxHp = 0, heal = 0 } = bonuses;
+  if (atk === 0 && maxHp === 0 && heal === 0) {
     el.hidden = true;
     return;
   }
   const parts = [];
   if (atk > 0) parts.push(`공격 +${atk}`);
   if (maxHp > 0) parts.push(`최대 HP +${maxHp}`);
+  if (heal > 0) parts.push(`회복 +${heal}`); // Reward & Growth 01: 회복 훈련도 HUD 요약에
   el.textContent = `파티 강화: ${parts.join(" · ")}`;
   el.hidden = false;
 }

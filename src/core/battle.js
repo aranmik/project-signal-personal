@@ -2,6 +2,7 @@ import { gameState } from "./state.js";
 import { createInitialParty, createPreviewEnemies, createStageEnemies, SLOT_ORDER, DEFAULT_FORMATION } from "./state.js";
 import { FUSION_RECIPES, BASE_JOBS, prefersFront, slotPreference } from "../data/jobs.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
+import { rewardById } from "../data/rewards.js";
 import { renderGame, playActionFx, playStatusTickFx } from "../ui/render.js";
 
 let tickTimer = null;
@@ -174,6 +175,7 @@ export function resetBattle() {
   gameState.run.stage = 1;
   gameState.run.result = null;
   gameState.run.bonuses = { atk: 0, maxHp: 0, heal: 0 };
+  gameState.run.rewardLevels = {}; // 런 성장은 런과 함께 초기화 (시작 배치 유지와 별개)
   gameState.screen = "battle";
 
   // Fusion Flow 01: 런 시작 배치 복원(합체/영입으로 바뀐 formation을 초기화).
@@ -189,36 +191,38 @@ export function resetBattle() {
   gameState.battle.result = null;
   gameState.battle.previewKind = null; // 정식 런 — 프리뷰 모드 해제
   gameState.run.recruitOffer = null;
+  gameState.run.lastFusion = null;
+  gameState.run.recruitContext = null;
 
   gameState.logs = ["초보자의 길 1 / 10 — 모험 시작!"];
 
   renderGame(gameState);
 }
 
-// Game Flow Foundation 01: 보상 선택(공격/체력/회복 훈련) → 다음 스테이지.
-//   회복 훈련은 사제 회복량에 작은 고정치(+2)를 더한다 — 복잡한 성장 시스템 아님.
-export function applyReward(type) {
+// Game Flow 01 → Reward & Growth Foundation 01: 보상 선택 → 런 성장 누적 → 다음 스테이지.
+//   효과는 REWARDS 데이터(stat/value) 기반 — run.bonuses에 누적되고 다음 전투 파티
+//   재생성 시 아군 전체(합체/영입 멤버 포함)에 반영된다. 적에게는 적용되지 않는다.
+//   rewardLevels는 표시용 선택 횟수(Lv). 런 재시작 시 둘 다 초기화(resetBattle).
+export function applyReward(id) {
+  const reward = rewardById(id);
+  if (!reward) return;
+
   const b = gameState.run.bonuses;
-  let logMsg = "";
+  b[reward.stat] = (b[reward.stat] || 0) + reward.value;
 
-  if (type === "atk") {
-    b.atk += 1;
-    logMsg = "보상: 공격 훈련 — 파티 공격력 +1";
-  } else if (type === "heal") {
-    b.heal += 2;
-    logMsg = "보상: 회복 훈련 — 회복량 +2";
-  } else {
-    b.maxHp += 5;
-    logMsg = "보상: 체력 훈련 — 파티 최대 HP +5";
-  }
+  const lv = gameState.run.rewardLevels;
+  lv[id] = (lv[id] || 0) + 1;
 
-  gameState.logs = [logMsg];
+  gameState.logs = [`보상: ${reward.name} Lv.${lv[id]} — 다음 전투부터 적용`];
 
   // Fusion Flow 01: 보상 후 스테이지 클리어 이벤트(S3/S8 합체, S5 영입) 라우팅.
   //   이벤트 타이밍은 STAGE_CLEAR_EVENTS(stage data)로 관리 — 테마/층수가 바뀌면 데이터만 수정.
   const ev = STAGE_CLEAR_EVENTS[gameState.run.stage];
   if (ev) {
-    if (ev.type === "recruit") rollRecruitOffer(); // 영입 후보는 진입 시 1회 확정
+    if (ev.type === "recruit") {
+      rollRecruitOffer(); // 영입 후보는 진입 시 1회 확정
+      gameState.run.recruitContext = "expand"; // 4인 확장 영입 — 문구 분기용
+    }
     gameState.screen = ev.type; // "fusion" | "recruit"
     renderGame(gameState);
     return;
@@ -262,8 +266,21 @@ export function applyFusion(resultId) {
   f[freed] = null;
   gameState.logs.push(`합체! ${recipe.result === "rogue" ? "전사 + 궁수 → 도적" : "사제 + 신관 → 성직자"}`);
 
-  // 공통 규칙: 합체 실행 = 인원 1명 감소 → 반드시 영입으로 보충.
+  // Fusion Moment 01: 합체는 탄생 — 짧은 결과 확인 화면을 먼저 보여준다.
+  //   영입 후보는 지금 굴려 고정(공통 규칙: 합체 실행 = 반드시 영입으로 보충).
+  gameState.run.lastFusion = {
+    materials: [...recipe.materials],
+    result: recipe.result,
+    birthLine: recipe.birthLine,
+  };
   rollRecruitOffer();
+  gameState.run.recruitContext = "fusion";
+  gameState.screen = "fusionResult";
+  renderGame(gameState);
+}
+
+// 합체 결과 확인 → 동료 영입으로 이어간다(후보는 applyFusion에서 이미 확정).
+export function continueAfterFusion() {
   gameState.screen = "recruit";
   renderGame(gameState);
 }

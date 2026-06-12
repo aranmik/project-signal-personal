@@ -134,10 +134,14 @@ export const gameState = {
     stage: 1,
     maxStage: 10,
     result: null,
-    bonuses: { atk: 0, maxHp: 0, heal: 0 },
+    bonuses: { atk: 0, maxHp: 0, heal: 0 }, // 누적 성장값 — 파티 재생성 시 아군 전체 적용
+    rewardLevels: {}, // Reward & Growth 01: 보상별 선택 횟수(Lv 표시용 — 효과는 bonuses가 담당)
     formation: null,      // null = 기본 4인 배치
     startFormation: null, // 직업 선택 화면에서 정한 시작 배치
     recruitOffer: null,   // 영입 화면 진입 시 굴린 랜덤 후보(최대 3) — 화면 갱신에도 고정
+    // Fusion Moment 01: 합체 결과 화면용(직전 합체 정보) / 영입 화면 문맥(fusion=빈자리 보충, expand=4인 확장)
+    lastFusion: null,
+    recruitContext: null,
   },
 
   party: createInitialParty(),

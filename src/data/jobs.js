@@ -9,9 +9,18 @@ export const BASE_JOBS = ["warrior", "guardian", "archer", "priest", "cleric", "
 export const ADVANCED_JOBS = ["rogue", "saint"];
 
 // 합체 레시피 — job id 기반 판단. materials 2개 → result 1개.
+//   birthLine: 합체 결과 화면용 탄생 문구 — "소모/제거"가 아니라 "탄생"으로 읽히게.
 export const FUSION_RECIPES = [
-  { materials: ["warrior", "archer"], result: "rogue" },  // 전사 + 궁수 = 도적
-  { materials: ["priest", "cleric"], result: "saint" },   // 사제 + 신관 = 성직자
+  {
+    materials: ["warrior", "archer"],
+    result: "rogue",
+    birthLine: "전사와 궁수의 힘이 하나로 모였다.",
+  },
+  {
+    materials: ["priest", "cleric"],
+    result: "saint",
+    birthLine: "사제와 신관의 힘이 하나로 이어졌다.",
+  },
 ];
 
 // 현재 파티(jobIds)에서 실행 가능한 레시피만 추린다.

@@ -4,7 +4,7 @@ import { renderGame } from "../ui/render.js";
 import {
   startRun, goTitle, applyReward, cycleSpeed, startPreview, showJobSelect,
   applyFusion, skipFusion, applyRecruit, skipRecruit,
-  swapFormationSlots, confirmArrange,
+  swapFormationSlots, confirmArrange, continueAfterFusion,
 } from "./battle.js";
 
 console.log("Project Signal Personal — init", gameState);
@@ -86,6 +86,12 @@ document.getElementById("fusion-panel").addEventListener("click", (e) => {
   else if ("fusionSkip" in b.dataset) skipFusion();
 });
 
+// Fusion Moment 01: 합체 결과(탄생) 화면 → 동료 영입
+document.getElementById("fusion-result-panel").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (b && "fusionContinue" in b.dataset) continueAfterFusion();
+});
+
 document.getElementById("recruit-panel").addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b) return;
@@ -137,7 +143,8 @@ document.querySelectorAll("#preview-bar [data-preview]").forEach((btn) => {
   });
 });
 
-// Game Flow Foundation 01: 보상 선택 (공격 / 체력 / 회복 훈련)
-document.getElementById("growth-atk").addEventListener("click", () => applyReward("atk"));
-document.getElementById("growth-maxhp").addEventListener("click", () => applyReward("maxHp"));
-document.getElementById("growth-heal").addEventListener("click", () => applyReward("heal"));
+// Reward & Growth 01: 보상 버튼은 REWARDS 데이터로 렌더 — 위임으로 처리
+document.getElementById("growth-choices").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-reward]");
+  if (b) applyReward(b.dataset.reward);
+});

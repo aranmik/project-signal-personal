@@ -1419,6 +1419,63 @@ body {
 
 .fusion-row .fusion-formula { font-size: 13px; color: #cdd9e5; }
 .fusion-row .fusion-formula b { color: #f0d36a; }
+.fusion-row .fusion-arrow { color: #5a82af; margin: 0 2px; }
+
+.flow-note--dim { font-size: 11px; color: #6c7c8c; }
+
+/* === Fusion Moment 01: 합체 결과(탄생) 화면 — 재료 2 → 결과 1 흐름 === */
+.fusion-cast {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin: 6px 0;
+}
+
+.fusion-cast .cast-card {
+  padding: 13px 14px;
+  font-size: 13px;
+  font-weight: 800;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.fusion-cast .cast-mat {
+  color: #9aa8b8;
+  background: #131a26;
+  border: 1px solid #2a3a4a;
+}
+
+.fusion-cast .cast-plus,
+.fusion-cast .cast-arrow { color: #5a82af; font-size: 14px; }
+
+.fusion-cast .cast-result {
+  color: #1a1206;
+  background: #f0d36a;
+  border: 1px solid #f6e7a8;
+  box-shadow: 0 0 14px rgba(240, 211, 106, 0.35);
+  animation: cast-born 0.5s ease-out;
+}
+
+@keyframes cast-born {
+  0% { transform: scale(0.86); opacity: 0; }
+  60% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+#fusion-continue {
+  margin-top: 12px;
+  width: 100%;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: bold;
+  color: #fff;
+  background: #e94560;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
 
 .fusion-row button {
   padding: 9px 14px;
@@ -1694,3 +1751,16 @@ body {
   background: #1e3a5f;
   border-color: #7ec8e3;
 }
+
+/* Reward & Growth 01: 보상 카드 이름/설명 2줄 + 안내/요약 */
+#growth-choices button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+#growth-choices .reward-name { font-size: 15px; font-weight: bold; }
+#growth-choices .reward-desc { font-size: 12px; font-weight: normal; color: #9ab4cc; }
+
+#growth-subtitle .growth-hint { font-size: 12px; color: #8aa0b4; }
