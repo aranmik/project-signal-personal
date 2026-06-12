@@ -417,7 +417,9 @@ const actingUnits = new Set();
 
 // battle.js에서 행동 발생 시 호출 (전투 계산과 분리된 FX 이벤트)
 export function playActionFx(event) {
-  const { sourceInstanceId, sourceUnitId, targetInstanceId, lineType, isHeal, amount } = event;
+  // Job Grammar 01: kind = 직업 행동 분류(strike/protect/snipe/heal/attack).
+  //   현재는 행동선 data-kind 기록만 — 시각 변화 없음. 미래 직업별 FX/로그 확장 hook.
+  const { sourceInstanceId, sourceUnitId, targetInstanceId, lineType, kind, isHeal, amount } = event;
   const layer = document.getElementById("fx-layer");
   const field = document.getElementById("battle-field");
   if (!layer || !field) return;
@@ -440,7 +442,7 @@ export function playActionFx(event) {
   const speed = Number(field.dataset.speed) || 1;
   const lead = speed === 2 ? 80 : 120;
   const fire = () => {
-    spawnLine(layer, s, t, lineType);
+    spawnLine(layer, s, t, lineType, kind);
     spawnPulse(layer, t, isHeal);
     spawnNumber(layer, t, targetInstanceId, isHeal, amount);
     reactUnit(targetInstanceId, isHeal);
@@ -542,7 +544,7 @@ const LINE_STYLE = {
 const MAX_FX_LINES = 7;
 const MAX_FX_NUMBERS = 8;
 
-function spawnLine(layer, s, t, lineType) {
+function spawnLine(layer, s, t, lineType, kind) {
   // 상한 초과 시 가장 오래된 선 제거(읽힘 우선, 화면이 무너지지 않게)
   const lines = layer.querySelectorAll(".fx-svg");
   if (lines.length >= MAX_FX_LINES) lines[0].remove();
@@ -567,6 +569,7 @@ function spawnLine(layer, s, t, lineType) {
 
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("class", `fx-svg fx-svg--${lineType}`);
+  if (kind) svg.dataset.kind = kind; // Job Grammar 01 — 직업 행동 분류 hook(시각 변화 없음)
   svg.setAttribute("width", w);
   svg.setAttribute("height", h);
   svg.setAttribute("viewBox", `0 0 ${w} ${h}`);

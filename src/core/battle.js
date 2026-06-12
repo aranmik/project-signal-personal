@@ -234,6 +234,36 @@ function battleTick() {
 const POISON_TICK_DAMAGE = 2; // 작게 고정 — 밸런스를 흔들지 않는 기반 수치
 const GUARD_DAMAGE_REDUCTION = 3; // 받는 피해 -3 (최소 1 보장)
 
+// Job Identity / Skill Grammar Foundation 01 — 직업 행동 문법.
+//   직업은 이름이 아니라 반복되는 행동 문법으로 읽힌다. kind는 FX/로그/미래 스킬 확장용
+//   분류일 뿐 — 계산식이 아니다. 적은 공통 "attack"(직업 문법 없음).
+const JOB_ACTION_KIND = {
+  warrior: "strike",   // 전열 기본 공격자 — 기준점
+  guardian: "protect", // 보호 담당 — guard 부여 + 공격 유지
+  archer: "snipe",     // 후열 마무리 — 최저 HP 저격(기존 문법)
+  priest: "heal",      // 회복 담당(기존 문법)
+};
+
+function actionKindOf(unit, isParty) {
+  return isParty ? JOB_ACTION_KIND[unit.id] || "attack" : "attack";
+}
+
+// 수호자 protect: 행동 시 가장 위태로운(HP 비율 최저) 아군에게 짧은 guard 1행동.
+//   공격은 그대로 수행(전투 템포 불변). 이미 guard면 중첩/갱신 없음(최소 문법).
+//   FX 없음 — 상태 마커 + 로그가 신호. duration 1 = 대상의 다음 행동까지.
+const GUARDIAN_PROTECT_DURATION = 1;
+
+function grantGuard(guardian) {
+  const alive = gameState.party.filter((u) => !u.isDead);
+  if (alive.length === 0) return;
+  const target = alive.reduce((a, b) =>
+    a.hp / a.maxHp <= b.hp / b.maxHp ? a : b
+  );
+  if (hasStatus(target, "guard")) return;
+  target.statuses.push({ type: "guard", duration: GUARDIAN_PROTECT_DURATION });
+  pushLog(`${guardian.name}${josa(guardian.name, "이가")} ${target.name}${josa(target.name, "을를")} 지켰다.`);
+}
+
 function hasStatus(unit, type) {
   return Array.isArray(unit.statuses) && unit.statuses.some((s) => s.type === type);
 }
@@ -267,6 +297,11 @@ function performAction(unit) {
   }
 
   const isParty = gameState.party.includes(unit);
+
+  // Job Grammar 01 — guardian protect: 공격 전에 보호 부여(공격은 아래에서 그대로).
+  if (isParty && unit.id === "guardian") {
+    grantGuard(unit);
+  }
 
   if (isParty && unit.id === "priest") {
     const healTarget = selectHealTarget(gameState.party);
@@ -324,6 +359,7 @@ function josa(name, type) {
 function attackVerb(unit) {
   if (unit.id === "archer") return "저격했다";
   if (unit.id === "warrior") return "베었다";
+  if (unit.id === "guardian") return "찔렀다"; // Job Grammar 01 — 창(lance) 문법
   return "공격했다";
 }
 
@@ -347,11 +383,13 @@ function performAttack(attacker, target) {
   pushLog(`${attacker.name}${josa(attacker.name, "이가")} ${target.name}${ro} ${verb}. ${damage} 피해.`);
 
   // Action Feedback 01: source → target 행동선 + 피격 + 피해 숫자
+  //   Job Grammar 01: kind는 직업 행동 분류(strike/protect/snipe) — 표시/확장 hook.
   playActionFx({
     sourceInstanceId: attacker.instanceId,
     sourceUnitId: attacker.id,
     targetInstanceId: target.instanceId,
     lineType: attackLineType(attacker),
+    kind: actionKindOf(attacker, attacker.team === "party"),
     isHeal: false,
     amount: damage,
   });
@@ -377,6 +415,7 @@ function performHeal(healer, target) {
     sourceUnitId: healer.id,
     targetInstanceId: target.instanceId,
     lineType: "heal",
+    kind: "heal", // Job Grammar 01 — priest 회복 문법
     isHeal: true,
     amount: actualHeal,
   });
