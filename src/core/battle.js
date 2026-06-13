@@ -3,7 +3,8 @@ import { createInitialParty, createPreviewEnemies, createStageEnemies, SLOT_ORDE
 import { FUSION_RECIPES, BASE_JOBS, prefersFront, slotPreference } from "../data/jobs.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
 import { rewardById } from "../data/rewards.js";
-import { renderGame, playActionFx, playStatusTickFx } from "../ui/render.js";
+import { renderGame, playActionFx, playStatusTickFx, playSupportFx } from "../ui/render.js";
+import { skillOf } from "../data/skills.js";
 
 let tickTimer = null;
 // Combat Feel Polish 01: 기본 전투 호흡 상향. 새 1x = 500ms (BASE / speed).
@@ -498,24 +499,19 @@ function performAction(unit) {
     return;
   }
 
+  // Hero Skill Foundation 01: 행동 횟수(주기형 스킬 조건용). 스테이지마다 유닛 재생성 → 자연 초기화.
+  unit.actionCount = (unit.actionCount || 0) + 1;
+
   const isParty = gameState.party.includes(unit);
 
-  // Job Grammar 01 → Fusion Flow 01: 문법(grammar) 기반 분기 — 직업이 늘어도 여기 그대로.
-  if (isParty && grammarOf(unit) === "protect") {
-    grantGuard(unit);
+  // 영웅: 스킬 조건을 만족하면 스킬 사용(아니면 기본 공격으로 fallback). 적은 스킬 없음.
+  if (isParty && trySkill(unit)) {
+    unit.actionGauge -= 100;
+    return;
   }
 
-  if (isParty && grammarOf(unit) === "heal") {
-    const healTarget = selectHealTarget(gameState.party);
-    if (healTarget) {
-      performHeal(unit, healTarget);
-      unit.actionGauge -= 100;
-      return;
-    }
-  }
-
+  // 기본 공격(fallback). snipe 문법(궁수/도적)은 약한 적 우선 원거리 타겟팅 유지.
   const targetPool = isParty ? gameState.enemies : gameState.party;
-
   const attackTarget = isParty && grammarOf(unit) === "snipe"
     ? selectArcherTarget(targetPool)
     : selectAttackTarget(targetPool);
@@ -524,6 +520,180 @@ function performAction(unit) {
     performAttack(unit, attackTarget);
   }
   unit.actionGauge -= 100;
+}
+
+// Hero Skill Foundation 01 — 영웅 첫 스킬 디스패치(직업 id 기준).
+//   원칙: 조건 만족 시 스킬 수행 후 true 반환 → 기본 공격 대신 스킬. 아니면 false(기본 공격).
+//   계산식은 "스킬 효과 최소 범위"에서만 변경(배수/소량 회복/게이지 -25). 밸런스는 보수적.
+function trySkill(unit) {
+  const meta = skillOf(unit.id);
+  if (!meta) return false;
+  const enemies = gameState.enemies.filter((u) => !u.isDead);
+
+  switch (unit.id) {
+    case "warrior": {
+      // 강타: 3번째 행동마다 강한 일격(×1.5).
+      if (unit.actionCount % 3 !== 0) return false;
+      const t = selectAttackTarget(enemies);
+      if (!t) return false;
+      performAttack(unit, t, { mult: 1.5, skill: meta });
+      return true;
+    }
+    case "rogue": {
+      // 급습: HP 40% 이하 적이 있으면 마무리(×1.6, 원거리 문법 유지).
+      const low = lowestRatioEnemy(enemies, 0.4);
+      if (!low) return false;
+      performAttack(unit, low, { mult: 1.6, lineType: "ranged", skill: meta });
+      return true;
+    }
+    case "archer": {
+      // 저격: 3번째 행동마다 또는 HP 50% 이하 적이 있으면 약점 저격(×1.4, 약한 적 우선).
+      const low = lowestRatioEnemy(enemies, 0.5);
+      if (unit.actionCount % 3 !== 0 && !low) return false;
+      const t = selectArcherTarget(enemies);
+      if (!t) return false;
+      performAttack(unit, t, { mult: 1.4, lineType: "ranged", skill: meta });
+      return true;
+    }
+    case "trickster": {
+      // 교란: 곧 행동할(게이지 높은) 적의 진행도를 낮춤(-25) + 아주 약한 피해. 영구잠금 없음.
+      const top = enemies.reduce((a, b) => (a && (a.actionGauge || 0) >= (b.actionGauge || 0) ? a : b), enemies[0]);
+      if (!top || (top.actionGauge || 0) < 40) return false;
+      performDisrupt(unit, top, meta);
+      return true;
+    }
+    case "guardian": {
+      // 수호: 피해 입었고 guard 없는 아군 중 HP 비율 최저에게 guard 부여(+그래도 기본 공격은 수행).
+      const ward = damagedUnguardedAlly();
+      if (!ward) return false;
+      grantGuardTo(unit, ward);
+      playSupportFx({ casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind, guardInstanceId: ward.instanceId });
+      // 보호 후에도 전열 공격은 유지(템포 불변) — 단 외침은 수호!만(공격 외침 생략).
+      const t = selectAttackTarget(enemies);
+      if (t) performAttack(unit, t, { noShout: true });
+      return true;
+    }
+    case "priest": {
+      // 치유: HP 75% 이하 아군이 있으면 최저 1명 회복.
+      const t = lowestRatioAlly(0.75);
+      if (!t) return false;
+      performHeal(unit, t, { skill: meta });
+      return true;
+    }
+    case "cleric": {
+      // 축복: 피해 입은 아군이 있으면 소량 회복 + guard(사제보다 회복 낮게, 보호 위주).
+      const t = lowestRatioAlly(0.95);
+      if (!t) return false;
+      performBless(unit, t, meta);
+      return true;
+    }
+    case "saint": {
+      // 성역: HP 80% 이하 아군이 2명 이상이면 파티 소량 회복 + 최저 1명 guard.
+      const hurt = gameState.party.filter((u) => !u.isDead && u.hp / u.maxHp <= 0.8);
+      if (hurt.length < 2) return false;
+      performSanctuary(unit, meta);
+      return true;
+    }
+    default:
+      return false;
+  }
+}
+
+// 스킬 보조 셀렉터 ---------------------------------------------------------
+function aliveParty() {
+  return gameState.party.filter((u) => !u.isDead);
+}
+function lowestRatioAlly(maxRatio) {
+  const c = aliveParty().filter((u) => u.hp / u.maxHp < maxRatio);
+  if (c.length === 0) return null;
+  return c.reduce((a, b) => (a.hp / a.maxHp <= b.hp / b.maxHp ? a : b));
+}
+function damagedUnguardedAlly() {
+  const c = aliveParty().filter((u) => u.hp < u.maxHp && !hasStatus(u, "guard"));
+  if (c.length === 0) return null;
+  return c.reduce((a, b) => (a.hp / a.maxHp <= b.hp / b.maxHp ? a : b));
+}
+function lowestRatioEnemy(enemies, maxRatio) {
+  const c = enemies.filter((u) => u.hp / u.maxHp <= maxRatio);
+  if (c.length === 0) return null;
+  return c.reduce((a, b) => (a.hp / a.maxHp <= b.hp / b.maxHp ? a : b));
+}
+
+function grantGuardTo(caster, target) {
+  if (hasStatus(target, "guard")) return;
+  target.statuses.push({ type: "guard", duration: GUARDIAN_PROTECT_DURATION });
+  pushLog(`${caster.name}${josa(caster.name, "이가")} ${target.name}${josa(target.name, "을를")} 지켰다.`);
+}
+
+// 교란: 게이지 -25(0 미만 방지) + 아주 약한 피해. 보라/분홍 왜곡선.
+function performDisrupt(trickster, target, meta) {
+  const dmg = Math.max(1, Math.round(trickster.atk * 0.5));
+  target.hp -= dmg;
+  target.actionGauge = Math.max(0, (target.actionGauge || 0) - 25);
+  pushLog(`${trickster.name}${josa(trickster.name, "이가")} ${target.name}${josa(target.name, "을를")} 교란했다. ${dmg} 피해.`);
+  playActionFx({
+    sourceInstanceId: trickster.instanceId,
+    sourceUnitId: trickster.id,
+    targetInstanceId: target.instanceId,
+    lineType: "disrupt",
+    kind: "disrupt",
+    isHeal: false,
+    amount: dmg,
+    shoutText: meta.name + "!",
+    shoutKind: meta.kind,
+    shoutTier: "skill",
+  });
+  if (target.hp <= 0) {
+    target.hp = 0;
+    target.isDead = true;
+    pushLog(`${target.name}${josa(target.name, "이가")} 쓰러졌다.`);
+  }
+}
+
+// 축복(신관): 소량 회복 + guard. 사제 단일 치유보다 회복 낮게.
+function performBless(cleric, target, meta) {
+  const healAmount = Math.max(1, Math.round(cleric.atk * 1.0));
+  const before = target.hp;
+  target.hp = Math.min(target.maxHp, target.hp + healAmount);
+  const actual = target.hp - before;
+  if (!hasStatus(target, "guard")) {
+    target.statuses.push({ type: "guard", duration: GUARDIAN_PROTECT_DURATION });
+  }
+  pushLog(`${cleric.name}${josa(cleric.name, "이가")} ${target.name}${josa(target.name, "을를")} 축복했다. (+${actual})`);
+  playSupportFx({
+    casterInstanceId: cleric.instanceId,
+    text: meta.name + "!",
+    kind: meta.kind,
+    heals: actual > 0 ? [{ targetInstanceId: target.instanceId, amount: actual }] : [],
+    guardInstanceId: target.instanceId,
+  });
+}
+
+// 성역(성직자): 파티 전체 소량 회복 + 최저 1명 guard. 단일 큰 회복이 아니라 "안정화".
+function performSanctuary(saint, meta) {
+  const allies = aliveParty();
+  const each = Math.max(1, Math.round(saint.atk * 0.8));
+  const heals = [];
+  allies.forEach((a) => {
+    const before = a.hp;
+    a.hp = Math.min(a.maxHp, a.hp + each);
+    const actual = a.hp - before;
+    if (actual > 0) heals.push({ targetInstanceId: a.instanceId, amount: actual });
+  });
+  const lowest = allies.reduce((a, b) => (a.hp / a.maxHp <= b.hp / b.maxHp ? a : b));
+  let guardId = null;
+  if (lowest && !hasStatus(lowest, "guard")) {
+    lowest.statuses.push({ type: "guard", duration: GUARDIAN_PROTECT_DURATION });
+    guardId = lowest.instanceId;
+  }
+  pushLog(`${saint.name}${josa(saint.name, "이가")} 성역을 펼쳤다. 파티가 안정됐다.`);
+  playSupportFx({
+    casterInstanceId: saint.instanceId,
+    text: meta.name + "!",
+    kind: meta.kind,
+    heals,
+    guardInstanceId: guardId,
+  });
 }
 
 function selectAttackTarget(pool) {
@@ -576,29 +746,35 @@ function attackLineType(attacker) {
   return "attack"; // 근접/일반
 }
 
-function performAttack(attacker, target) {
+// Hero Skill Foundation 01: opts = { mult, skill, lineType, noShout }.
+//   mult = 피해 배수(스킬), skill = { name, kind }(스킬 텍스트), lineType 강제(급습/저격=ranged),
+//   noShout = 외침 생략(수호 후 동반 공격 등). 미지정이면 기본 공격 "공격!".
+function performAttack(attacker, target, opts = {}) {
   // Status & Effect Foundation 01: guard — 받는 피해 최소 보정(음수/0 방지, 최소 1).
-  const damage = hasStatus(target, "guard")
+  const base = hasStatus(target, "guard")
     ? Math.max(1, attacker.atk - GUARD_DAMAGE_REDUCTION)
     : attacker.atk;
+  const damage = Math.max(1, Math.round(base * (opts.mult || 1)));
   target.hp -= damage;
 
   const verb = attackVerb(attacker);
   const ro = josa(target.name, "을를");
-  const i = josa(target.name, "이가");
 
   pushLog(`${attacker.name}${josa(attacker.name, "이가")} ${target.name}${ro} ${verb}. ${damage} 피해.`);
 
-  // Action Feedback 01: source → target 행동선 + 피격 + 피해 숫자
-  //   Job Grammar 01: kind는 직업 행동 분류(strike/protect/snipe) — 표시/확장 hook.
+  const line = opts.lineType || attackLineType(attacker);
   playActionFx({
     sourceInstanceId: attacker.instanceId,
     sourceUnitId: attacker.id,
     targetInstanceId: target.instanceId,
-    lineType: attackLineType(attacker),
+    lineType: line,
     kind: actionKindOf(attacker, attacker.team === "party"),
     isHeal: false,
     amount: damage,
+    // 스킬이면 스킬명(더 큰 텍스트), 아니면 기본 "공격!". noShout면 외침 없음.
+    shoutText: opts.noShout ? null : opts.skill ? opts.skill.name + "!" : "공격!",
+    shoutKind: opts.skill ? opts.skill.kind : line === "ranged" ? "ranged" : "attack",
+    shoutTier: opts.skill ? "skill" : "basic",
   });
 
   if (target.hp <= 0) {
@@ -608,7 +784,7 @@ function performAttack(attacker, target) {
   }
 }
 
-function performHeal(healer, target) {
+function performHeal(healer, target, opts = {}) {
   // Game Flow 01: 회복 훈련 보상(run.bonuses.heal) — 작은 고정 가산만.
   const healAmount = Math.round(healer.atk * 1.5) + (gameState.run.bonuses.heal || 0);
   const hpBefore = target.hp;
@@ -617,15 +793,18 @@ function performHeal(healer, target) {
 
   pushLog(`${healer.name}${josa(healer.name, "이가")} ${target.name}${josa(target.name, "을를")} 회복했다. (+${actualHeal})`);
 
-  // Action Feedback 01: source → target 회복선 + 회복 숫자
+  // Action Feedback 01: source → target 회복선 + 회복 숫자. Skill 01: 치유! 텍스트.
   playActionFx({
     sourceInstanceId: healer.instanceId,
     sourceUnitId: healer.id,
     targetInstanceId: target.instanceId,
     lineType: "heal",
-    kind: "heal", // Job Grammar 01 — priest 회복 문법
+    kind: "heal",
     isHeal: true,
     amount: actualHeal,
+    shoutText: opts.skill ? opts.skill.name + "!" : "치유!",
+    shoutKind: "heal",
+    shoutTier: "skill",
   });
 }
 

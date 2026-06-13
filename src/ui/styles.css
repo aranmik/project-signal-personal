@@ -183,10 +183,12 @@ body {
      · 후열 2슬롯 = 같은 하단 밴드, x를 넓게 벌린 가로 쌍(좌측으로 후퇴)
      · 전열↔후열 열을 어긋나게 두어 어떤 조합도 세로줄이 되지 않게.
    x 30~162(좌측 영역 안, 우상단 적 zone과 겹치지 않음), 두 밴드 높이차로 판독 분리. */
-#battle-field .hero-slot-f0 { left: 162px; bottom: 178px; } /* 전열 1 — 적과 최근접(상단·안쪽) */
-#battle-field .hero-slot-f1 { left: 64px;  bottom: 156px; } /* 전열 2 — 상단·바깥쪽 */
-#battle-field .hero-slot-b0 { left: 128px; bottom: 60px; }  /* 후열 1 — 하단·안쪽 */
-#battle-field .hero-slot-b1 { left: 30px;  bottom: 30px; }  /* 후열 2 — 적과 최원거리(하단·바깥쪽) */
+/* Combat Breath Hotfix 01: 각 행의 가로 간격을 아주 소폭(≈10px) 넓혀 치유선/행동선이
+   아바타 사이에 묻히지 않게. 사다리꼴(전열2/후열2) 감각·3인도 4슬롯 원칙·적 진영 거리 유지. */
+#battle-field .hero-slot-f0 { left: 166px; bottom: 178px; } /* 전열 1 — 적과 최근접(상단·안쪽) */
+#battle-field .hero-slot-f1 { left: 58px;  bottom: 156px; } /* 전열 2 — 상단·바깥쪽 */
+#battle-field .hero-slot-b0 { left: 132px; bottom: 60px; }  /* 후열 1 — 하단·안쪽 */
+#battle-field .hero-slot-b1 { left: 24px;  bottom: 30px; }  /* 후열 2 — 적과 최원거리(하단·바깥쪽) */
 
 /* 적은 상단 "우측 70(x 117~390)" 영역 전체를 넓게 사용(우상 한 점 정렬 아님).
    top 10~150으로 상단 절반의 폭·높이를 활용해 영역감을 살린다. */
@@ -1121,21 +1123,49 @@ body {
 }
 .fx-head--cross .fx-mote { fill: currentColor; opacity: 0.85; }
 
-/* "공격!" 외침 — 가장 작은 액션 텍스트 계층(행동 주체 머리 위, 짧게 떠올라 fade) */
+/* 행동 텍스트 외침 — "공격!"(basic, 가장 작음) / 스킬명(skill, 더 큼).
+   얼굴 근처에서 떠올라 위로 fade. 스킬명은 더 크고 색이 진하게(액션 텍스트 계층). */
 .fx-shout {
   position: absolute;
   transform: translate(-50%, -50%);
   font-size: 11px; font-weight: 800;
   color: #ffd49a;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
-  opacity: 0; pointer-events: none; white-space: nowrap; z-index: 6;
+  opacity: 0; pointer-events: none; white-space: nowrap; z-index: 7;
   animation: fx-shout 0.7s ease-out forwards;
 }
+.fx-shout--skill {
+  font-size: 16px; font-weight: 900;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.4);
+  animation-duration: 0.85s;
+}
+/* 스킬명 색 계층(kind별) */
+.fx-shout--attack  { color: #ff9a5f; }   /* 공격계 — 주황/빨강 */
+.fx-shout--ranged  { color: #9be07a; }   /* 원거리 — 초록 */
+.fx-shout--heal    { color: #9fe6cf; }   /* 치유 — 청록 */
+.fx-shout--support { color: #ffe1a2; }   /* 지원/보호 — 금빛 */
+.fx-shout--disrupt { color: #e7a8ff; }   /* 교란 — 보라/분홍 */
 #battle-field[data-speed="MAX"] .fx-shout { animation-duration: 0.5s; }
 @keyframes fx-shout {
   0%   { opacity: 0;    transform: translate(-50%, -42%) scale(0.85); }
   28%  { opacity: 0.95; transform: translate(-50%, -64%) scale(1); }
   100% { opacity: 0;    transform: translate(-50%, -96%) scale(1); }
+}
+
+/* Hero Skill 01 — 교란 왜곡선(보라) */
+.fx-svg--disrupt { color: rgba(208, 150, 240, 0.92); }
+.fx-svg--disrupt .fx-path { stroke-width: 2.4; stroke-dasharray: 4 3; }
+
+/* Combat Breath Hotfix 01 — 치유선 가독성: 끝 잔상을 공격보다 약간 더 길게(잘 보이게). */
+.fx-svg--heal { animation-duration: 1.6s; }
+.fx-svg--heal .fx-path { stroke-width: 2.8; }
+.fx-head--cross .fx-crossline { stroke-width: 3; }  /* 십자가 더 또렷이 */
+
+/* 수호/축복/성역 guard 부여 — 방패 느낌의 금빛 pulse(피격 pulse와 구분) */
+.fx-pulse--guard {
+  background: rgba(240, 211, 138, 0.22);
+  border: 2px solid rgba(240, 211, 138, 0.8);
+  box-shadow: 0 0 12px rgba(240, 211, 138, 0.45);
 }
 
 /* === 궁수 straight: 거의 직선 + 날카로운 채운 화살촉 → "꽂혔다" === */

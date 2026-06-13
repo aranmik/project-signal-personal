@@ -883,23 +883,66 @@ function borderPointToward(targetInstanceId, from, fieldRect) {
   return { x: cx + dx * r.width * 0.40, y: cy + dy * r.height * 0.40 };
 }
 
-// Basic Action Breath 01 — 기본 공격 "공격!" 외침(가장 작은 액션 텍스트 계층).
-//   행동 주체 머리 위에서 짧게 떠 위로 올라가며 사라진다. 과밀 방지 상한.
+// Basic Action Breath 01 → Hero Skill 01 — 행동 텍스트 외침.
+//   "공격!"(basic, 가장 작음) / 스킬명(skill, 더 큼) 계층. 색은 kind별.
+//   Combat Breath Hotfix 01: 시작점을 머리 근처(얼굴 위)로 내려 "대사를 외치는" 느낌.
+//   행동 주체 얼굴 근처에서 떠 위로 올라가며 fade. 과밀 방지 상한 + 화면 안 clamp.
 const MAX_FX_SHOUTS = 5;
-function spawnActionShout(sourceInstanceId, text, fieldRect) {
+function spawnActionShout(sourceInstanceId, text, fieldRect, opts = {}) {
   const layer = document.getElementById("fx-layer");
   if (!layer) return;
-  const p = unitPoint(sourceInstanceId, { fx: 0.5, fy: -0.02 }, fieldRect);
+  const isSkill = opts.tier === "skill";
+  // 얼굴/머리 근처(유닛 박스 상단 안쪽). 스킬은 살짝 더 위(크기 큼 보정).
+  const fy = isSkill ? 0.06 : 0.14;
+  const p = unitPoint(sourceInstanceId, { fx: 0.5, fy }, fieldRect);
   if (!p) return;
   const shouts = layer.querySelectorAll(".fx-shout");
   if (shouts.length >= MAX_FX_SHOUTS) shouts[0].remove();
   const el = document.createElement("span");
-  el.className = "fx-shout";
+  el.className =
+    "fx-shout" +
+    (isSkill ? " fx-shout--skill" : "") +
+    (opts.kind ? ` fx-shout--${opts.kind}` : "");
   el.textContent = text;
   el.style.left = `${p.x}px`;
-  el.style.top = `${p.y}px`;
+  el.style.top = `${Math.max(8, p.y)}px`; // 화면 상단 밖으로 시작하지 않게 clamp
   el.addEventListener("animationend", () => el.remove());
   layer.appendChild(el);
+}
+
+// Hero Skill Foundation 01 — 비-라인 지원 스킬 FX(수호/축복/성역).
+//   시전자에 스킬 외침 + 각 회복 대상에 회복 pulse/숫자 + guard 대상에 방패 pulse.
+//   라인 없이 "파티에 닿았다"를 표현(다수 대상은 area pulse처럼 읽힘). 과밀 상한 공유.
+export function playSupportFx({ casterInstanceId, text, kind, heals = [], guardInstanceId }) {
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  const fieldRect = field.getBoundingClientRect();
+
+  if (text) spawnActionShout(casterInstanceId, text, fieldRect, { tier: "skill", kind });
+
+  heals.forEach((h) => {
+    if (dyingUnits.has(h.targetInstanceId) || cleanedDead.has(h.targetInstanceId)) return;
+    const p = unitPoint(h.targetInstanceId, { fx: 0.5, fy: 0.46 }, fieldRect);
+    if (p) spawnPulse(layer, p, true);
+    if (h.amount > 0) {
+      const tn = numberAnchor(h.targetInstanceId, fieldRect);
+      if (tn) spawnNumber(layer, tn, h.targetInstanceId, true, h.amount);
+    }
+    reactUnit(h.targetInstanceId, true);
+  });
+
+  if (guardInstanceId && !dyingUnits.has(guardInstanceId) && !cleanedDead.has(guardInstanceId)) {
+    const g = unitPoint(guardInstanceId, { fx: 0.5, fy: 0.46 }, fieldRect);
+    if (g) {
+      const s = document.createElement("span");
+      s.className = "fx-pulse fx-pulse--guard";
+      s.style.left = `${g.x}px`;
+      s.style.top = `${g.y}px`;
+      s.addEventListener("animationend", () => s.remove());
+      layer.appendChild(s);
+    }
+  }
 }
 
 // Action Emphasis 01: 시선 우선순위 = acting > line > target reaction > idle.
@@ -911,7 +954,8 @@ const actingUnits = new Set();
 export function playActionFx(event) {
   // Job Grammar 01: kind = 직업 행동 분류(strike/protect/snipe/heal/attack).
   //   현재는 행동선 data-kind 기록만 — 시각 변화 없음. 미래 직업별 FX/로그 확장 hook.
-  const { sourceInstanceId, sourceUnitId, targetInstanceId, lineType, kind, isHeal, amount } = event;
+  const { sourceInstanceId, sourceUnitId, targetInstanceId, lineType, kind, isHeal, amount,
+    shoutText, shoutKind, shoutTier } = event;
   const layer = document.getElementById("fx-layer");
   const field = document.getElementById("battle-field");
   if (!layer || !field) return;
@@ -930,8 +974,11 @@ export function playActionFx(event) {
 
   // 1) 행동자 선언("나야 지금!") — source unit이 먼저 짧게 보인다.
   cueActor(sourceInstanceId, lineType);
-  // 1a) Basic Action Breath 01: 기본 공격이면 행동 주체 근처에 작은 "공격!" 외침(가장 작은 액션 텍스트 계층).
-  if (!isHeal) spawnActionShout(sourceInstanceId, "공격!", fieldRect);
+  // 1a) 행동 텍스트(외침). Hero Skill 01: event.shoutText로 "공격!"/스킬명 모두 처리.
+  //   (이전엔 공격만 하드코딩 → 이제 스킬명도 같은 채널로. heal 단일 치유도 텍스트가 뜬다.)
+  if (shoutText) {
+    spawnActionShout(sourceInstanceId, shoutText, fieldRect, { tier: shoutTier, kind: shoutKind });
+  }
   // 1b) 대상 신호("잡혔다") — actor보다 약한 보조 신호. 선이 도착하기 전 대상을 가리킨다.
   spawnTargetCue(targetInstanceId, isHeal);
 
@@ -1041,7 +1088,10 @@ let __fxLineSeq = 0;
 const LINE_STYLE = {
   attack:   { bowF: 0.32, bowMin: 22, bowMax: 74, flip: 1,  head: "x",      draw: true, ghost: true },
   ranged:   { bowF: 0.74, bowMin: 52, bowMax: 150, flip: 1, head: "target", draw: true },
-  heal:     { bowF: 0.34, bowMin: 20, bowMax: 56, flip: -1, head: "cross",  draw: false },
+  // Combat Breath Hotfix 01: 치유선 곡률↑(아군 간격 좁아도 아바타 사이에 안 묻히게 위로 크게 호).
+  heal:     { bowF: 0.50, bowMin: 34, bowMax: 92, flip: -1, head: "cross",  draw: false },
+  // Hero Skill 01: 교란 — 보라/분홍 거친 왜곡선(짧게 흔들림). 작은 혼란 표식(spark).
+  disrupt:  { bowF: 0.22, bowMin: 14, bowMax: 44, flip: 1,  head: "spark",  draw: false, rough: true },
   // legacy(미사용)
   straight: { bowF: 0.05, bowMin: 3,  bowMax: 8,  flip: 1,  head: "arrow", draw: true },
   slash:    { bowF: 0.36, bowMin: 26, bowMax: 82, flip: 1,  head: "slash", draw: true, ghost: true },
