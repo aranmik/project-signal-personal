@@ -1,6 +1,9 @@
-// Fusion Flow Foundation 01:
-//   grammar = 직업 행동 문법(strike/protect/snipe/heal/harass) — battle.js가 이 필드로 분기.
-//   visual  = 아바타 비주얼 donor(전용 실루엣이 생기기 전까지 기존 파츠 + CSS 틴트 재사용).
+// Fusion Flow Foundation 01 / Combat Readability Polish 02:
+//   grammar   = 직업 행동 문법(strike/protect/snipe/heal/harass) — battle.js가 이 필드로 분기.
+//   visual    = 아바타 비주얼 donor(전용 실루엣 전까지 기존 파츠 + CSS 틴트 재사용).
+//   avatarKey = 아바타 자산 키. render는 .avatar-{avatarKey} 클래스로 출력 →
+//               추후 "루다 CSS 아바타 → 본게임 이식 → 직업카드/전투유닛/도감" 공통 hook.
+//               (이번엔 틀만 — 실제 30종 아바타 이식/디자인 확정은 하지 않는다.)
 //   role은 기본값일 뿐 — 실제 전열/후열은 배치(formation slot)가 덮어쓴다.
 export const UNIT_TEMPLATES = {
   party: {
@@ -11,6 +14,7 @@ export const UNIT_TEMPLATES = {
       job: "warrior",
       role: "front",
       grammar: "strike",
+      avatarKey: "warrior",
       maxHp: 120,
       atk: 14,
       speed: 8,
@@ -23,6 +27,7 @@ export const UNIT_TEMPLATES = {
       job: "priest",
       role: "back",
       grammar: "heal",
+      avatarKey: "priest",
       maxHp: 80,
       atk: 8,
       speed: 7,
@@ -35,6 +40,7 @@ export const UNIT_TEMPLATES = {
       job: "archer",
       role: "back",
       grammar: "snipe",
+      avatarKey: "archer",
       maxHp: 75,
       atk: 16,
       speed: 9,
@@ -50,6 +56,7 @@ export const UNIT_TEMPLATES = {
       job: "guardian",
       role: "back",
       grammar: "protect",
+      avatarKey: "guardian",
       maxHp: 105,
       atk: 11,
       speed: 6,
@@ -65,6 +72,7 @@ export const UNIT_TEMPLATES = {
       role: "back",
       grammar: "heal", // 임시: 사제와 같은 회복 문법(수치만 약하게)
       visual: "priest",
+      avatarKey: "cleric",
       maxHp: 82,
       atk: 7,
       speed: 7,
@@ -78,6 +86,7 @@ export const UNIT_TEMPLATES = {
       role: "back",
       grammar: "harass", // 임시: 일반 공격(방해 효과는 추후 — mark/debuff 미연결)
       visual: "archer",
+      avatarKey: "trickster",
       maxHp: 72,
       atk: 13,
       speed: 9,
@@ -92,6 +101,7 @@ export const UNIT_TEMPLATES = {
       role: "front",
       grammar: "snipe", // 전사+궁수 — 빠르고 약점을 노리는 마무리
       visual: "warrior",
+      avatarKey: "rogue",
       maxHp: 110,
       atk: 19,
       speed: 9,
@@ -105,6 +115,7 @@ export const UNIT_TEMPLATES = {
       role: "back",
       grammar: "heal", // 사제+신관 — 더 단단한 회복 담당
       visual: "priest",
+      avatarKey: "holy-cleric",
       maxHp: 100,
       atk: 11,
       speed: 7,

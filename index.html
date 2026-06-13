@@ -27,23 +27,31 @@
         <div id="job-select-inner">
           <p id="job-kicker">초보자의 길</p>
           <h2 id="job-heading">동료 3명을 선택하세요</h2>
+          <!-- Combat Readability Polish 02: data-avatar = 전투 유닛과 같은 avatarKey 참조 hook
+               (.job-ava.avatar-{key} placeholder — 추후 루다 아바타를 카드/전투 공통 적용) -->
           <div id="job-grid">
-            <button type="button" class="job-card" data-job="warrior">
+            <button type="button" class="job-card" data-job="warrior" data-avatar="warrior">
+              <span class="job-ava avatar-warrior" aria-hidden="true"></span>
               <span class="job-name">전사</span><span class="job-role">전열 공격</span>
             </button>
-            <button type="button" class="job-card" data-job="guardian">
+            <button type="button" class="job-card" data-job="guardian" data-avatar="guardian">
+              <span class="job-ava avatar-guardian" aria-hidden="true"></span>
               <span class="job-name">수호자</span><span class="job-role">보호 담당</span>
             </button>
-            <button type="button" class="job-card" data-job="archer">
+            <button type="button" class="job-card" data-job="archer" data-avatar="archer">
+              <span class="job-ava avatar-archer" aria-hidden="true"></span>
               <span class="job-name">궁수</span><span class="job-role">후열 저격</span>
             </button>
-            <button type="button" class="job-card" data-job="priest">
+            <button type="button" class="job-card" data-job="priest" data-avatar="priest">
+              <span class="job-ava avatar-priest" aria-hidden="true"></span>
               <span class="job-name">사제</span><span class="job-role">회복 지원</span>
             </button>
-            <button type="button" class="job-card" data-job="cleric">
+            <button type="button" class="job-card" data-job="cleric" data-avatar="cleric">
+              <span class="job-ava avatar-cleric" aria-hidden="true"></span>
               <span class="job-name">신관</span><span class="job-role">후열 지원</span>
             </button>
-            <button type="button" class="job-card" data-job="trickster">
+            <button type="button" class="job-card" data-job="trickster" data-avatar="trickster">
+              <span class="job-ava avatar-trickster" aria-hidden="true"></span>
               <span class="job-name">교란꾼</span><span class="job-role">후열 교란</span>
             </button>
           </div>
@@ -112,6 +120,8 @@
         <section id="battle-field">
           <span class="team-label enemy">enemy side</span>
           <span class="team-label party">party side</span>
+          <!-- Combat Readability Polish 02: 보스/정예 전용 정보 HUD (중앙 상단) -->
+          <div id="encounter-hud" hidden></div>
           <div id="log-overlay" hidden></div>
           <div id="unit-layer"></div>
           <div id="fx-layer"></div>

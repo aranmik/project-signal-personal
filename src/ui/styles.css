@@ -216,6 +216,109 @@ body {
 #battle-field .unit.enemy.mon-elite .monster { filter: drop-shadow(0 0 5px rgba(239, 125, 106, 0.45)); }
 #battle-field .unit.enemy.mon-boss .monster { filter: drop-shadow(0 0 8px rgba(239, 125, 106, 0.55)); }
 
+/* === Combat Readability Polish 02: Boss/Elite Encounter HUD (중앙 상단) === */
+/* HUD에 잡힌 적은 아바타 부착 바/게이지/상태슬롯을 숨긴다(정보는 HUD가 담당, 아바타는 위압감만) */
+#battle-field .unit.is-encounter .hp-bar,
+#battle-field .unit.is-encounter .tempo-bar,
+#battle-field .unit.is-encounter .status-slots { display: none; }
+
+#encounter-hud {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 86%;
+  max-width: 320px;
+  padding: 8px 11px 9px;
+  background: rgba(16, 12, 18, 0.82);
+  border: 1px solid rgba(233, 125, 106, 0.4);
+  border-radius: 9px;
+  z-index: 9;
+  pointer-events: none;
+}
+
+#encounter-hud[data-tier="boss"] { border-color: rgba(233, 69, 96, 0.55); }
+
+#encounter-hud .enc-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 6px;
+}
+
+#encounter-hud .enc-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #1a1206;
+  background: #e6b455;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+#encounter-hud[data-tier="boss"] .enc-label { background: #e94560; color: #fff; }
+
+#encounter-hud .enc-name {
+  font-size: 13px;
+  font-weight: 800;
+  color: #eef3f8;
+}
+
+#encounter-hud .enc-status {
+  display: flex;
+  gap: 3px;
+  margin-left: auto;
+}
+#encounter-hud .enc-status .status-marker { width: 8px; height: 8px; border-radius: 50%; }
+
+#encounter-hud .enc-hp {
+  display: block;
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+#encounter-hud .enc-hp-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #e94560, #ff7a6e);
+  transition: width 0.25s ease-out;
+}
+
+#encounter-hud .enc-tempo {
+  display: block;
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+#encounter-hud .enc-tempo-fill {
+  display: block;
+  height: 100%;
+  background: #6fa8e0;
+  transition: width 0.2s linear;
+}
+
+/* === Combat Readability Polish 02: Avatar Scaffold ===
+   .avatar-{key}는 추후 루다 CSS 아바타가 꽂힐 자리(전투 유닛 / 직업 카드 공통).
+   지금은 placeholder만 — 전투 유닛엔 시각 변화를 주지 않는다(기존 donor 파츠 유지).
+   직업 카드의 작은 .job-ava 칩만 키별 색으로 "스캐폴드가 존재함"을 표시한다. */
+.job-card .job-ava {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #243245;
+  border: 1px solid #2f4156;
+}
+.job-card .job-ava.avatar-warrior { background: #5a3a32; }
+.job-card .job-ava.avatar-guardian { background: #2f4a63; }
+.job-card .job-ava.avatar-archer { background: #41522f; }
+.job-card .job-ava.avatar-priest { background: #5a4f2f; }
+.job-card .job-ava.avatar-cleric { background: #2f5a52; }
+.job-card .job-ava.avatar-trickster { background: #432f5a; }
+
 /* 공통 idle — 전투 직전 숨 쉬며 대치하는 느낌 (발밑 고정, 약한 호흡) */
 @keyframes sig-idle {
   0%, 100% { transform: translateY(0) scaleY(1); }

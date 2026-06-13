@@ -75,8 +75,71 @@ export function renderGame(state) {
   battleView.dataset.status = state.battle.status;
   renderHud(state);
   renderUnits(state);
+  renderEncounterHud(state);
   renderLogOverlay(state);
   renderResultOverlay(state);
+}
+
+// Combat Readability Polish 02 — Boss/Elite Encounter HUD.
+//   tier 적의 정보(이름/HP/속도/상태)는 커진 아바타 밑이 아니라 중앙 상단 전용 HUD로 표시.
+//   현재는 boss를 우선 노출(elite-mix 다수전 회귀 방지) — elite 확장은 encounterUnit만 넓히면 됨.
+//   HUD에 잡힌 유닛(.is-encounter)은 아바타 부착 바/게이지/상태슬롯을 CSS로 숨긴다.
+function encounterUnit(state) {
+  const enemies = state.enemies || [];
+  // boss 우선. (확장: || enemies.find((u) => u.tier === "elite" && !u.isDead))
+  return enemies.find((u) => u.tier === "boss" && !u.isDead) || null;
+}
+
+function renderEncounterHud(state) {
+  const hud = document.getElementById("encounter-hud");
+  if (!hud) return;
+
+  // 매 렌더 시 이전 표식 해제 후 현재 대상에만 부여(재배치/스테이지 전환 안전)
+  document
+    .querySelectorAll("#unit-layer .unit.is-encounter")
+    .forEach((el) => el.classList.remove("is-encounter"));
+
+  const unit = encounterUnit(state);
+  if (!unit || dyingUnits.has(unit.instanceId) || cleanedDead.has(unit.instanceId)) {
+    hud.hidden = true;
+    hud.dataset.iid = "";
+    return;
+  }
+
+  const el = document.querySelector(`#unit-layer [data-instance-id="${unit.instanceId}"]`);
+  if (el) el.classList.add("is-encounter");
+
+  // 구조는 대상이 바뀔 때만 재생성(매 tick HP/게이지 width만 갱신 → 바 transition 유지)
+  if (hud.dataset.iid !== unit.instanceId) {
+    hud.dataset.iid = unit.instanceId;
+    hud.dataset.tier = unit.tier;
+    const label = unit.tier === "boss" ? "BOSS" : "ELITE";
+    hud.innerHTML = `
+      <div class="enc-top">
+        <span class="enc-label">${label}</span>
+        <span class="enc-name">${unit.name}</span>
+        <div class="enc-status" data-markers=""></div>
+      </div>
+      <span class="enc-hp"><span class="enc-hp-fill"></span></span>
+      <span class="enc-tempo"><span class="enc-tempo-fill"></span></span>
+    `;
+  }
+
+  const hpPct = unit.maxHp > 0
+    ? Math.max(0, Math.min(100, (unit.hp / unit.maxHp) * 100))
+    : 0;
+  hud.querySelector(".enc-hp-fill").style.width = `${hpPct.toFixed(1)}%`;
+  const gauge = Math.max(0, Math.min(100, unit.actionGauge ?? 0));
+  hud.querySelector(".enc-tempo-fill").style.width = `${gauge.toFixed(1)}%`;
+
+  const markers = displayMarkers(unit);
+  const statusEl = hud.querySelector(".enc-status");
+  const key = markers.join(",");
+  if (statusEl && statusEl.dataset.markers !== key) {
+    statusEl.dataset.markers = key;
+    statusEl.innerHTML = statusMarkersHTML(markers);
+  }
+  hud.hidden = false;
 }
 
 // Fusion Flow Foundation 01 — 현재 배치 한 줄 표시 (전열/후열이 읽히게).
@@ -557,7 +620,10 @@ function createFieldUnit(unit) {
   if (unit.tier) wrap.dataset.tier = unit.tier;
 
   // Fusion Flow 01: 신규 직업은 전용 실루엣 전까지 비주얼 donor(visual) 파츠 + CSS 틴트 재사용.
+  //   Combat Readability Polish 02: avatar-{avatarKey} 스캐폴드 클래스도 함께 — 추후 루다
+  //   CSS 아바타를 이 클래스에 꽂으면 job id 하드코딩 없이 교체된다(전투/카드 공통 hook).
   const visual = unit.visual || id;
+  const avatarKey = unit.avatarKey || id;
   const figClass = isParty ? "avatar" : "monster";
   const parts = (AVATAR_PARTS[visual] || [])
     .map((p) => `<span class="part ${p}"></span>`)
@@ -592,7 +658,7 @@ function createFieldUnit(unit) {
     ${rolePip}
     <div class="status-slots" data-markers="${markersKey}">${statusMarkersHTML(markers)}</div>
     <div class="fig-react">
-      <div class="${figClass} ${visual} job-${id}">${parts}</div>
+      <div class="${figClass} ${visual} job-${id} avatar-${avatarKey}">${parts}</div>
     </div>
     <span class="hp-bar"><span class="hp-bar-fill" style="width:${hpPct}%"></span></span>
     <span class="tempo-bar${readyClass}"><span class="tempo-bar-fill" style="width:${gaugePct}%"></span></span>
@@ -623,9 +689,13 @@ const SOURCE_ANCHORS = {
 };
 const TARGET_HIT = { fx: 0.5, fy: 0.5 };       // body / hit-point
 const TARGET_HEAL = { fx: 0.5, fy: 0.32 };     // heal-point (상단)
+// Combat Readability Polish 02: 피해/회복 숫자는 머리 위에서 시작 → 위로 float.
+const TARGET_NUMBER = { fx: 0.5, fy: 0.08 };   // head anchor (유닛 상단)
 
-// 같은 대상 숫자 중복 시 queue offset 판단용
-const recentNumberAt = new Map();
+// Combat Readability Polish 02: 대상별로 현재 떠 있는 숫자 수 — queue/stagger 판단용.
+//   같은 유닛에 짧은 간격으로 숫자가 겹치면 위로 쌓고(y-offset) 살짝 delay를 줘서
+//   겹쳐 터지지 않게 한다. 대상이 다르면 각자 병렬로 뜬다(서로 영향 없음).
+const activeNumbers = new Map();
 
 function unitPoint(instanceId, frac, fieldRect) {
   const el = document.querySelector(
@@ -670,10 +740,12 @@ export function playActionFx(event) {
   // 2) 짧은 선행 뒤 행동선 발사 + 대상 반응. 배속이면 리듬만 살게 더 짧게.
   const speed = Number(field.dataset.speed) || 1;
   const lead = speed === 2 ? 80 : 120;
+  // 숫자는 머리 위(head anchor)에서 시작 — 선/펄스는 타격 지점(t) 그대로.
+  const tn = unitPoint(targetInstanceId, TARGET_NUMBER, fieldRect) || t;
   const fire = () => {
     spawnLine(layer, s, t, lineType, kind);
     spawnPulse(layer, t, isHeal);
-    spawnNumber(layer, t, targetInstanceId, isHeal, amount);
+    spawnNumber(layer, tn, targetInstanceId, isHeal, amount);
     reactUnit(targetInstanceId, isHeal);
   };
   setTimeout(fire, lead);
@@ -687,7 +759,7 @@ export function playStatusTickFx({ targetInstanceId, amount, kind }) {
   const layer = document.getElementById("fx-layer");
   const field = document.getElementById("battle-field");
   if (!layer || !field) return;
-  const t = unitPoint(targetInstanceId, TARGET_HIT, field.getBoundingClientRect());
+  const t = unitPoint(targetInstanceId, TARGET_NUMBER, field.getBoundingClientRect());
   if (!t) return;
   spawnNumber(layer, t, targetInstanceId, false, amount, kind);
 }
@@ -907,20 +979,29 @@ function spawnNumber(layer, t, targetInstanceId, isHeal, amount, variant) {
   const nums = layer.querySelectorAll(".fx-number");
   if (nums.length >= MAX_FX_NUMBERS) nums[0].remove();
 
-  const now = performance.now();
-  const last = recentNumberAt.get(targetInstanceId) || 0;
-  const overlap = now - last < 700; // 같은 대상에 거의 동시 → queue offset
-  recentNumberAt.set(targetInstanceId, now);
+  // Combat Readability Polish 02 — 같은 대상에 떠 있는 숫자 수(idx)로 stagger.
+  //   idx만큼 위로 쌓고(겹침 방지) 짧은 delay(최대 4단계)를 줘 순서대로 뜬다.
+  //   너무 밀리지 않게 stagger 상한을 둔다(큐 누적 방지).
+  const idx = activeNumbers.get(targetInstanceId) || 0;
+  activeNumbers.set(targetInstanceId, idx + 1);
+  const step = Math.min(idx, 4);
 
   const n = document.createElement("span");
   n.className =
     `fx-number ${isHeal ? "fx-number--heal" : "fx-number--dmg"}` +
-    (variant ? ` fx-number--${variant}` : "") + // 상태 tick 변주(poison 등)
-    (overlap ? " fx-number--queued" : "");
+    (variant ? ` fx-number--${variant}` : ""); // 상태 tick 변주(poison 등)
   n.textContent = `${isHeal ? "+" : "-"}${amount}`;
   n.style.left = `${t.x}px`;
-  n.style.top = `${t.y}px`;
-  n.addEventListener("animationend", () => n.remove());
+  n.style.top = `${t.y - step * 15}px`; // 위로 쌓기
+  if (step > 0) n.style.animationDelay = `${step * 80}ms`;
+
+  const done = () => {
+    n.remove();
+    const c = (activeNumbers.get(targetInstanceId) || 1) - 1;
+    if (c <= 0) activeNumbers.delete(targetInstanceId);
+    else activeNumbers.set(targetInstanceId, c);
+  };
+  n.addEventListener("animationend", done);
   layer.appendChild(n);
 }
 
