@@ -160,14 +160,7 @@ document.getElementById("to-title-btn").addEventListener("click", goTitle);
 // Combat Breath Preview 01: 상단 HUD 배속 순환 (2x/MAX)
 document.getElementById("speed-toggle").addEventListener("click", cycleSpeed);
 
-// Combat Breath Preview 01: 개발/프리뷰용 전투 장면 버튼
-document.querySelectorAll("#preview-bar [data-preview]").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const kind = btn.dataset.preview;
-    if (kind === "default") startRun();
-    else startPreview(kind);
-  });
-});
+// Combat Grammar Polish 02: 프리뷰 디버깅 바 제거 — UI 진입점 없음(startPreview는 dev 전용 잔존).
 
 // Reward & Growth 01: 보상 버튼은 REWARDS 데이터로 렌더 — 위임으로 처리
 document.getElementById("growth-choices").addEventListener("click", (e) => {

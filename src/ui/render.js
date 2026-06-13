@@ -594,6 +594,15 @@ function updateFieldUnit(el, unit) {
     hpFill.style.width = `${hpPct.toFixed(1)}%`;
   }
 
+  // Combat Grammar Polish 02: 보호막 덮개 갱신(피해로 줄면 같이 줄어듦).
+  const shieldEl = el.querySelector(".hp-shield");
+  if (shieldEl) {
+    const shPct = unit.maxHp > 0
+      ? Math.max(0, Math.min(100, ((unit.shield || 0) / unit.maxHp) * 100))
+      : 0;
+    shieldEl.style.width = `${shPct.toFixed(1)}%`;
+  }
+
   const tempoBar = el.querySelector(".tempo-bar");
   const tempoFill = el.querySelector(".tempo-bar-fill");
   if (tempoFill) {
@@ -764,6 +773,10 @@ function createFieldUnit(unit) {
   const hpPct = unit.maxHp > 0
     ? Math.max(0, Math.min(100, (unit.hp / unit.maxHp) * 100)).toFixed(1)
     : "0";
+  // Combat Grammar Polish 02: 보호막 덮개 비율 = min(shield/maxHp, 1).
+  const shieldPct = unit.maxHp > 0
+    ? Math.max(0, Math.min(100, ((unit.shield || 0) / unit.maxHp) * 100)).toFixed(1)
+    : "0";
 
   // Combat Tempo 01: actionGauge(0~100, 100에서 행동) 비율 → 속도 게이지
   //   HP바와 분리된 보조 채널(곧 행동할 기척). 숫자 없음.
@@ -794,7 +807,7 @@ function createFieldUnit(unit) {
     <div class="fig-react">
       ${figureHTML}
     </div>
-    <span class="hp-bar"><span class="hp-bar-fill" style="width:${hpPct}%"></span></span>
+    <span class="hp-bar"><span class="hp-bar-fill" style="width:${hpPct}%"></span><span class="hp-shield" style="width:${shieldPct}%"></span></span>
     <span class="tempo-bar${readyClass}"><span class="tempo-bar-fill" style="width:${gaugePct}%"></span></span>
   `;
 
@@ -883,6 +896,37 @@ function borderPointToward(targetInstanceId, from, fieldRect) {
   return { x: cx + dx * r.width * 0.40, y: cy + dy * r.height * 0.40 };
 }
 
+// Combat Grammar Polish 02 — 행동선 도착점(피격점) 분기.
+//   boss 대상: 보스 몸 내부 9분할 중 랜덤(매번 살짝 다르게, 바깥 허공/HUD로 안 나감).
+//   몬스터→영웅: 영웅 몸통(가슴) 쪽 — 테두리 허공이 아니라 몸에 닿게.
+//   그 외(영웅→몬스터 기본): 기존 테두리 가까운 지점.
+const BOSS_GRID_X = [0.30, 0.5, 0.70];
+const BOSS_GRID_Y = [0.32, 0.5, 0.66];
+function impactPoint(targetInstanceId, sourceInstanceId, s, fieldRect) {
+  const tgtEl = document.querySelector(
+    `#unit-layer [data-instance-id="${targetInstanceId}"]`
+  );
+  if (!tgtEl || !s) return null;
+  const r = tgtEl.getBoundingClientRect();
+  const left = r.left - fieldRect.left;
+  const top = r.top - fieldRect.top;
+
+  if (tgtEl.dataset.tier === "boss") {
+    const gx = BOSS_GRID_X[(Math.random() * 3) | 0];
+    const gy = BOSS_GRID_Y[(Math.random() * 3) | 0];
+    return { x: left + gx * r.width, y: top + gy * r.height };
+  }
+
+  const srcEl = sourceInstanceId
+    ? document.querySelector(`#unit-layer [data-instance-id="${sourceInstanceId}"]`)
+    : null;
+  if (srcEl && srcEl.classList.contains("enemy") && tgtEl.classList.contains("party")) {
+    return { x: left + 0.5 * r.width, y: top + 0.46 * r.height }; // 영웅 몸통(가슴)
+  }
+
+  return borderPointToward(targetInstanceId, s, fieldRect);
+}
+
 // Basic Action Breath 01 → Hero Skill 01 — 행동 텍스트 외침.
 //   "공격!"(basic, 가장 작음) / 스킬명(skill, 더 큼) 계층. 색은 kind별.
 //   Combat Breath Hotfix 01: 시작점을 머리 근처(얼굴 위)로 내려 "대사를 외치는" 느낌.
@@ -892,17 +936,18 @@ function spawnActionShout(sourceInstanceId, text, fieldRect, opts = {}) {
   const layer = document.getElementById("fx-layer");
   if (!layer) return;
   const isSkill = opts.tier === "skill";
-  // 얼굴/머리 근처(유닛 박스 상단 안쪽). 스킬은 살짝 더 위(크기 큼 보정).
-  const fy = isSkill ? 0.06 : 0.14;
+  // Combat Grammar Polish 02: 얼굴/머리 근처에서 "대사처럼" 시작. 스킬도 아바타 가까이로 내림.
+  const fy = isSkill ? 0.16 : 0.2;
   const p = unitPoint(sourceInstanceId, { fx: 0.5, fy }, fieldRect);
   if (!p) return;
   const shouts = layer.querySelectorAll(".fx-shout");
   if (shouts.length >= MAX_FX_SHOUTS) shouts[0].remove();
+  // "공격!"(basic)은 직업색 없이 흰색 통일 — kind 색은 스킬 외침에만.
   const el = document.createElement("span");
   el.className =
     "fx-shout" +
     (isSkill ? " fx-shout--skill" : "") +
-    (opts.kind ? ` fx-shout--${opts.kind}` : "");
+    (isSkill && opts.kind ? ` fx-shout--${opts.kind}` : "");
   el.textContent = text;
   el.style.left = `${p.x}px`;
   el.style.top = `${Math.max(8, p.y)}px`; // 화면 상단 밖으로 시작하지 않게 clamp
@@ -968,7 +1013,7 @@ export function playActionFx(event) {
   //   공격자(치유자)와 가장 가까운 지점(borderPointToward). 중심 직격이 아니라 "닿는" 느낌.
   const s = unitPoint(sourceInstanceId, srcFrac, fieldRect);
   const t = s
-    ? borderPointToward(targetInstanceId, s, fieldRect) || unitPoint(targetInstanceId, TARGET_HIT, fieldRect)
+    ? impactPoint(targetInstanceId, sourceInstanceId, s, fieldRect) || unitPoint(targetInstanceId, TARGET_HIT, fieldRect)
     : null;
   if (!s || !t) return;
 

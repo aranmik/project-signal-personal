@@ -14,6 +14,9 @@ function createUnit(template, instanceId, bonuses = { atk: 0, maxHp: 0 }) {
     // Status & Effect Foundation 01: 실제 상태 데이터({ type, duration } 배열).
     //   duration은 "그 유닛의 행동 횟수" 기준(배속 영향 없음). statusMarkers(표시 전용)와 분리.
     statuses: [],
+    // Combat Grammar Polish 02 — 보호막(numeric). 피해는 shield를 먼저 깎고 초과분만 HP에.
+    //   maxHp와 별개(초과 가능). HP바 파랑 덮개 비율 = min(shield/maxHp, 1).
+    shield: 0,
   };
 }
 

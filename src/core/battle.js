@@ -477,7 +477,7 @@ function processStatusesBeforeAction(unit) {
   if (!Array.isArray(unit.statuses) || unit.statuses.length === 0) return;
 
   if (hasStatus(unit, "poison")) {
-    unit.hp -= POISON_TICK_DAMAGE;
+    applyDamage(unit, POISON_TICK_DAMAGE); // shield 우선 흡수(공통 피해 경로)
     pushLog(`${unit.name}${josa(unit.name, "이가")} 중독 피해. ${POISON_TICK_DAMAGE} 피해.`);
     // FX 과밀 방지: 행동선/펄스 없이 작은 숫자만 (기존 숫자 상한 공유)
     playStatusTickFx({ targetInstanceId: unit.instanceId, amount: POISON_TICK_DAMAGE, kind: "poison" });
@@ -563,10 +563,11 @@ function trySkill(unit) {
       return true;
     }
     case "guardian": {
-      // 수호: 피해 입었고 guard 없는 아군 중 HP 비율 최저에게 guard 부여(+그래도 기본 공격은 수행).
-      const ward = damagedUnguardedAlly();
+      // 수호: 피해 입었고 보호막 없는 아군 중 HP 비율 최저에게 보호막 부여(+그래도 기본 공격은 수행).
+      const ward = damagedUnshieldedAlly();
       if (!ward) return false;
-      grantGuardTo(unit, ward);
+      grantShieldTo(unit, ward, SHIELD_GUARD);
+      pushLog(`${unit.name}${josa(unit.name, "이가")} ${ward.name}${josa(ward.name, "을를")} 지켰다.`);
       playSupportFx({ casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind, guardInstanceId: ward.instanceId });
       // 보호 후에도 전열 공격은 유지(템포 불변) — 단 외침은 수호!만(공격 외침 생략).
       const t = selectAttackTarget(enemies);
@@ -608,8 +609,8 @@ function lowestRatioAlly(maxRatio) {
   if (c.length === 0) return null;
   return c.reduce((a, b) => (a.hp / a.maxHp <= b.hp / b.maxHp ? a : b));
 }
-function damagedUnguardedAlly() {
-  const c = aliveParty().filter((u) => u.hp < u.maxHp && !hasStatus(u, "guard"));
+function damagedUnshieldedAlly() {
+  const c = aliveParty().filter((u) => u.hp < u.maxHp && (u.shield || 0) <= 0);
   if (c.length === 0) return null;
   return c.reduce((a, b) => (a.hp / a.maxHp <= b.hp / b.maxHp ? a : b));
 }
@@ -619,16 +620,32 @@ function lowestRatioEnemy(enemies, maxRatio) {
   return c.reduce((a, b) => (a.hp / a.maxHp <= b.hp / b.maxHp ? a : b));
 }
 
-function grantGuardTo(caster, target) {
-  if (hasStatus(target, "guard")) return;
-  target.statuses.push({ type: "guard", duration: GUARDIAN_PROTECT_DURATION });
-  pushLog(`${caster.name}${josa(caster.name, "이가")} ${target.name}${josa(target.name, "을를")} 지켰다.`);
+// Combat Grammar Polish 02 — 보호막(numeric) 부여. 보수적 수치. 누적 폭주 방지를 위해
+//   기존 shield와 비교해 더 큰 값으로 "갱신"(stack이 아니라 refresh).
+const SHIELD_GUARD = 12;   // 수호자 수호
+const SHIELD_BLESS = 8;    // 신관 축복
+const SHIELD_SANCT = 6;    // 성직자 성역(최저 1명)
+function grantShieldTo(caster, target, amount) {
+  target.shield = Math.max(target.shield || 0, amount);
+}
+
+// Combat Grammar Polish 02 — 피해 적용: shield 우선 흡수 → 초과분만 HP. 사망 판정은 HP 기준.
+//   poison/기본 공격/교란 등 모든 피해가 이 경로를 탄다(공통). 음수 방지.
+function applyDamage(target, dmg) {
+  let remaining = Math.max(0, dmg);
+  const sh = target.shield || 0;
+  if (sh > 0) {
+    const absorbed = Math.min(sh, remaining);
+    target.shield = sh - absorbed;
+    remaining -= absorbed;
+  }
+  if (remaining > 0) target.hp -= remaining;
 }
 
 // 교란: 게이지 -25(0 미만 방지) + 아주 약한 피해. 보라/분홍 왜곡선.
 function performDisrupt(trickster, target, meta) {
   const dmg = Math.max(1, Math.round(trickster.atk * 0.5));
-  target.hp -= dmg;
+  applyDamage(target, dmg);
   target.actionGauge = Math.max(0, (target.actionGauge || 0) - 25);
   pushLog(`${trickster.name}${josa(trickster.name, "이가")} ${target.name}${josa(target.name, "을를")} 교란했다. ${dmg} 피해.`);
   playActionFx({
@@ -656,9 +673,7 @@ function performBless(cleric, target, meta) {
   const before = target.hp;
   target.hp = Math.min(target.maxHp, target.hp + healAmount);
   const actual = target.hp - before;
-  if (!hasStatus(target, "guard")) {
-    target.statuses.push({ type: "guard", duration: GUARDIAN_PROTECT_DURATION });
-  }
+  grantShieldTo(cleric, target, SHIELD_BLESS);
   pushLog(`${cleric.name}${josa(cleric.name, "이가")} ${target.name}${josa(target.name, "을를")} 축복했다. (+${actual})`);
   playSupportFx({
     casterInstanceId: cleric.instanceId,
@@ -682,8 +697,8 @@ function performSanctuary(saint, meta) {
   });
   const lowest = allies.reduce((a, b) => (a.hp / a.maxHp <= b.hp / b.maxHp ? a : b));
   let guardId = null;
-  if (lowest && !hasStatus(lowest, "guard")) {
-    lowest.statuses.push({ type: "guard", duration: GUARDIAN_PROTECT_DURATION });
+  if (lowest) {
+    grantShieldTo(saint, lowest, SHIELD_SANCT);
     guardId = lowest.instanceId;
   }
   pushLog(`${saint.name}${josa(saint.name, "이가")} 성역을 펼쳤다. 파티가 안정됐다.`);
@@ -755,7 +770,8 @@ function performAttack(attacker, target, opts = {}) {
     ? Math.max(1, attacker.atk - GUARD_DAMAGE_REDUCTION)
     : attacker.atk;
   const damage = Math.max(1, Math.round(base * (opts.mult || 1)));
-  target.hp -= damage;
+  // Combat Grammar Polish 02: 보호막 우선 흡수 → 초과분만 HP.
+  applyDamage(target, damage);
 
   const verb = attackVerb(attacker);
   const ro = josa(target.name, "을를");
