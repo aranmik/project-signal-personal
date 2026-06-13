@@ -48,30 +48,27 @@
                (.job-ava.avatar-{key} placeholder — 추후 루다 아바타를 카드/전투 공통 적용) -->
           <!-- Avatar Import 01: data-avatar 칩 placeholder → SR 아바타 미니(.av-stage 컨텍스트).
                figure 마크업은 main.js가 avatarFigureHTML로 주입한다(직업카드/전투 공통 키). -->
+          <!-- Visual-First UI Cleanup 01: 카드는 아바타 단독(직업명/역할 텍스트 제거).
+               직업 식별은 아바타가, 선택 결과는 하단 배치 슬롯의 직업명이 담당.
+               접근성용 이름은 버튼 aria-label로 보존. -->
           <div id="job-grid" class="av-stage">
-            <button type="button" class="job-card" data-job="warrior" data-avatar="warrior">
+            <button type="button" class="job-card" data-job="warrior" data-avatar="warrior" aria-label="전사">
               <span class="job-ava" aria-hidden="true"></span>
-              <span class="job-name">전사</span><span class="job-role">전열 공격</span>
             </button>
-            <button type="button" class="job-card" data-job="guardian" data-avatar="guardian">
+            <button type="button" class="job-card" data-job="guardian" data-avatar="guardian" aria-label="수호자">
               <span class="job-ava" aria-hidden="true"></span>
-              <span class="job-name">수호자</span><span class="job-role">보호 담당</span>
             </button>
-            <button type="button" class="job-card" data-job="archer" data-avatar="archer">
+            <button type="button" class="job-card" data-job="archer" data-avatar="archer" aria-label="궁수">
               <span class="job-ava" aria-hidden="true"></span>
-              <span class="job-name">궁수</span><span class="job-role">후열 저격</span>
             </button>
-            <button type="button" class="job-card" data-job="priest" data-avatar="priest">
+            <button type="button" class="job-card" data-job="priest" data-avatar="priest" aria-label="사제">
               <span class="job-ava" aria-hidden="true"></span>
-              <span class="job-name">사제</span><span class="job-role">회복 지원</span>
             </button>
-            <button type="button" class="job-card" data-job="cleric" data-avatar="cleric">
+            <button type="button" class="job-card" data-job="cleric" data-avatar="cleric" aria-label="신관">
               <span class="job-ava" aria-hidden="true"></span>
-              <span class="job-name">신관</span><span class="job-role">후열 지원</span>
             </button>
-            <button type="button" class="job-card" data-job="trickster" data-avatar="trickster">
+            <button type="button" class="job-card" data-job="trickster" data-avatar="trickster" aria-label="교란꾼">
               <span class="job-ava" aria-hidden="true"></span>
-              <span class="job-name">교란꾼</span><span class="job-role">후열 교란</span>
             </button>
           </div>
           <p id="formation-hint">배치 — 슬롯을 눌러 위치를 바꿀 수 있어요</p>

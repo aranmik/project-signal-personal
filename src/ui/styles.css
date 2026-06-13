@@ -1088,10 +1088,55 @@ body {
 }
 
 /* 직업/진영별 색 토큰 (currentColor) */
-.fx-svg--straight { color: rgba(217, 232, 134, 0.92); }  /* 궁수 — 연두 */
-.fx-svg--heal { color: rgba(150, 226, 198, 0.9); }       /* 사제 회복 — 부드러운 민트 */
-.fx-svg--slash { color: rgba(240, 195, 106, 0.9); }      /* 전사/수호자 — amber */
-.fx-svg--enemy { color: rgba(208, 96, 84, 0.86); }       /* 적 — 어두운 coral */
+.fx-svg--straight { color: rgba(217, 232, 134, 0.92); }  /* (legacy) 궁수 — 연두 */
+.fx-svg--heal { color: rgba(150, 226, 198, 0.9); }       /* 회복 — 청록 민트 */
+.fx-svg--slash { color: rgba(240, 195, 106, 0.9); }      /* (legacy) 전사/수호자 — amber */
+.fx-svg--enemy { color: rgba(208, 96, 84, 0.86); }       /* (legacy) 적 — 어두운 coral */
+
+/* === Basic Action Breath 01 — 기본 공격(빨강 곡선·X) / 원거리(녹색 큰 곡선·과녁) === */
+.fx-svg--attack { color: rgba(235, 96, 82, 0.94); }      /* 기본 공격 — 빨강(영웅·몬스터 공통) */
+.fx-svg--ranged { color: rgba(120, 202, 104, 0.94); }    /* 원거리 기본 공격 — 녹색 */
+.fx-svg--attack .fx-path,
+.fx-svg--ranged .fx-path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: fx-draw 0.2s ease-out forwards;
+}
+.fx-svg--attack .fx-path { stroke-width: 3; }
+.fx-svg--attack .fx-path--ghost { stroke-width: 1.6; opacity: 0.4; }
+.fx-svg--ranged .fx-path { stroke-width: 2.7; }
+
+/* X 타격점(기본 공격) */
+.fx-head--x .fx-xcut {
+  fill: none; stroke: currentColor; stroke-width: 2.8; stroke-linecap: round;
+}
+.fx-head--x .fx-xcut--b { stroke-width: 2.2; opacity: 0.85; }
+/* 과녁/조준점(원거리) */
+.fx-head--target .fx-ring { fill: none; stroke: currentColor; stroke-width: 2; }
+.fx-head--target .fx-ring--in { stroke-width: 1.6; opacity: 0.8; }
+.fx-head--target .fx-bull { fill: currentColor; }
+/* 회복 십자가(치유) */
+.fx-head--cross .fx-crossline {
+  fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round;
+}
+.fx-head--cross .fx-mote { fill: currentColor; opacity: 0.85; }
+
+/* "공격!" 외침 — 가장 작은 액션 텍스트 계층(행동 주체 머리 위, 짧게 떠올라 fade) */
+.fx-shout {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 11px; font-weight: 800;
+  color: #ffd49a;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  opacity: 0; pointer-events: none; white-space: nowrap; z-index: 6;
+  animation: fx-shout 0.7s ease-out forwards;
+}
+#battle-field[data-speed="MAX"] .fx-shout { animation-duration: 0.5s; }
+@keyframes fx-shout {
+  0%   { opacity: 0;    transform: translate(-50%, -42%) scale(0.85); }
+  28%  { opacity: 0.95; transform: translate(-50%, -64%) scale(1); }
+  100% { opacity: 0;    transform: translate(-50%, -96%) scale(1); }
+}
 
 /* === 궁수 straight: 거의 직선 + 날카로운 채운 화살촉 → "꽂혔다" === */
 .fx-svg--straight .fx-head--arrow { fill: currentColor; }
@@ -1231,7 +1276,7 @@ body {
 }
 @media (prefers-reduced-motion: reduce) {
   .fx-svg, .fx-svg .fx-path, .fx-svg .fx-head,
-  .fx-pulse, .fx-number { animation-duration: 0.01s; }
+  .fx-pulse, .fx-number, .fx-shout { animation-duration: 0.01s; }
 }
 
 /* === Shell 01: 타이틀 화면 === */
@@ -1942,10 +1987,9 @@ body {
 #job-select-inner { padding-top: 12px; padding-bottom: 16px; gap: 8px; }
 #job-heading { font-size: 17px; margin: 2px 0; }
 #job-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px; }
-#job-grid .job-card { padding: 9px 5px; gap: 3px; }
-#job-grid .job-card .job-ava { width: 100%; height: 62px; }
-#job-grid .job-card .job-name { font-size: 13px; }
-#job-grid .job-card .job-role { font-size: 10px; }
+/* Visual-First UI Cleanup 01: 카드 = 아바타 단독 → 패딩 줄이고 아바타가 프레임을 채운다. */
+#job-grid .job-card { padding: 8px 4px; gap: 0; }
+#job-grid .job-card .job-ava { width: 100%; height: 88px; }
 #formation-hint { margin: 6px 0 2px; font-size: 11px; }
 #job-select #formation-grid { gap: 6px; }
 #job-select .form-slot-box { padding: 7px 6px; }

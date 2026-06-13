@@ -281,11 +281,10 @@ function renderRecruitPanel(state) {
   const targetSlot = (id) => slotPreference(id).find((k) => !f[k]);
   const rows = candidates.length
     ? candidates.map((id) =>
-        // Start Flow UX Polish 01: 좌/중/우 3열 카드(#recruit-list grid). 카드 내부는 세로 구성.
-        `<button type="button" class="recruit-card" data-recruit="${id}">
+        // Visual-First UI Cleanup 01: 영입 카드는 아바타 단독(직업명/슬롯 텍스트 제거).
+        //   새 동료를 "모습으로" 고르는 화면. 접근성 이름은 aria-label로 보존.
+        `<button type="button" class="recruit-card" data-recruit="${id}" aria-label="${jobName(id)}">
           <span class="recruit-ava">${jobAvatarHTML(id, "av-fit--recruit")}</span>
-          <span class="job-name">${jobName(id)}</span>
-          <span class="recruit-slot">${SLOT_NAMES[targetSlot(id)] || ""}</span>
         </button>`
       ).join("")
     : `<p class="flow-note">영입 가능한 동료가 없습니다.</p>`;
@@ -867,6 +866,42 @@ function numberAnchor(targetInstanceId, fieldRect) {
   return { x, y };
 }
 
+// Basic Action Breath 01 — 도착점 = 대상 테두리 중 from(공격자/치유자)과 가장 가까운 지점.
+//   대상 중심에서 from 방향으로 ~rect의 40% 이동 → 모서리보다 살짝 안쪽(타격점/닿는 지점).
+function borderPointToward(targetInstanceId, from, fieldRect) {
+  const el = document.querySelector(
+    `#unit-layer [data-instance-id="${targetInstanceId}"]`
+  );
+  if (!el || !from) return null;
+  const r = el.getBoundingClientRect();
+  const cx = r.left - fieldRect.left + r.width / 2;
+  const cy = r.top - fieldRect.top + r.height / 2;
+  let dx = from.x - cx;
+  let dy = from.y - cy;
+  const len = Math.hypot(dx, dy) || 1;
+  dx /= len; dy /= len;
+  return { x: cx + dx * r.width * 0.40, y: cy + dy * r.height * 0.40 };
+}
+
+// Basic Action Breath 01 — 기본 공격 "공격!" 외침(가장 작은 액션 텍스트 계층).
+//   행동 주체 머리 위에서 짧게 떠 위로 올라가며 사라진다. 과밀 방지 상한.
+const MAX_FX_SHOUTS = 5;
+function spawnActionShout(sourceInstanceId, text, fieldRect) {
+  const layer = document.getElementById("fx-layer");
+  if (!layer) return;
+  const p = unitPoint(sourceInstanceId, { fx: 0.5, fy: -0.02 }, fieldRect);
+  if (!p) return;
+  const shouts = layer.querySelectorAll(".fx-shout");
+  if (shouts.length >= MAX_FX_SHOUTS) shouts[0].remove();
+  const el = document.createElement("span");
+  el.className = "fx-shout";
+  el.textContent = text;
+  el.style.left = `${p.x}px`;
+  el.style.top = `${p.y}px`;
+  el.addEventListener("animationend", () => el.remove());
+  layer.appendChild(el);
+}
+
 // Action Emphasis 01: 시선 우선순위 = acting > line > target reaction > idle.
 //   현재 행동 중(acting cue 표시 중)인 유닛 추적 → 그 사이 들어오는
 //   target reaction은 생략(같은 유닛에 선언과 피격이 겹쳐 시선이 꼬이지 않게).
@@ -883,15 +918,20 @@ export function playActionFx(event) {
 
   const fieldRect = field.getBoundingClientRect();
   const srcFrac = SOURCE_ANCHORS[sourceUnitId] || { fx: 0.5, fy: 0.45 };
-  const tgtFrac = isHeal ? TARGET_HEAL : TARGET_HIT;
 
   // 좌표는 .unit wrap rect 기준 → acting scale(자식 .fig-react)에 영향받지 않음(안정)
+  // Basic Action Breath 01: 시작점 = 공격자 팔/무기(srcFrac), 도착점 = 대상 테두리 중
+  //   공격자(치유자)와 가장 가까운 지점(borderPointToward). 중심 직격이 아니라 "닿는" 느낌.
   const s = unitPoint(sourceInstanceId, srcFrac, fieldRect);
-  const t = unitPoint(targetInstanceId, tgtFrac, fieldRect);
+  const t = s
+    ? borderPointToward(targetInstanceId, s, fieldRect) || unitPoint(targetInstanceId, TARGET_HIT, fieldRect)
+    : null;
   if (!s || !t) return;
 
   // 1) 행동자 선언("나야 지금!") — source unit이 먼저 짧게 보인다.
   cueActor(sourceInstanceId, lineType);
+  // 1a) Basic Action Breath 01: 기본 공격이면 행동 주체 근처에 작은 "공격!" 외침(가장 작은 액션 텍스트 계층).
+  if (!isHeal) spawnActionShout(sourceInstanceId, "공격!", fieldRect);
   // 1b) 대상 신호("잡혔다") — actor보다 약한 보조 신호. 선이 도착하기 전 대상을 가리킨다.
   spawnTargetCue(targetInstanceId, isHeal);
 
@@ -993,10 +1033,18 @@ let __fxLineSeq = 0;
 // 타입별 경로/끝점 성격. bowF=길이비례 곡률, flip=휘는 방향, head=끝 장식.
 //   Living Battle Screen 04: 궁수는 직선성 유지, 전사/수호자(slash)만 곡률을 적극 강화
 //   ("바나나슛" — 빈 공간(우하/좌상)을 살짝 경유해 휘어 꽂힘). 직선↔곡선 대비 유지.
+// Basic Action Breath 01 — 행동선 문법:
+//   attack = 빨강 곡선 + X 타격점(영웅 근접/기타 + 몬스터 일반 공격 공통)
+//   ranged = 녹색 "크게 휘는" 곡선(곡률 attack 대비 ~2배+) + 과녁(원거리 기본 공격)
+//   heal   = 청록 점선 + 십자가(회복)
+//   (구버전 straight/slash/enemy는 미사용 — 호환 위해 정의만 남겨둔다)
 const LINE_STYLE = {
+  attack:   { bowF: 0.32, bowMin: 22, bowMax: 74, flip: 1,  head: "x",      draw: true, ghost: true },
+  ranged:   { bowF: 0.74, bowMin: 52, bowMax: 150, flip: 1, head: "target", draw: true },
+  heal:     { bowF: 0.34, bowMin: 20, bowMax: 56, flip: -1, head: "cross",  draw: false },
+  // legacy(미사용)
   straight: { bowF: 0.05, bowMin: 3,  bowMax: 8,  flip: 1,  head: "arrow", draw: true },
   slash:    { bowF: 0.36, bowMin: 26, bowMax: 82, flip: 1,  head: "slash", draw: true, ghost: true },
-  heal:     { bowF: 0.34, bowMin: 20, bowMax: 56, flip: -1, head: "spark", draw: false },
   enemy:    { bowF: 0.16, bowMin: 8,  bowMax: 22, flip: 1,  head: "claw",  draw: false, rough: true },
 };
 
@@ -1087,7 +1135,32 @@ function spawnLine(layer, s, t, lineType, kind) {
 // 끝점 장식: 타입별로 다른 "꽂힘"의 결.
 function appendHead(svg, type, t, ang) {
   const el =
-    type === "arrow"
+    // Basic Action Breath 01 — 기본 공격: X 타격점
+    type === "x"
+      ? makeNS("g", {
+          class: "fx-head fx-head--x",
+          transform: `translate(${t.x} ${t.y}) rotate(${ang})`,
+        },
+          '<path class="fx-xcut" d="M -8 -8 L 8 8"></path>' +
+          '<path class="fx-xcut fx-xcut--b" d="M -8 8 L 8 -8"></path>')
+    // Basic Action Breath 01 — 원거리: 과녁/조준점
+    : type === "target"
+      ? makeNS("g", {
+          class: "fx-head fx-head--target",
+          transform: `translate(${t.x} ${t.y})`,
+        },
+          '<circle class="fx-ring" cx="0" cy="0" r="9.5"></circle>' +
+          '<circle class="fx-ring fx-ring--in" cx="0" cy="0" r="5"></circle>' +
+          '<circle class="fx-bull" cx="0" cy="0" r="1.8"></circle>')
+    // Basic Action Breath 01 — 회복: 십자가
+    : type === "cross"
+      ? makeNS("g", {
+          class: "fx-head fx-head--cross",
+          transform: `translate(${t.x} ${t.y})`,
+        },
+          '<path class="fx-crossline" d="M 0 -8.5 L 0 8.5 M -8.5 0 L 8.5 0"></path>' +
+          '<circle class="fx-mote" cx="7" cy="-6" r="1.5"></circle>')
+    : type === "arrow"
       ? makeNS("path", {
           class: "fx-head fx-head--arrow",
           d: "M 0 0 L -10 -5 L -10 5 Z",

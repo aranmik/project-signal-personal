@@ -566,10 +566,14 @@ function attackVerb(unit) {
   return "공격했다";
 }
 
+// Basic Action Breath 01 — 행동 시각 문법(표시용. 계산/타겟/피해 불변).
+//   영웅·몬스터의 일반 공격은 같은 "attack"(빨강 곡선 + X 타격점),
+//   원거리 기본 공격(snipe: 궁수/도적)은 "ranged"(녹색·크게 휘는 곡선 + 과녁),
+//   회복은 "heal"(청록 점선 + 십자가). action kind는 표시 문법용으로만 쓴다.
 function attackLineType(attacker) {
-  if (attacker.team === "enemy") return "enemy";
-  if (grammarOf(attacker) === "snipe") return "straight"; // 저격 계열(궁수/도적)
-  return "slash"; // 근접/기타 — source→target connector
+  if (attacker.team === "enemy") return "attack"; // 몬스터 일반 공격도 영웅과 같은 전투 언어
+  if (grammarOf(attacker) === "snipe") return "ranged"; // 원거리 기본 공격(궁수/도적)
+  return "attack"; // 근접/일반
 }
 
 function performAttack(attacker, target) {

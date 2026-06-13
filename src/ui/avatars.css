@@ -20,10 +20,10 @@
   height: 82px;
   transform-origin: center bottom;
 }
-.av-fit.av-fit--card { transform: scale(0.74); }   /* 직업 선택 카드(전신) */
+.av-fit.av-fit--card { transform: scale(0.86); }   /* 직업 선택 카드(아바타 단독·전신) */
 .av-fit.av-fit--codex { transform: scale(0.92); }  /* 도감 카드 */
 .av-fit.av-fit--cast { transform: scale(0.66); }   /* 합체 결과 — 프레임 안 전신 */
-.av-fit.av-fit--recruit { transform: scale(0.84); } /* 영입 카드 — 전신 강조 */
+.av-fit.av-fit--recruit { transform: scale(0.94); } /* 영입 카드 — 아바타 단독·전신 강조 */
 #battle-field .av-fit { transform: scale(0.8); }   /* 전투 유닛 박스(≈61px) */
 
 :is(#battle-field, .av-stage) .sig-av {
@@ -432,20 +432,15 @@
   gap: 8px;
   width: 100%;
 }
+/* Visual-First UI Cleanup 01: 영입 카드 = 아바타 단독(텍스트 없음) → 아바타가 카드를 채운다. */
 .recruit-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 6px;
+  display: grid;
+  place-items: center;
   min-height: 0;
-  padding: 12px 6px 14px;
-  text-align: center;
+  padding: 10px 6px;
 }
 .recruit-card .recruit-ava {
-  width: 100%; height: 78px;
+  width: 100%; height: 104px;
   display: grid; place-items: center; overflow: hidden;
   background: #0f1620; border-radius: 9px;
 }
-.recruit-card .job-name { font-size: 14px; font-weight: 800; }
-.recruit-card .recruit-slot { font-size: 11px; font-weight: normal; color: #8aa0b4; }
