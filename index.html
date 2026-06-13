@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Project Signal Personal</title>
   <link rel="stylesheet" href="./src/ui/styles.css" />
+  <link rel="stylesheet" href="./src/ui/avatars.css" />
 </head>
 <body>
   <main id="app">
@@ -17,7 +18,14 @@
           <h1 id="title-name">Project Signal Personal</h1>
           <p id="title-tagline">초보자의 길 — 너의 선택으로 강해진다.</p>
           <button id="title-start" type="button">시작하기</button>
+          <!-- Job Codex Entry Foundation: 직업 도감(관람용 창구) -->
+          <button id="title-codex" type="button">직업 도감</button>
         </div>
+      </section>
+
+      <!-- Job Codex Entry Foundation: SR-01~24 직업/아바타 관람 화면 (선택/시작 기능 아님) -->
+      <section id="codex-screen" class="av-stage" hidden>
+        <div id="codex-inner"></div>
       </section>
 
       <!-- Game Flow 01 → Fusion Flow 01: 직업 선택 + 배치 화면
@@ -29,29 +37,31 @@
           <h2 id="job-heading">동료 3명을 선택하세요</h2>
           <!-- Combat Readability Polish 02: data-avatar = 전투 유닛과 같은 avatarKey 참조 hook
                (.job-ava.avatar-{key} placeholder — 추후 루다 아바타를 카드/전투 공통 적용) -->
-          <div id="job-grid">
+          <!-- Avatar Import 01: data-avatar 칩 placeholder → SR 아바타 미니(.av-stage 컨텍스트).
+               figure 마크업은 main.js가 avatarFigureHTML로 주입한다(직업카드/전투 공통 키). -->
+          <div id="job-grid" class="av-stage">
             <button type="button" class="job-card" data-job="warrior" data-avatar="warrior">
-              <span class="job-ava avatar-warrior" aria-hidden="true"></span>
+              <span class="job-ava" aria-hidden="true"></span>
               <span class="job-name">전사</span><span class="job-role">전열 공격</span>
             </button>
             <button type="button" class="job-card" data-job="guardian" data-avatar="guardian">
-              <span class="job-ava avatar-guardian" aria-hidden="true"></span>
+              <span class="job-ava" aria-hidden="true"></span>
               <span class="job-name">수호자</span><span class="job-role">보호 담당</span>
             </button>
             <button type="button" class="job-card" data-job="archer" data-avatar="archer">
-              <span class="job-ava avatar-archer" aria-hidden="true"></span>
+              <span class="job-ava" aria-hidden="true"></span>
               <span class="job-name">궁수</span><span class="job-role">후열 저격</span>
             </button>
             <button type="button" class="job-card" data-job="priest" data-avatar="priest">
-              <span class="job-ava avatar-priest" aria-hidden="true"></span>
+              <span class="job-ava" aria-hidden="true"></span>
               <span class="job-name">사제</span><span class="job-role">회복 지원</span>
             </button>
             <button type="button" class="job-card" data-job="cleric" data-avatar="cleric">
-              <span class="job-ava avatar-cleric" aria-hidden="true"></span>
+              <span class="job-ava" aria-hidden="true"></span>
               <span class="job-name">신관</span><span class="job-role">후열 지원</span>
             </button>
             <button type="button" class="job-card" data-job="trickster" data-avatar="trickster">
-              <span class="job-ava avatar-trickster" aria-hidden="true"></span>
+              <span class="job-ava" aria-hidden="true"></span>
               <span class="job-name">교란꾼</span><span class="job-role">후열 교란</span>
             </button>
           </div>
@@ -72,12 +82,12 @@
       </section>
 
       <!-- Fusion Moment Foundation 01: 합체 결과(탄생) 확인 화면 -->
-      <section id="fusion-result-panel" class="flow-panel" hidden>
+      <section id="fusion-result-panel" class="flow-panel av-stage" hidden>
         <div id="fusion-result-body"></div>
       </section>
 
       <!-- Fusion Flow Foundation 01: 동료 영입 화면 (S3 합체 후 / S5 클리어 후) -->
-      <section id="recruit-panel" class="flow-panel" hidden>
+      <section id="recruit-panel" class="flow-panel av-stage" hidden>
         <div id="recruit-body"></div>
       </section>
 

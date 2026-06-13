@@ -314,12 +314,17 @@ body {
    .avatar-{key}는 추후 루다 CSS 아바타가 꽂힐 자리(전투 유닛 / 직업 카드 공통).
    지금은 placeholder만 — 전투 유닛엔 시각 변화를 주지 않는다(기존 donor 파츠 유지).
    직업 카드의 작은 .job-ava 칩만 키별 색으로 "스캐폴드가 존재함"을 표시한다. */
+/* Avatar Import 01: 칩 placeholder → SR 아바타 미니 호스트.
+   .av-fit는 transform-scale이라 레이아웃 박스(76×82)가 유지되므로,
+   호스트를 고정 크기 + overflow:hidden + place-items:center로 두고 가운데 정렬·클립한다. */
 .job-card .job-ava {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  background: #243245;
-  border: 1px solid #2f4156;
+  width: 54px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: transparent;
+  border: none;
 }
 .job-card .job-ava.avatar-warrior { background: #5a3a32; }
 .job-card .job-ava.avatar-guardian { background: #2f4a63; }

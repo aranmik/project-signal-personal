@@ -1,18 +1,33 @@
 import { gameState, SLOT_ORDER } from "./state.js";
 import { slotPreference } from "../data/jobs.js";
 import { renderGame } from "../ui/render.js";
+import { avatarSpec, avatarFigureHTML } from "../data/avatars.js";
 import {
   startRun, goTitle, applyReward, cycleSpeed, startPreview, showJobSelect,
   applyFusion, skipFusion, applyRecruit, skipRecruit,
-  swapFormationSlots, confirmArrange, continueAfterFusion,
+  swapFormationSlots, confirmArrange, continueAfterFusion, showCodex,
 } from "./battle.js";
 
 console.log("Project Signal Personal — init", gameState);
 
 renderGame(gameState);
 
+// Avatar Import 01: 정적 직업 카드의 placeholder 칩(.job-ava)에 SR 아바타 주입.
+//   data-avatar(avatarKey)로 스펙 조회 — 전투 유닛과 동일 키. (1회, 카드는 정적)
+document.querySelectorAll("#job-grid .job-card").forEach((card) => {
+  const spec = avatarSpec(card.dataset.avatar);
+  const slot = card.querySelector(".job-ava");
+  if (slot) slot.innerHTML = avatarFigureHTML(spec.sr, spec.parts, "av-fit--card");
+});
+
 // Game Flow Foundation 01: 타이틀 → 직업 선택 → 런 시작.
 document.getElementById("title-start").addEventListener("click", showJobSelect);
+
+// Job Codex Entry Foundation: 타이틀 → 직업 도감 / 도감 → 타이틀.
+document.getElementById("title-codex").addEventListener("click", showCodex);
+document.getElementById("codex-screen").addEventListener("click", (e) => {
+  if (e.target.closest("[data-codex-back]")) goTitle();
+});
 
 /* =========================================================
    Fusion Flow Foundation 01 — 직업 선택 + 배치(전열2/후열2)

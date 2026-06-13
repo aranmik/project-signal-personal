@@ -1,0 +1,326 @@
+/* =====================================================================
+   Avatar Import 01 — 시그널R&D SR-01~24 CSS 아바타 (본게임 이식)
+   소스: presentation-lab/avatar-museum-01.html 의 .sr 아바타 시스템.
+
+   격리 설계:
+   - 박물관 아바타는 `.body/.head/.aura/.shadow` 같은 일반 part 클래스를 쓰는데,
+     본게임 전투엔 `#battle-field .body { }`(ID 특이도) 규칙이 이미 있어 충돌한다.
+   - 그래서 전용 컴포넌트 `.sig-av`(76×82, 박물관 좌표계)로 옮기고, 모든 규칙을
+     `:is(#battle-field, .av-stage)` 로 감싸 ID 특이도를 확보 → 전투/도감/카드 한 벌로
+     동작하면서 기존 레거시 part 규칙을 이긴다.
+   - `.av-fit` 래퍼가 컨텍스트별 scale을 담당(전투 유닛 박스/카드/도감 크기).
+   - 적(.monster)·포메이션 anchor·Boss HUD·숫자큐는 전혀 건드리지 않는다.
+   - SR-25~30(신규 6종)은 미이식.
+   ===================================================================== */
+
+/* 컨텍스트별 크기 래퍼 — 레이아웃 박스는 sig-av(76×82) 기준, scale만 다르게. */
+.av-fit {
+  display: block;
+  width: 76px;
+  height: 82px;
+  transform-origin: center bottom;
+}
+.av-fit.av-fit--card { transform: scale(0.62); }   /* 직업 선택 카드 */
+.av-fit.av-fit--codex { transform: scale(0.92); }  /* 도감 카드 */
+.av-fit.av-fit--cast { transform: scale(0.5); }    /* 합체 결과/영입 소형 */
+#battle-field .av-fit { transform: scale(0.8); }   /* 전투 유닛 박스(≈61px) */
+
+:is(#battle-field, .av-stage) .sig-av {
+  position: relative;
+  display: block;
+  width: 76px;
+  height: 82px;
+  margin: 0 auto;
+}
+/* 전투에서만 idle 호흡(도감/카드는 정지 — 모바일 부담 방지). sig-idle 키프레임 재사용. */
+#battle-field .sig-av { animation: sig-idle 2.6s ease-in-out infinite; }
+#battle-field .unit.dead .sig-av,
+#battle-field .unit.dying .sig-av { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  #battle-field .sig-av { animation: none; }
+}
+
+:is(#battle-field, .av-stage) .sig-av .part { position: absolute; display: block; }
+
+/* ---- 공통 베이스 part ---- */
+:is(#battle-field, .av-stage) .sig-av .shadow {
+  left: 14px; bottom: 2px; width: 48px; height: 8px;
+  border-radius: 50%; background: rgba(0, 0, 0, 0.35);
+}
+:is(#battle-field, .av-stage) .sig-av .feet {
+  left: 23px; bottom: 9px; width: 30px; height: 9px;
+  border-left: 9px solid transparent; border-right: 9px solid transparent;
+  border-top: 9px solid #526071;
+}
+:is(#battle-field, .av-stage) .sig-av .body {
+  left: 24px; top: 35px; width: 29px; height: 31px;
+  border-radius: 9px 9px 7px 7px; background: #78889a; border: 2px solid #d5dde6;
+}
+:is(#battle-field, .av-stage) .sig-av .head {
+  left: 27px; top: 16px; width: 23px; height: 23px;
+  border-radius: 50%; background: #f0c9a2; border: 2px solid #f8e5c8;
+}
+:is(#battle-field, .av-stage) .sig-av .mask {
+  left: 29px; top: 24px; width: 19px; height: 7px; border-radius: 7px; background: #293241;
+}
+:is(#battle-field, .av-stage) .sig-av .aura {
+  inset: 7px 8px 4px; border-radius: 50%; border: 2px solid transparent; opacity: 0.45;
+}
+
+/* ---- .sr 베이스 (몸/머리 보정 + 무기/장식 part 라이브러리) ---- */
+:is(#battle-field, .av-stage) .sig-av .body { left: 23px; top: 34px; width: 31px; height: 32px; border-radius: 10px 10px 7px 7px; background: #526071; border-color: #d8e0ea; }
+:is(#battle-field, .av-stage) .sig-av .head { left: 27px; top: 15px; width: 23px; height: 23px; }
+:is(#battle-field, .av-stage) .sig-av .sword,
+:is(#battle-field, .av-stage) .sig-av .lance,
+:is(#battle-field, .av-stage) .sig-av .staff,
+:is(#battle-field, .av-stage) .sig-av .bow,
+:is(#battle-field, .av-stage) .sig-av .dagger,
+:is(#battle-field, .av-stage) .sig-av .rifle,
+:is(#battle-field, .av-stage) .sig-av .banner,
+:is(#battle-field, .av-stage) .sig-av .lute,
+:is(#battle-field, .av-stage) .sig-av .key { border-radius: 4px; z-index: 4; }
+:is(#battle-field, .av-stage) .sig-av .shield { left: 8px; top: 33px; width: 28px; height: 35px; border-radius: 14px 14px 17px 17px; border: 3px solid #e7d08a; background: #48515e; z-index: 5; }
+:is(#battle-field, .av-stage) .sig-av .sword { right: 8px; top: 14px; width: 7px; height: 47px; border-radius: 6px 6px 2px 2px; background: linear-gradient(to top, #aeb8c5 0 68%, #f7fbff 69% 100%); transform: rotate(16deg); z-index: 6; }
+:is(#battle-field, .av-stage) .sig-av .sword::before { content: ""; position: absolute; left: -8px; bottom: 11px; width: 23px; height: 5px; border-radius: 5px; background: #f0c36a; }
+:is(#battle-field, .av-stage) .sig-av .sword::after { content: ""; position: absolute; left: 1px; bottom: -5px; width: 5px; height: 10px; border-radius: 4px; background: #7a5d33; }
+:is(#battle-field, .av-stage) .sig-av .lance { right: 9px; top: 8px; width: 4px; height: 66px; background: #d9ecf8; transform: rotate(24deg); }
+:is(#battle-field, .av-stage) .sig-av .lance::before { content: ""; position: absolute; left: -5px; top: -8px; border-left: 7px solid transparent; border-right: 7px solid transparent; border-bottom: 13px solid #f0c36a; }
+:is(#battle-field, .av-stage) .sig-av .staff { left: 13px; top: 15px; width: 5px; height: 56px; background: #d9fff3; box-shadow: inset 0 0 0 1px rgba(35,42,52,.32); z-index: 6; }
+:is(#battle-field, .av-stage) .sig-av .staff::before { content: ""; position: absolute; left: -6px; top: -9px; width: 17px; height: 17px; border-radius: 50%; border: 3px solid #9fe6cf; background: #253d3b; }
+:is(#battle-field, .av-stage) .sig-av .staff::after { content: ""; position: absolute; left: -4px; top: 9px; width: 13px; height: 4px; border-radius: 4px; background: #9fe6cf; }
+:is(#battle-field, .av-stage) .sig-av .bow { right: 7px; top: 12px; width: 37px; height: 58px; border-right: 5px solid #a8d46a; border-radius: 0 50% 50% 0; transform: rotate(14deg); }
+:is(#battle-field, .av-stage) .sig-av .bow::before { content: ""; position: absolute; right: 7px; top: 3px; width: 1px; height: 51px; border-radius: 2px; background: rgba(231, 239, 208, 0.88); transform: rotate(-8deg); transform-origin: center; }
+:is(#battle-field, .av-stage) .sig-av .bow::after { content: ""; position: absolute; right: 4px; top: 27px; width: 8px; height: 8px; border-radius: 50%; background: rgba(231, 239, 208, 0.82); }
+:is(#battle-field, .av-stage) .sig-av .arrow { left: 15px; top: 37px; width: 43px; height: 3px; border-radius: 3px; background: #e7efd0; transform: rotate(-25deg); }
+:is(#battle-field, .av-stage) .sig-av .dagger { right: 8px; top: 29px; width: 8px; height: 25px; border-radius: 6px 6px 2px 2px; background: linear-gradient(to top, #aeb8c5, #f7fbff); transform: rotate(32deg); z-index: 7; }
+:is(#battle-field, .av-stage) .sig-av .dagger::before { content: ""; position: absolute; left: -6px; bottom: 3px; width: 21px; height: 4px; border-radius: 4px; background: #9ba8bb; }
+:is(#battle-field, .av-stage) .sig-av .dagger::after { content: ""; position: absolute; left: 3px; bottom: -9px; width: 4px; height: 12px; border-radius: 4px; background: #2b3441; }
+:is(#battle-field, .av-stage) .sig-av .rifle { left: 3px; top: 39px; width: 65px; height: 7px; border-radius: 5px; background: #d8dfe8; transform: rotate(-13deg); z-index: 8; }
+:is(#battle-field, .av-stage) .sig-av .rifle::before { content: ""; position: absolute; left: 3px; top: 5px; width: 18px; height: 13px; border-radius: 4px 3px 8px 8px; background: #4b382c; transform: rotate(22deg); }
+:is(#battle-field, .av-stage) .sig-av .rifle::after { content: ""; position: absolute; right: -9px; top: 2px; width: 14px; height: 3px; border-radius: 3px; background: #9ba8bb; }
+:is(#battle-field, .av-stage) .sig-av .cloak { left: 17px; top: 23px; width: 43px; height: 48px; border-radius: 50% 50% 12px 12px; background: rgba(48, 55, 69, 0.88); border: 2px solid #778399; }
+:is(#battle-field, .av-stage) .sig-av .hood { left: 17px; top: 10px; width: 43px; height: 34px; border-radius: 50% 50% 36% 36%; border: 3px solid #778399; background: #262d3a; z-index: 6; clip-path: polygon(50% 0, 94% 36%, 82% 100%, 18% 100%, 6% 36%); }
+:is(#battle-field, .av-stage) .sig-av .halo { left: 22px; top: 6px; width: 33px; height: 13px; border: 3px solid rgba(240, 195, 106, 0.78); border-bottom-color: transparent; border-radius: 50%; }
+:is(#battle-field, .av-stage) .sig-av .aura { border-color: rgba(159, 230, 207, 0.32); box-shadow: 0 0 14px rgba(159,230,207,.12); }
+:is(#battle-field, .av-stage) .sig-av .orb { right: 8px; top: 12px; width: 17px; height: 17px; border-radius: 50%; background: #9fe6cf; box-shadow: 0 0 12px rgba(159,230,207,.42); }
+:is(#battle-field, .av-stage) .sig-av .seal { left: 26px; top: 10px; width: 25px; height: 25px; border-radius: 50%; border: 3px solid #ef9a9a; box-shadow: 0 0 10px rgba(239,154,154,.28); }
+:is(#battle-field, .av-stage) .sig-av .spark { width: 12px; height: 12px; background: #9ad4f0; clip-path: polygon(50% 0, 61% 37%, 100% 50%, 61% 63%, 50% 100%, 39% 63%, 0 50%, 39% 37%); z-index: 6; }
+:is(#battle-field, .av-stage) .sig-av .ribbon { left: 9px; top: 24px; width: 58px; height: 33px; border-top: 4px solid #ef9a9a; border-radius: 50%; transform: rotate(-22deg); z-index: 5; }
+:is(#battle-field, .av-stage) .sig-av .trap { left: 23px; bottom: 12px; width: 31px; height: 12px; border: 3px solid #9ba8bb; border-top: none; border-radius: 0 0 15px 15px; z-index: 6; }
+:is(#battle-field, .av-stage) .sig-av .wall { left: 7px; top: 35px; width: 62px; height: 32px; border: 3px solid #d8dfe8; border-radius: 7px; background: linear-gradient(90deg, rgba(255,255,255,.18) 1px, transparent 1px) 0 0/18px 100%, #4b5664; z-index: 4; }
+:is(#battle-field, .av-stage) .sig-av .book,
+:is(#battle-field, .av-stage) .sig-av .scroll { left: 8px; top: 38px; width: 24px; height: 19px; border-radius: 5px; background: #e8ddc0; border: 2px solid #c7b27a; z-index: 6; }
+:is(#battle-field, .av-stage) .sig-av .lute { left: 7px; top: 33px; width: 25px; height: 32px; border-radius: 50% 50% 12px 12px; border: 3px solid #f0c36a; background: #5b412c; transform: rotate(-13deg); }
+:is(#battle-field, .av-stage) .sig-av .lute::before { content: ""; position: absolute; left: 9px; top: -20px; width: 4px; height: 23px; border-radius: 4px; background: #f0c36a; }
+:is(#battle-field, .av-stage) .sig-av .note { right: 8px; top: 9px; width: 17px; height: 29px; border-left: 4px solid #f0c36a; border-bottom: 4px solid #f0c36a; border-radius: 0 0 11px 11px; z-index: 6; }
+:is(#battle-field, .av-stage) .sig-av .note::before { content: ""; position: absolute; left: -8px; bottom: -8px; width: 13px; height: 11px; border-radius: 50%; background: #f0c36a; }
+:is(#battle-field, .av-stage) .sig-av .note::after { content: ""; position: absolute; left: 2px; top: 1px; width: 15px; height: 8px; border-top: 4px solid #f0c36a; border-radius: 50%; transform: rotate(-18deg); }
+:is(#battle-field, .av-stage) .sig-av .crown { left: 24px; top: 5px; width: 30px; height: 16px; background: #f0c36a; clip-path: polygon(0 100%, 0 35%, 22% 80%, 50% 10%, 78% 80%, 100% 35%, 100% 100%); z-index: 6; }
+:is(#battle-field, .av-stage) .sig-av .sun { left: 20px; top: 0; width: 38px; height: 38px; border-radius: 50%; background: rgba(240,195,106,.2); border: 3px solid rgba(240,195,106,.75); box-shadow: 0 0 16px rgba(240,195,106,.3); }
+:is(#battle-field, .av-stage) .sig-av .horn { top: 7px; width: 15px; height: 17px; background: #d9ecf8; clip-path: polygon(50% 0, 100% 100%, 0 100%); z-index: 6; }
+:is(#battle-field, .av-stage) .sig-av .horn.left { left: 18px; transform: rotate(-22deg); }
+:is(#battle-field, .av-stage) .sig-av .horn.right { right: 18px; transform: rotate(22deg); }
+:is(#battle-field, .av-stage) .sig-av .trident { right: 7px; top: 8px; width: 5px; height: 62px; border-radius: 5px; background: #d9ecf8; transform: rotate(18deg); z-index: 6; }
+:is(#battle-field, .av-stage) .sig-av .trident::before { content: ""; position: absolute; left: -8px; top: -10px; width: 22px; height: 17px; border-top: 4px solid #d9ecf8; border-left: 4px solid #d9ecf8; border-right: 4px solid #d9ecf8; border-radius: 10px 10px 0 0; }
+:is(#battle-field, .av-stage) .sig-av .trident::after { content: ""; position: absolute; left: -1px; top: -14px; width: 7px; height: 18px; border-radius: 6px; background: #d9ecf8; }
+:is(#battle-field, .av-stage) .sig-av .headband { left: 25px; top: 22px; width: 28px; height: 5px; border-radius: 5px; background: #f0c36a; box-shadow: 0 0 8px rgba(240,195,106,.42); z-index: 8; }
+:is(#battle-field, .av-stage) .sig-av .wing { left: 4px; top: 24px; width: 27px; height: 36px; border-radius: 70% 18% 70% 28%; border: 3px solid #9ad4f0; background: rgba(154,212,240,.2); transform: rotate(-21deg); z-index: 3; }
+:is(#battle-field, .av-stage) .sig-av .tail { left: 7px; bottom: 13px; width: 41px; height: 22px; border-bottom: 5px solid #9ad4f0; border-radius: 50%; transform: rotate(-18deg); z-index: 3; }
+
+/* ---- 직업별 모디파이어 (SR-01~24) ---- */
+:is(#battle-field, .av-stage) .sig-av.sr-warrior .body { left: 20px; width: 36px; border-color: var(--gold, #f0c36a); background: #68717e; }
+:is(#battle-field, .av-stage) .sig-av.sr-warrior .shield { left: 3px; top: 29px; width: 34px; height: 42px; border-width: 4px; border-color: #f0c36a; background: #4b5564; z-index: 6; }
+:is(#battle-field, .av-stage) .sig-av.sr-warrior .sword { right: 3px; top: 16px; height: 50px; }
+:is(#battle-field, .av-stage) .sig-av.sr-guardian .body,
+:is(#battle-field, .av-stage) .sig-av.sr-wall .body { border-color: #d8dfe8; background: #4c5662; }
+:is(#battle-field, .av-stage) .sig-av.sr-priest .body,
+:is(#battle-field, .av-stage) .sig-av.sr-shrine .body,
+:is(#battle-field, .av-stage) .sig-av.sr-cleric .body { border-color: #9fe6cf; background: #3f665d; }
+:is(#battle-field, .av-stage) .sig-av.sr-archer .body,
+:is(#battle-field, .av-stage) .sig-av.sr-watchbow .body,
+:is(#battle-field, .av-stage) .sig-av.sr-tracker .body { border-color: #a8d46a; background: #536a3e; transform: skewX(-8deg); }
+:is(#battle-field, .av-stage) .sig-av.sr-disruptor .body,
+:is(#battle-field, .av-stage) .sig-av.sr-thief .body { border-color: #c7a2ff; background: #372b52; }
+:is(#battle-field, .av-stage) .sig-av.sr-warden .body,
+:is(#battle-field, .av-stage) .sig-av.sr-trapper .body { border-color: #a8d46a; background: #405c3f; }
+:is(#battle-field, .av-stage) .sig-av.sr-paladin .body,
+:is(#battle-field, .av-stage) .sig-av.sr-vanguard .body { border-color: var(--gold, #f0c36a); background: #5f604f; }
+:is(#battle-field, .av-stage) .sig-av.sr-forbidden .body,
+:is(#battle-field, .av-stage) .sig-av.sr-mage .body { border-color: #c7a2ff; background: #332d4f; }
+:is(#battle-field, .av-stage) .sig-av.sr-healbow .body,
+:is(#battle-field, .av-stage) .sig-av.sr-purifier .body { border-color: #9fe6cf; background: #49695f; }
+:is(#battle-field, .av-stage) .sig-av.sr-bard .body { border-color: #f0c36a; background: #5a4d35; }
+:is(#battle-field, .av-stage) .sig-av.sr-dragonspear .body { border-color: #79d88a; background: #6b2f2d; box-shadow: inset 0 -8px 0 rgba(121,216,138,.12); }
+:is(#battle-field, .av-stage) .sig-av.sr-sage .body { border-color: #c7a2ff; background: #464061; }
+:is(#battle-field, .av-stage) .sig-av.sr-sunlord .body { border-color: var(--gold, #f0c36a); background: #6b5940; }
+
+:is(#battle-field, .av-stage) .sig-av.sr-sentinel .banner { left: 9px; top: 24px; width: 4px; height: 39px; background: #d8dfe8; transform: rotate(-13deg); }
+:is(#battle-field, .av-stage) .sig-av.sr-sentinel .banner::before { content: ""; position: absolute; right: 3px; top: 2px; width: 18px; height: 13px; border-radius: 10px 4px 4px 10px; background: #ef9a9a; }
+:is(#battle-field, .av-stage) .sig-av.sr-vanguard .lance { right: 8px; top: 18px; height: 50px; transform: rotate(21deg); opacity: .88; }
+:is(#battle-field, .av-stage) .sig-av.sr-vanguard .lance::before { left: -4px; top: -7px; border-left-width: 6px; border-right-width: 6px; border-bottom-width: 11px; }
+:is(#battle-field, .av-stage) .sig-av.sr-warden .horn.left,
+:is(#battle-field, .av-stage) .sig-av.sr-warden .horn.right { background: #a8d46a; opacity: .9; }
+:is(#battle-field, .av-stage) .sig-av.sr-watchbow .tower { right: 4px; bottom: 10px; width: 20px; height: 52px; border-radius: 5px 5px 3px 3px; border: 3px solid #d8dfe8; background: #495463; z-index: 5; }
+:is(#battle-field, .av-stage) .sig-av.sr-watchbow .beacon { right: 5px; top: 5px; width: 20px; height: 20px; border-radius: 50%; background: #9ad4f0; box-shadow: 0 0 12px rgba(154,212,240,.38); z-index: 6; }
+:is(#battle-field, .av-stage) .sig-av.sr-mage .orb { background: #c7a2ff; box-shadow: 0 0 14px rgba(199,162,255,.42); }
+:is(#battle-field, .av-stage) .sig-av.sr-gatekeeper .key { right: 8px; top: 18px; width: 5px; height: 50px; background: #f0c36a; transform: rotate(17deg); z-index: 7; }
+:is(#battle-field, .av-stage) .sig-av.sr-gatekeeper .key::before { content: ""; position: absolute; left: -7px; top: -9px; width: 18px; height: 18px; border: 4px solid #f0c36a; border-radius: 50%; }
+:is(#battle-field, .av-stage) .sig-av.sr-dragonspear .lance::before { border-bottom-color: #79d88a; }
+:is(#battle-field, .av-stage) .sig-av.sr-sage .scroll { transform: rotate(-9deg); }
+:is(#battle-field, .av-stage) .sig-av.sr-shrine .staff { left: auto; right: 5px; top: 9px; height: 63px; width: 6px; background: #e9fff8; box-shadow: 0 0 0 4px rgba(159,230,207,.14); transform: rotate(4deg); z-index: 7; }
+:is(#battle-field, .av-stage) .sig-av.sr-shrine .staff::before { left: -8px; top: -9px; width: 20px; height: 17px; border: 3px solid #e9fff8; border-bottom-color: transparent; border-radius: 50% 50% 0 0; background: transparent; box-shadow: 0 0 10px rgba(159,230,207,.28); }
+:is(#battle-field, .av-stage) .sig-av.sr-shrine .staff::after { left: -5px; top: 10px; width: 16px; height: 5px; background: #9fe6cf; }
+:is(#battle-field, .av-stage) .sig-av.sr-shrine .halo { left: 25px; top: 3px; width: 27px; height: 9px; border-width: 2px; opacity: .45; }
+:is(#battle-field, .av-stage) .sig-av.sr-guardian .shield { left: 9px; top: 39px; width: 23px; height: 28px; border-width: 3px; border-color: #d8dfe8; opacity: .92; }
+:is(#battle-field, .av-stage) .sig-av.sr-guardian .lance { right: 4px; opacity: .95; z-index: 6; }
+:is(#battle-field, .av-stage) .sig-av.sr-priest .orb { right: 3px; top: 8px; width: 22px; height: 22px; }
+:is(#battle-field, .av-stage) .sig-av.sr-cleric .book { left: 5px; top: 33px; width: 35px; height: 26px; transform: rotate(-8deg); }
+:is(#battle-field, .av-stage) .sig-av.sr-cleric .halo { opacity: .35; transform: scale(.82); }
+:is(#battle-field, .av-stage) .sig-av.sr-purifier .flame { right: 4px; top: 4px; width: 22px; height: 31px; border-radius: 50% 50% 50% 0; background: linear-gradient(135deg, #f7fff9 0 42%, #9fe6cf 43% 100%); box-shadow: 0 0 13px rgba(159,230,207,.42); transform: rotate(-35deg); z-index: 6; }
+:is(#battle-field, .av-stage) .sig-av.sr-sunlord .staff { left: 10px; opacity: .55; }
+:is(#battle-field, .av-stage) .sig-av.sr-watchbow .bow,
+:is(#battle-field, .av-stage) .sig-av.sr-tracker .bow { opacity: .52; transform: scale(.88) rotate(14deg); }
+:is(#battle-field, .av-stage) .sig-av.sr-healbow .bow { opacity: .72; }
+:is(#battle-field, .av-stage) .sig-av.sr-healbow .arrow { background: #9fe6cf; box-shadow: 0 0 10px rgba(159,230,207,.42); }
+:is(#battle-field, .av-stage) .sig-av.sr-healbow .orb { right: 2px; top: 23px; width: 15px; height: 15px; }
+:is(#battle-field, .av-stage) .sig-av.sr-trapper .trap { left: 14px; bottom: 7px; width: 48px; height: 17px; border-width: 4px; border-color: #b6de83; }
+:is(#battle-field, .av-stage) .sig-av.sr-gatekeeper .shield { display: none; }
+:is(#battle-field, .av-stage) .sig-av.sr-gatekeeper .door { left: 8px; top: 26px; width: 36px; height: 43px; border-radius: 7px 7px 3px 3px; border: 3px solid #d8dfe8; background: #3f4b59; z-index: 4; }
+:is(#battle-field, .av-stage) .sig-av.sr-gatekeeper .door::after { content: ""; position: absolute; right: 6px; top: 19px; width: 5px; height: 5px; border-radius: 50%; background: #f0c36a; }
+:is(#battle-field, .av-stage) .sig-av.sr-wall .wall { top: 31px; height: 38px; border-width: 4px; }
+:is(#battle-field, .av-stage) .sig-av.sr-paladin .shield { left: 6px; top: 39px; width: 21px; height: 27px; opacity: .82; }
+:is(#battle-field, .av-stage) .sig-av.sr-paladin .sword { right: 4px; height: 58px; box-shadow: 0 0 10px rgba(240,195,106,.4); }
+:is(#battle-field, .av-stage) .sig-av.sr-paladin .aura { opacity: .62; border-color: rgba(240,195,106,.36); box-shadow: 0 0 15px rgba(240,195,106,.16); }
+:is(#battle-field, .av-stage) .sig-av.sr-paladin .halo { left: 23px; top: 4px; width: 31px; height: 13px; opacity: .72; }
+:is(#battle-field, .av-stage) .sig-av.sr-paladin .headband { background: #ffe1a2; }
+
+:is(#battle-field, .av-stage) .sig-av.sr-thief .body { left: 24px; top: 38px; height: 27px; border-color: #778399; background: #252936; transform: skewX(-12deg); }
+:is(#battle-field, .av-stage) .sig-av.sr-thief .hood { left: 17px; top: 9px; width: 43px; height: 34px; border-color: #8b79b8; background: #2d2541; }
+:is(#battle-field, .av-stage) .sig-av.sr-thief .cloak { left: 14px; top: 24px; width: 49px; height: 46px; border-color: #8b79b8; }
+:is(#battle-field, .av-stage) .sig-av.sr-thief .dagger { right: 5px; top: 36px; height: 22px; }
+:is(#battle-field, .av-stage) .sig-av.sr-thief .head { top: 18px; background: #d8b188; }
+:is(#battle-field, .av-stage) .sig-av.sr-thief .mask { top: 25px; z-index: 8; border-color: #111722; background: rgba(17,23,34,.8); box-shadow: 0 0 0 2px rgba(239,154,154,.45); }
+:is(#battle-field, .av-stage) .sig-av.sr-thief .reverse-dagger { right: 7px; top: 31px; height: 34px; }
+:is(#battle-field, .av-stage) .sig-av.sr-warden .shield { left: 10px; top: 38px; width: 23px; height: 28px; border-width: 3px; border-color: #a8d46a; background: #3f5640; }
+:is(#battle-field, .av-stage) .sig-av.sr-warden .trident { right: 4px; top: 9px; height: 63px; }
+:is(#battle-field, .av-stage) .sig-av.sr-watchbow .cloak { left: 15px; top: 30px; width: 45px; height: 35px; border-color: rgba(168,212,106,.62); background: rgba(50,70,47,.28); z-index: 3; }
+:is(#battle-field, .av-stage) .sig-av.sr-watchbow .bow { right: 2px; opacity: .9; transform: scale(.94) rotate(14deg); z-index: 7; }
+:is(#battle-field, .av-stage) .sig-av.sr-watchbow .arrow { left: 13px; top: 39px; z-index: 8; }
+:is(#battle-field, .av-stage) .sig-av.sr-watchbow .beacon { left: 17px; top: 34px; width: 10px; height: 10px; box-shadow: 0 0 8px rgba(154,212,240,.35); z-index: 8; }
+:is(#battle-field, .av-stage) .sig-av.sr-trapper .vial { right: 5px; top: 22px; width: 17px; height: 32px; z-index: 7; }
+:is(#battle-field, .av-stage) .sig-av.sr-trapper .bubble { right: 14px; top: 9px; }
+:is(#battle-field, .av-stage) .sig-av.sr-sentinel .banner { left: 9px; top: 24px; height: 39px; width: 4px; }
+:is(#battle-field, .av-stage) .sig-av.sr-sentinel .banner::before { width: 18px; height: 13px; top: 2px; }
+:is(#battle-field, .av-stage) .sig-av.sr-forbidden .chain { top: 36px; width: 17px; height: 37px; border-left: 4px dashed #9ba8bb; border-bottom: 4px solid #9ba8bb; border-radius: 0 0 12px 12px; z-index: 7; }
+:is(#battle-field, .av-stage) .sig-av.sr-forbidden .chain.left { left: 11px; transform: rotate(8deg); }
+:is(#battle-field, .av-stage) .sig-av.sr-forbidden .chain.right { left: auto; right: 8px; transform: scaleX(-1) rotate(8deg); }
+:is(#battle-field, .av-stage) .sig-av.sr-forbidden .chain::after { content: ""; position: absolute; left: -6px; bottom: -7px; width: 12px; height: 8px; border-radius: 50%; background: #9ba8bb; }
+:is(#battle-field, .av-stage) .sig-av.sr-tracker .bow { display: none; }
+:is(#battle-field, .av-stage) .sig-av.sr-tracker .rifle { left: 2px; top: 38px; }
+:is(#battle-field, .av-stage) .sig-av.sr-dragonspear .wing { left: 3px; top: 25px; width: 28px; height: 36px; border-color: #79d88a; background: rgba(150,47,43,.42); }
+:is(#battle-field, .av-stage) .sig-av.sr-dragonspear .tail { left: 7px; bottom: 12px; border-bottom-color: #79d88a; }
+:is(#battle-field, .av-stage) .sig-av.sr-dragonspear .lance { right: 4px; top: 8px; z-index: 7; background: #79d88a; box-shadow: 0 0 8px rgba(121,216,138,.22); }
+:is(#battle-field, .av-stage) .sig-av.sr-dragonspear .horn { background: #c9564b; filter: drop-shadow(0 0 2px rgba(121,216,138,.42)); }
+:is(#battle-field, .av-stage) .sig-av.sr-dragonspear .horn.left { left: 17px; }
+:is(#battle-field, .av-stage) .sig-av.sr-dragonspear .horn.right { right: 17px; }
+/* SR-06 교란꾼 spark — 박물관 inline 좌표를 클래스로 고정 */
+:is(#battle-field, .av-stage) .sig-av.sr-disruptor .spark { right: 8px; top: 13px; }
+
+/* ---- 추가 장식 part (SR-07/10/15/16/21 등에서 사용) ---- */
+:is(#battle-field, .av-stage) .sig-av .mark { right: 7px; top: 8px; width: 18px; height: 18px; border: 3px solid #ef9a9a; border-radius: 50%; z-index: 6; }
+:is(#battle-field, .av-stage) .sig-av .mark::before { content: ""; position: absolute; left: 6px; top: -7px; width: 3px; height: 26px; background: #ef9a9a; transform: rotate(45deg); }
+:is(#battle-field, .av-stage) .sig-av.sr-thief .mark { border-color: #111722; background: rgba(17,23,34,.8); box-shadow: 0 0 0 2px rgba(239,154,154,.45); }
+:is(#battle-field, .av-stage) .sig-av.sr-thief .mark::before { background: #111722; box-shadow: 0 0 0 1px rgba(239,154,154,.36); }
+:is(#battle-field, .av-stage) .sig-av .footprint { left: 8px; bottom: 12px; width: 9px; height: 13px; border-radius: 50%; background: #a8d46a; box-shadow: 13px -8px 0 rgba(168,212,106,.85); transform: rotate(-25deg); z-index: 6; }
+:is(#battle-field, .av-stage) .sig-av .heal-trail { left: 9px; top: 22px; width: 55px; height: 34px; border-top: 4px solid rgba(159,230,207,.74); border-radius: 50%; transform: rotate(-24deg); z-index: 5; }
+:is(#battle-field, .av-stage) .sig-av .vial { right: 4px; top: 27px; width: 16px; height: 31px; border-radius: 7px 7px 9px 9px; border: 3px solid #b6de83; background: linear-gradient(to bottom, transparent 0 35%, #78c85d 36% 100%); transform: rotate(-18deg); z-index: 6; }
+:is(#battle-field, .av-stage) .sig-av .bubble { right: 16px; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: #b6de83; box-shadow: -13px 9px 0 rgba(182,222,131,.8), 7px 15px 0 rgba(182,222,131,.66); z-index: 6; }
+:is(#battle-field, .av-stage) .sig-av .reverse-dagger { right: 7px; top: 31px; width: 6px; height: 34px; border-radius: 4px; background: #dce8f5; transform: rotate(-36deg); z-index: 6; }
+:is(#battle-field, .av-stage) .sig-av .long-shadow { left: 5px; bottom: 6px; width: 62px; height: 18px; border-radius: 50%; background: rgba(0,0,0,.38); transform: rotate(-16deg); z-index: 1; }
+:is(#battle-field, .av-stage) .sig-av .flame { right: 8px; top: 7px; width: 16px; height: 24px; border-radius: 50% 50% 50% 0; background: #f0c36a; transform: rotate(-35deg); box-shadow: 0 0 12px rgba(240,195,106,.35); z-index: 6; }
+
+/* =====================================================================
+   Avatar 호스트(카드/합체/도감) + Job Codex Entry Foundation 화면 레이아웃
+   ===================================================================== */
+
+/* 합체 결과/영입 카드 안 아바타 호스트 — av-fit(76×82, scale)이라 클립·중앙정렬 */
+.fusion-cast .cast-card .av-fit,
+.recruit-card .recruit-ava .av-fit { display: block; }
+.fusion-cast .cast-card {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.fusion-cast .cast-card .av-fit { width: 44px; height: 48px; overflow: visible; }
+.recruit-card .recruit-ava {
+  width: 50px; height: 54px; display: grid; place-items: center; overflow: hidden;
+  margin: 0 auto 2px;
+}
+
+/* 타이틀 — 직업 도감 버튼 (시작하기 아래 보조 버튼) */
+#title-codex {
+  margin-top: 10px;
+  padding: 9px 18px;
+  background: transparent;
+  color: #9ad4f0;
+  border: 1px solid #2f4a5a;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+#title-codex:hover { border-color: #4f7a90; color: #c7e8f7; }
+
+/* 도감 화면 — 세로 스크롤, 2열 카드 그리드(모바일 390 기준) */
+#codex-screen {
+  min-height: 100dvh;
+  padding: 16px 14px 28px;
+  overflow-y: auto;
+}
+.codex-header {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+}
+#codex-back {
+  flex: 0 0 auto;
+  padding: 8px 11px;
+  background: #1a2230;
+  color: #cdd9e6;
+  border: 1px solid #2f4156;
+  border-radius: 999px;
+  font: inherit; font-size: 12px; cursor: pointer;
+}
+.codex-title-wrap h2 { margin: 0; font-size: 19px; color: #eef3f8; }
+.codex-title-wrap p { margin: 3px 0 0; color: #9aa8b8; font-size: 11px; line-height: 1.4; }
+
+.codex-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.codex-card {
+  padding: 8px 8px 9px;
+  border: 1px solid #303947;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.035), transparent 42%), #171c24;
+  text-align: center;
+}
+.codex-card--wip { opacity: 0.82; }
+.codex-stage {
+  height: 86px;
+  display: grid; place-items: center;
+  margin-bottom: 6px;
+  border: 1px solid #2c3542;
+  border-radius: 7px;
+  background: #10151d;
+  overflow: hidden;
+}
+.codex-meta { display: flex; justify-content: center; align-items: baseline; gap: 6px; }
+.codex-code { color: #9aa8b8; font-size: 10px; letter-spacing: 0.04em; }
+.codex-name { color: #eef3f8; font-size: 14px; font-weight: 700; }
+.codex-tag {
+  display: inline-block; margin-top: 5px;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 10px; letter-spacing: 0.02em;
+}
+.codex-tag--base { background: rgba(159,230,207,0.14); color: #9fe6cf; }
+.codex-tag--fusion { background: rgba(240,195,106,0.14); color: #f0c36a; }
+.codex-tag--wip { background: rgba(154,168,184,0.12); color: #9aa8b8; }

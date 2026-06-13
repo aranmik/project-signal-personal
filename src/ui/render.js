@@ -3,9 +3,18 @@ import { availableFusions, slotPreference } from "../data/jobs.js";
 import { REWARDS } from "../data/rewards.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { SLOT_ORDER, SLOT_NAMES } from "../core/state.js";
+import { avatarSpec, avatarFigureHTML, CODEX_ENTRIES, CODEX_STATUS_LABEL } from "../data/avatars.js";
 
 function jobName(id) {
   return UNIT_TEMPLATES.party[id]?.name || id;
+}
+
+// Avatar Import 01: 직업 id → SR 아바타 미니 figure(합체 결과/영입 카드 공통).
+//   avatarKey 기반 — 전투 유닛/직업 카드와 같은 아바타가 카드에도 보인다.
+function jobAvatarHTML(id, extraClass = "av-fit--cast") {
+  const key = UNIT_TEMPLATES.party[id]?.avatarKey || id;
+  const spec = avatarSpec(key);
+  return avatarFigureHTML(spec.sr, spec.parts, extraClass);
 }
 
 export function renderGame(state) {
@@ -16,10 +25,12 @@ export function renderGame(state) {
   const fusionResultPanel = document.getElementById("fusion-result-panel");
   const recruitPanel = document.getElementById("recruit-panel");
   const arrangePanel = document.getElementById("arrange-panel");
+  const codexScreen = document.getElementById("codex-screen");
   const battleView = document.getElementById("battle-view");
 
   titleScreen.hidden = true;
   jobSelect.hidden = true;
+  if (codexScreen) codexScreen.hidden = true;
   growthPanel.hidden = true;
   fusionPanel.hidden = true;
   fusionResultPanel.hidden = true;
@@ -35,6 +46,15 @@ export function renderGame(state) {
   // Game Flow Foundation 01: 직업 선택 화면 (정적 카드 — 선택 상태는 main.js가 관리)
   if (state.screen === "jobSelect") {
     jobSelect.hidden = false;
+    return;
+  }
+
+  // Job Codex Entry Foundation: 직업 도감(관람용) — SR-01~24만, 선택/시작 없음.
+  if (state.screen === "codex") {
+    if (codexScreen) {
+      codexScreen.hidden = false;
+      renderCodex();
+    }
     return;
   }
 
@@ -198,11 +218,11 @@ function renderFusionResultPanel(state) {
     <div class="flow-kicker">합체 성공</div>
     <h2 class="flow-heading">${jobName(fusion.result)} 탄생!</h2>
     <div class="fusion-cast">
-      <span class="cast-card cast-mat">${jobName(m1)}</span>
+      <span class="cast-card cast-mat">${jobAvatarHTML(m1)}<b>${jobName(m1)}</b></span>
       <span class="cast-plus">+</span>
-      <span class="cast-card cast-mat">${jobName(m2)}</span>
+      <span class="cast-card cast-mat">${jobAvatarHTML(m2)}<b>${jobName(m2)}</b></span>
       <span class="cast-arrow">→</span>
-      <span class="cast-card cast-result">${jobName(fusion.result)}</span>
+      <span class="cast-card cast-result">${jobAvatarHTML(fusion.result)}<b>${jobName(fusion.result)}</b></span>
     </div>
     <p class="flow-note">${fusion.birthLine || "두 영웅의 힘이 하나로 모였다."}<br>새로운 영웅 <b>${jobName(fusion.result)}</b> — 파티에 합류했다.</p>
     <p class="flow-note flow-note--dim">빈자리를 채울 새 동료를 영입하세요.</p>
@@ -221,6 +241,7 @@ function renderRecruitPanel(state) {
   const rows = candidates.length
     ? candidates.map((id) =>
         `<button type="button" class="recruit-card" data-recruit="${id}">
+          <span class="recruit-ava">${jobAvatarHTML(id, "av-fit--card")}</span>
           <span class="job-name">${jobName(id)}</span>
           <span class="recruit-slot">${SLOT_NAMES[targetSlot(id)] || ""} 배치</span>
         </button>`
@@ -265,6 +286,39 @@ export function renderArrangePanel(state) {
     <p class="flow-note">슬롯을 눌러 위치를 바꾸고, 다음 전투를 준비하세요.</p>
     <div id="arrange-grid">${boxes}</div>
     <button type="button" id="arrange-done" data-arrange-done>다음 스테이지</button>
+  `;
+}
+
+// Job Codex Entry Foundation — 직업 도감(관람용 창구).
+//   SR-01~24를 카드 그리드로 보여준다. 기본/합체/준비 중 상태만 표시 —
+//   직업을 눌러도 파티/게임에 아무 변화가 없다(관람 전용, 발견/저장 시스템 없음).
+function renderCodex() {
+  const host = document.getElementById("codex-inner");
+  if (!host) return;
+
+  const cards = CODEX_ENTRIES.map((e) => {
+    const fig = avatarFigureHTML(e.sr, e.parts, "av-fit--codex");
+    const statusLabel = CODEX_STATUS_LABEL[e.status] || "";
+    return `<article class="codex-card codex-card--${e.status}">
+      <div class="codex-stage">${fig}</div>
+      <div class="codex-meta">
+        <span class="codex-code">${e.code}</span>
+        <span class="codex-name">${e.name}</span>
+      </div>
+      <span class="codex-tag codex-tag--${e.status}">${statusLabel}</span>
+    </article>`;
+  }).join("");
+
+  host.innerHTML = `
+    <div class="codex-header">
+      <button type="button" id="codex-back" data-codex-back>← 타이틀로</button>
+      <div class="codex-title-wrap">
+        <h2>직업 도감</h2>
+        <p>시그널R&amp;D SR-01 ~ SR-24. 관람용 창구 — 선택/시작 기능은 없습니다.</p>
+      </div>
+    </div>
+    <div class="codex-grid">${cards}</div>
+    <button type="button" class="flow-next" data-codex-back>타이틀로 돌아가기</button>
   `;
 }
 
@@ -624,10 +678,18 @@ function createFieldUnit(unit) {
   //   CSS 아바타를 이 클래스에 꽂으면 job id 하드코딩 없이 교체된다(전투/카드 공통 hook).
   const visual = unit.visual || id;
   const avatarKey = unit.avatarKey || id;
-  const figClass = isParty ? "avatar" : "monster";
-  const parts = (AVATAR_PARTS[visual] || [])
-    .map((p) => `<span class="part ${p}"></span>`)
-    .join("");
+  // Avatar Import 01: 아군은 SR 아바타(.sig-av) — avatarKey로 스펙 조회(job id 하드코딩 없음).
+  //   적은 기존 donor 파츠(.monster) 그대로(적 비주얼/밸런스 불변).
+  let figureHTML;
+  if (isParty) {
+    const spec = avatarSpec(avatarKey);
+    figureHTML = avatarFigureHTML(spec.sr, spec.parts);
+  } else {
+    const parts = (AVATAR_PARTS[visual] || [])
+      .map((p) => `<span class="part ${p}"></span>`)
+      .join("");
+    figureHTML = `<div class="monster ${visual} job-${id} avatar-${avatarKey}">${parts}</div>`;
+  }
   const hpPct = unit.maxHp > 0
     ? Math.max(0, Math.min(100, (unit.hp / unit.maxHp) * 100)).toFixed(1)
     : "0";
@@ -643,10 +705,11 @@ function createFieldUnit(unit) {
   // Hit Reaction 01: 아바타를 .fig-react로 감싼다.
   //   transform 충돌 회피용 전용 레이어 — .unit(scale) / .fig-react(피격·회복 반응) / .avatar(idle)
   //   세 요소가 각자 transform을 가져 곱연산으로 합성된다.
-  // Combat Readability Foundation 01:
-  //   - role-pip: 아군 직업 역할 보조 신호(작은 pip, 좌상단, 아바타 안 가림). 이름/숫자 아님.
-  //   - status-slots: 상태 마커가 올라갈 자리(상단 중앙). 비어 있으면 표시 없음.
-  const rolePip = isParty ? `<span class="role-pip role-${id}" aria-hidden="true"></span>` : "";
+  // Combat Readability Foundation 01 → Avatar Import 01:
+  //   role-pip(좌상단 작은 도형)은 SR 아바타가 직업/역할을 실루엣으로 구분하면서
+  //   아바타 파츠처럼 섞여 보였다 → 제거. 역할 식별은 아바타 자체가 담당한다.
+  //   status-slots(상태이상)·타겟 cue·Boss HUD 같은 시스템 UI는 유지(기능 불변).
+  const rolePip = "";
   const markers = displayMarkers(unit);
   const markersKey = markers.join(",");
   // Boss Presence Foundation 01: 정예/보스만 약한 존재감 aura(느린 호흡). 아바타 뒤(낮은 z).
@@ -658,7 +721,7 @@ function createFieldUnit(unit) {
     ${rolePip}
     <div class="status-slots" data-markers="${markersKey}">${statusMarkersHTML(markers)}</div>
     <div class="fig-react">
-      <div class="${figClass} ${visual} job-${id} avatar-${avatarKey}">${parts}</div>
+      ${figureHTML}
     </div>
     <span class="hp-bar"><span class="hp-bar-fill" style="width:${hpPct}%"></span></span>
     <span class="tempo-bar${readyClass}"><span class="tempo-bar-fill" style="width:${gaugePct}%"></span></span>

@@ -167,6 +167,13 @@ export function goTitle() {
   renderGame(gameState);
 }
 
+// Job Codex Entry Foundation — 타이틀 → 직업 도감(관람용 화면).
+//   전투/선택과 분리된 창구. 여기서 직업을 골라도 파티/게임에 아무 영향이 없다.
+export function showCodex() {
+  gameState.screen = "codex";
+  renderGame(gameState);
+}
+
 export function resetBattle() {
   clearInterval(tickTimer);
   tickTimer = null;
