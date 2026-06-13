@@ -218,11 +218,11 @@ function renderFusionResultPanel(state) {
     <div class="flow-kicker">합체 성공</div>
     <h2 class="flow-heading">${jobName(fusion.result)} 탄생!</h2>
     <div class="fusion-cast">
-      <span class="cast-card cast-mat">${jobAvatarHTML(m1)}<b>${jobName(m1)}</b></span>
+      <span class="cast-card cast-mat" aria-label="${jobName(m1)}">${jobAvatarHTML(m1, "av-fit--cast")}</span>
       <span class="cast-plus">+</span>
-      <span class="cast-card cast-mat">${jobAvatarHTML(m2)}<b>${jobName(m2)}</b></span>
+      <span class="cast-card cast-mat" aria-label="${jobName(m2)}">${jobAvatarHTML(m2, "av-fit--cast")}</span>
       <span class="cast-arrow">→</span>
-      <span class="cast-card cast-result">${jobAvatarHTML(fusion.result)}<b>${jobName(fusion.result)}</b></span>
+      <span class="cast-card cast-result" aria-label="${jobName(fusion.result)}">${jobAvatarHTML(fusion.result, "av-fit--cast")}</span>
     </div>
     <p class="flow-note">${fusion.birthLine || "두 영웅의 힘이 하나로 모였다."}<br>새로운 영웅 <b>${jobName(fusion.result)}</b> — 파티에 합류했다.</p>
     <p class="flow-note flow-note--dim">빈자리를 채울 새 동료를 영입하세요.</p>
@@ -241,9 +241,11 @@ function renderRecruitPanel(state) {
   const rows = candidates.length
     ? candidates.map((id) =>
         `<button type="button" class="recruit-card" data-recruit="${id}">
-          <span class="recruit-ava">${jobAvatarHTML(id, "av-fit--card")}</span>
-          <span class="job-name">${jobName(id)}</span>
-          <span class="recruit-slot">${SLOT_NAMES[targetSlot(id)] || ""} 배치</span>
+          <span class="recruit-ava">${jobAvatarHTML(id, "av-fit--recruit")}</span>
+          <span class="recruit-text">
+            <span class="job-name">${jobName(id)}</span>
+            <span class="recruit-slot">${SLOT_NAMES[targetSlot(id)] || ""} 배치</span>
+          </span>
         </button>`
       ).join("")
     : `<p class="flow-note">영입 가능한 동료가 없습니다.</p>`;
@@ -772,6 +774,29 @@ function unitPoint(instanceId, frac, fieldRect) {
   };
 }
 
+// First Loop Micro Polish 01 — 피해/회복 숫자 시작점.
+//   일반 유닛: 기존 head anchor(상단 8%) 유지.
+//   보스/정예(큰 rect): fy 비율로 잡으면 머리보다 한참 위에서 시작 → 위로 float하며 화면 밖 이탈.
+//   → 큰 rect는 rect 상단에서 작은 고정 오프셋만 두고, 최종 y는 전장 안으로 clamp.
+//   Boss HUD(상단 중앙)와 겹치지 않도록 아래쪽으로 충분히 내린다(상단 여백 확보).
+function numberAnchor(targetInstanceId, fieldRect) {
+  const el = document.querySelector(
+    `#unit-layer [data-instance-id="${targetInstanceId}"]`
+  );
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  const big = el.dataset.tier === "boss" || el.dataset.tier === "elite";
+  const x = r.left - fieldRect.left + 0.5 * r.width;
+  let y = big
+    ? r.top - fieldRect.top + 18 // 큰 rect: 상단 근처 고정 오프셋(머리 위 과도 거리 방지)
+    : r.top - fieldRect.top + 0.08 * r.height;
+  // float-up(약 -24px)을 감안해 위/아래로 화면을 벗어나지 않게 clamp.
+  //   보스는 Boss HUD가 상단을 쓰므로 최소 y를 더 낮춰(=아래로) 겹침을 피한다.
+  const minY = big ? 64 : 30;
+  y = Math.max(minY, Math.min(fieldRect.height - 18, y));
+  return { x, y };
+}
+
 // Action Emphasis 01: 시선 우선순위 = acting > line > target reaction > idle.
 //   현재 행동 중(acting cue 표시 중)인 유닛 추적 → 그 사이 들어오는
 //   target reaction은 생략(같은 유닛에 선언과 피격이 겹쳐 시선이 꼬이지 않게).
@@ -804,7 +829,8 @@ export function playActionFx(event) {
   const speed = Number(field.dataset.speed) || 1;
   const lead = speed === 2 ? 80 : 120;
   // 숫자는 머리 위(head anchor)에서 시작 — 선/펄스는 타격 지점(t) 그대로.
-  const tn = unitPoint(targetInstanceId, TARGET_NUMBER, fieldRect) || t;
+  //   보스/정예는 numberAnchor가 위치 보정 + 화면 안 clamp.
+  const tn = numberAnchor(targetInstanceId, fieldRect) || t;
   const fire = () => {
     spawnLine(layer, s, t, lineType, kind);
     spawnPulse(layer, t, isHeal);
@@ -822,7 +848,7 @@ export function playStatusTickFx({ targetInstanceId, amount, kind }) {
   const layer = document.getElementById("fx-layer");
   const field = document.getElementById("battle-field");
   if (!layer || !field) return;
-  const t = unitPoint(targetInstanceId, TARGET_NUMBER, field.getBoundingClientRect());
+  const t = numberAnchor(targetInstanceId, field.getBoundingClientRect());
   if (!t) return;
   spawnNumber(layer, t, targetInstanceId, false, amount, kind);
 }
@@ -1055,7 +1081,7 @@ function spawnNumber(layer, t, targetInstanceId, isHeal, amount, variant) {
     (variant ? ` fx-number--${variant}` : ""); // 상태 tick 변주(poison 등)
   n.textContent = `${isHeal ? "+" : "-"}${amount}`;
   n.style.left = `${t.x}px`;
-  n.style.top = `${t.y - step * 15}px`; // 위로 쌓기
+  n.style.top = `${Math.max(2, t.y - step * 15)}px`; // 위로 쌓기(화면 상단 밖 이탈 방지 clamp)
   if (step > 0) n.style.animationDelay = `${step * 80}ms`;
 
   const done = () => {

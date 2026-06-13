@@ -20,9 +20,10 @@
   height: 82px;
   transform-origin: center bottom;
 }
-.av-fit.av-fit--card { transform: scale(0.62); }   /* 직업 선택 카드 */
+.av-fit.av-fit--card { transform: scale(0.74); }   /* 직업 선택 카드(전신) */
 .av-fit.av-fit--codex { transform: scale(0.92); }  /* 도감 카드 */
-.av-fit.av-fit--cast { transform: scale(0.5); }    /* 합체 결과/영입 소형 */
+.av-fit.av-fit--cast { transform: scale(0.66); }   /* 합체 결과 — 프레임 안 전신 */
+.av-fit.av-fit--recruit { transform: scale(0.84); } /* 영입 카드 — 전신 강조 */
 #battle-field .av-fit { transform: scale(0.8); }   /* 전투 유닛 박스(≈61px) */
 
 :is(#battle-field, .av-stage) .sig-av {
@@ -243,16 +244,28 @@
    Avatar 호스트(카드/합체/도감) + Job Codex Entry Foundation 화면 레이아웃
    ===================================================================== */
 
-/* 합체 결과/영입 카드 안 아바타 호스트 — av-fit(76×82, scale)이라 클립·중앙정렬 */
-.fusion-cast .cast-card .av-fit,
-.recruit-card .recruit-ava .av-fit { display: block; }
+/* First Loop Micro Polish 01 — 합체 결과: 직업명 텍스트 제거, 프레임 안 아바타 단독.
+   카드는 고정 프레임 + 중앙정렬, av-fit(76×82 scale)은 클립. (styles.css 기존 cast-card
+   텍스트 스타일을 덮어쓴다 — avatars.css가 뒤에 로드돼 동일 특이도에서 우선) */
 .fusion-cast .cast-card {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  display: grid; place-items: center; overflow: hidden;
+  width: 60px; height: 66px; padding: 0;
+  border-radius: 10px;
 }
-.fusion-cast .cast-card .av-fit { width: 44px; height: 48px; overflow: visible; }
+.fusion-cast .cast-mat { background: #131a26; border: 1px solid #2a3a4a; }
+.fusion-cast .cast-result {
+  border: 1px solid #f6e7a8;
+  box-shadow: 0 0 14px rgba(240, 211, 106, 0.35);
+}
+
+/* 영입 카드 — 세로 카드 안 가로 배치: 전신 아바타(좌) + 이름/배치(우). */
 .recruit-card .recruit-ava {
-  width: 50px; height: 54px; display: grid; place-items: center; overflow: hidden;
-  margin: 0 auto 2px;
+  flex: 0 0 auto;
+  width: 66px; height: 76px; display: grid; place-items: center; overflow: hidden;
+  background: #0f1620; border-radius: 9px;
+}
+.recruit-card .recruit-text {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
 }
 
 /* 타이틀 — 직업 도감 버튼 (시작하기 아래 보조 버튼) */
@@ -324,3 +337,38 @@
 .codex-tag--base { background: rgba(159,230,207,0.14); color: #9fe6cf; }
 .codex-tag--fusion { background: rgba(240,195,106,0.14); color: #f0c36a; }
 .codex-tag--wip { background: rgba(154,168,184,0.12); color: #9aa8b8; }
+
+/* 영입 카드 컨테이너 — 세로 스택(부모 #recruit-list가 column) + 가로 배치, 큰 터치 영역 */
+.recruit-card {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  min-height: 92px;
+  padding: 12px 16px;
+  text-align: left;
+}
+.recruit-card .job-name { font-size: 16px; font-weight: 800; }
+.recruit-card .recruit-slot { font-size: 12px; font-weight: normal; color: #8aa0b4; }
+
+/* First Loop Micro Polish 01 — "동료 3명을 선택하세요": 전신 아바타 강조.
+   호스트를 키우고(62×72) 선택 상태는 아바타를 가리지 않게 테두리+체크로 표현. */
+.job-card .job-ava {
+  width: 62px;
+  height: 72px;
+}
+.job-card { position: relative; }
+.job-card.selected {
+  box-shadow: 0 0 0 2px #3a6ea8 inset;
+}
+.job-card.selected::after {
+  content: "✓";
+  position: absolute;
+  top: 6px; right: 8px;
+  width: 18px; height: 18px;
+  line-height: 18px; text-align: center;
+  font-size: 12px; font-weight: 800;
+  color: #0b1320; background: #6fb0e8;
+  border-radius: 50%;
+  z-index: 2;
+}
