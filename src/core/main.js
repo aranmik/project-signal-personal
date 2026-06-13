@@ -13,6 +13,18 @@ console.log("Project Signal Personal — init", gameState);
 
 renderGame(gameState);
 
+// First Class Expansion 01 — dev 테스트 훅(일반 UI 무관). 콘솔에서 임의 4직업 파티로 전투 시작:
+//   signalDev.testParty(["warden","watchbow","trapper","paladin"])
+//   확장 16종 스킬을 즉석에서 확인하기 위한 용도 — 정식 직업 선택 흐름은 기존 6종 그대로.
+window.signalDev = {
+  testParty(jobs) {
+    const slots = ["f0", "f1", "b0", "b1"];
+    const formation = {};
+    slots.forEach((k, i) => { if (jobs[i]) formation[k] = jobs[i]; });
+    startRun(formation);
+  },
+};
+
 // Avatar Import 01: 정적 직업 카드의 placeholder 칩(.job-ava)에 SR 아바타 주입.
 //   data-avatar(avatarKey)로 스펙 조회 — 전투 유닛과 동일 키. (1회, 카드는 정적)
 document.querySelectorAll("#job-grid .job-card").forEach((card) => {

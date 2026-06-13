@@ -120,6 +120,27 @@ export const UNIT_TEMPLATES = {
       atk: 11,
       speed: 7,
     },
+
+    // First Class Expansion 01 — 1차 직업 확장 16종.
+    //   "개성 확인용 foundation": grammar는 fallback 기본공격 타겟팅만 결정(스킬은 skills.js logic).
+    //   visual = FX/파츠 donor, avatarKey = SR 아바타 키(=직업 id, avatars.js AVATAR_SPEC 자동 매핑).
+    //   수치는 보수적 임시값(밸런스 아님). 즉시 선택 가능 직업은 아님 — 데이터/스킬 hook 확보용.
+    warden:     { id: "warden",     name: "워든",   team: "party", job: "warden",     role: "front", grammar: "strike", visual: "warrior", avatarKey: "warden",     maxHp: 112, atk: 14, speed: 7 },
+    watchbow:   { id: "watchbow",   name: "파수궁", team: "party", job: "watchbow",   role: "back",  grammar: "snipe",  visual: "archer",  avatarKey: "watchbow",   maxHp: 80,  atk: 15, speed: 8 },
+    trapper:    { id: "trapper",    name: "덫꾼",   team: "party", job: "trapper",    role: "back",  grammar: "snipe",  visual: "archer",  avatarKey: "trapper",    maxHp: 78,  atk: 12, speed: 7 },
+    paladin:    { id: "paladin",    name: "성기사", team: "party", job: "paladin",    role: "front", grammar: "strike", visual: "warrior", avatarKey: "paladin",    maxHp: 118, atk: 13, speed: 6 },
+    vanguard:   { id: "vanguard",   name: "선봉",   team: "party", job: "vanguard",   role: "front", grammar: "strike", visual: "warrior", avatarKey: "vanguard",   maxHp: 102, atk: 12, speed: 8 },
+    forbidden:  { id: "forbidden",  name: "금제",   team: "party", job: "forbidden",  role: "front", grammar: "strike", visual: "warrior", avatarKey: "forbidden",  maxHp: 98,  atk: 12, speed: 7 },
+    wall:       { id: "wall",       name: "성벽",   team: "party", job: "wall",       role: "front", grammar: "protect",visual: "guardian",avatarKey: "wall",       maxHp: 145, atk: 9,  speed: 5 },
+    healbow:    { id: "healbow",    name: "치유궁", team: "party", job: "healbow",    role: "back",  grammar: "snipe",  visual: "archer",  avatarKey: "healbow",    maxHp: 82,  atk: 11, speed: 7 },
+    purifier:   { id: "purifier",   name: "정화사", team: "party", job: "purifier",   role: "back",  grammar: "heal",   visual: "priest",  avatarKey: "purifier",   maxHp: 84,  atk: 9,  speed: 7 },
+    mage:       { id: "mage",       name: "마도",   team: "party", job: "mage",       role: "back",  grammar: "snipe",  visual: "archer",  avatarKey: "mage",       maxHp: 74,  atk: 16, speed: 7 },
+    bard:       { id: "bard",       name: "바드",   team: "party", job: "bard",       role: "back",  grammar: "harass", visual: "archer",  avatarKey: "bard",       maxHp: 86,  atk: 10, speed: 8 },
+    gatekeeper: { id: "gatekeeper", name: "수문장", team: "party", job: "gatekeeper", role: "front", grammar: "protect",visual: "guardian",avatarKey: "gatekeeper", maxHp: 122, atk: 11, speed: 6 },
+    tracker:    { id: "tracker",    name: "추적자", team: "party", job: "tracker",    role: "back",  grammar: "snipe",  visual: "archer",  avatarKey: "tracker",    maxHp: 80,  atk: 15, speed: 8 },
+    dragonspear:{ id: "dragonspear",name: "용창",   team: "party", job: "dragonspear",role: "front", grammar: "strike", visual: "warrior", avatarKey: "dragonspear",maxHp: 108, atk: 15, speed: 7 },
+    sage:       { id: "sage",       name: "현자",   team: "party", job: "sage",       role: "back",  grammar: "snipe",  visual: "priest",  avatarKey: "sage",       maxHp: 82,  atk: 12, speed: 7 },
+    sunlord:    { id: "sunlord",    name: "성황",   team: "party", job: "sunlord",    role: "back",  grammar: "heal",   visual: "priest",  avatarKey: "sunlord",    maxHp: 104, atk: 11, speed: 6 },
   },
 
   enemies: {

@@ -696,10 +696,15 @@ function spawnTargetCue(targetInstanceId, isHeal) {
 //   유닛 위에 작은 상태 마커(최대 3)를 올릴 자리. 실제 상태 계산과 결합하지 않음 —
 //   unit.statusMarkers(표시용 배열)만 읽는다. preview/test 용도.
 const STATUS_MARKERS = {
-  poison: "sm-poison", // 중독 후보 — 초록 점
-  guard: "sm-guard",   // 보호 후보 — 파란 사각
-  mark: "sm-mark",     // 표식 후보 — 호박 점
-  buff: "sm-buff",     // 강화 후보 — 보라 마름모
+  poison: "sm-poison", // 중독 — 초록 점
+  guard: "sm-guard",   // 보호 — 파란 사각
+  mark: "sm-mark",     // 표식/조준/결속 — 호박 점
+  buff: "sm-buff",     // 강화 — 보라 마름모
+  // First Class Expansion 01 — 확장 상태 마커(작은 점, 색만 구분).
+  taunt: "sm-taunt",     // 도발 — 빨강
+  slow: "sm-slow",       // 감속 — 하늘
+  atkDown: "sm-atkdown", // 공격력↓ — 회색
+  rhythm: "sm-rhythm",   // 리듬(치명 예약) — 금색
 };
 
 function statusMarkersHTML(markers) {
@@ -1036,7 +1041,8 @@ export function playActionFx(event) {
   const fire = () => {
     spawnLine(layer, s, t, lineType, kind);
     spawnPulse(layer, t, isHeal);
-    spawnNumber(layer, tn, targetInstanceId, isHeal, amount);
+    // First Class Expansion 01: 피해/회복 0(상태 부여형 스킬: 중독 등)은 숫자 생략.
+    if (amount > 0) spawnNumber(layer, tn, targetInstanceId, isHeal, amount);
     reactUnit(targetInstanceId, isHeal);
   };
   setTimeout(fire, lead);

@@ -876,6 +876,11 @@ body {
 .status-marker.sm-guard  { background: #6fa8e0; border-radius: 2px; } /* 보호 — 파란 사각 */
 .status-marker.sm-mark   { background: #e6b455; }                    /* 표식 — 호박 점 */
 .status-marker.sm-buff   { background: #d3a4ef; border-radius: 1px; transform: rotate(45deg); } /* 강화 — 보라 마름모 */
+/* First Class Expansion 01 — 확장 상태 마커 */
+.status-marker.sm-taunt   { background: #ef6a5a; }  /* 도발 — 빨강 */
+.status-marker.sm-slow    { background: #7fc8ff; }  /* 감속 — 하늘 */
+.status-marker.sm-atkdown { background: #9aa8b8; }  /* 공격력↓ — 회색 */
+.status-marker.sm-rhythm  { background: #f0d36a; border-radius: 1px; transform: rotate(45deg); } /* 리듬 — 금 마름모 */
 
 /* First Loop Micro Polish 01 — role-pip(좌상단 역할 도형) 완전 제거.
    SR 아바타가 직업/역할을 실루엣으로 구분하므로 별도 pip/badge를 두지 않는다.

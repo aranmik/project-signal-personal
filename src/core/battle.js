@@ -402,7 +402,9 @@ function battleTick() {
   ];
 
   allUnits.forEach((u) => {
-    u.actionGauge += u.speed;
+    // First Class Expansion 01: slow(감속) — 속도 게이지 상승 -40%(바드 템포). 자기 행동 시 1턴 만료.
+    const slowed = Array.isArray(u.statuses) && u.statuses.some((s) => s.type === "slow");
+    u.actionGauge += slowed ? u.speed * 0.6 : u.speed;
   });
 
   const ready = allUnits
@@ -476,16 +478,15 @@ function hasStatus(unit, type) {
 function processStatusesBeforeAction(unit) {
   if (!Array.isArray(unit.statuses) || unit.statuses.length === 0) return;
 
-  if (hasStatus(unit, "poison")) {
-    applyDamage(unit, POISON_TICK_DAMAGE); // shield 우선 흡수(공통 피해 경로)
-    pushLog(`${unit.name}${josa(unit.name, "이가")} 중독 피해. ${POISON_TICK_DAMAGE} 피해.`);
+  const poison = Array.isArray(unit.statuses) && unit.statuses.find((s) => s.type === "poison");
+  if (poison) {
+    // First Class Expansion 01A: 덫꾼 중독은 대상 maxHp 10%(tickPct), 그 외(프리뷰 등)는 고정값.
+    const pDmg = poison.tickPct ? Math.max(1, Math.round(unit.maxHp * poison.tickPct)) : POISON_TICK_DAMAGE;
+    applyDamage(unit, pDmg); // shield/결속 경로 공통
+    pushLog(`${unit.name}${josa(unit.name, "이가")} 중독 피해. ${pDmg} 피해.`);
     // FX 과밀 방지: 행동선/펄스 없이 작은 숫자만 (기존 숫자 상한 공유)
-    playStatusTickFx({ targetInstanceId: unit.instanceId, amount: POISON_TICK_DAMAGE, kind: "poison" });
-    if (unit.hp <= 0) {
-      unit.hp = 0;
-      unit.isDead = true;
-      pushLog(`${unit.name}${josa(unit.name, "이가")} 쓰러졌다.`);
-    }
+    playStatusTickFx({ targetInstanceId: unit.instanceId, amount: pDmg, kind: "poison" });
+    killIfDead(unit);
   }
 
   unit.statuses.forEach((s) => { s.duration -= 1; });
@@ -589,15 +590,284 @@ function trySkill(unit) {
       return true;
     }
     case "saint": {
-      // 성역: HP 80% 이하 아군이 2명 이상이면 파티 소량 회복 + 최저 1명 guard.
-      const hurt = gameState.party.filter((u) => !u.isDead && u.hp / u.maxHp <= 0.8);
-      if (hurt.length < 2) return false;
-      performSanctuary(unit, meta);
+      // 01A: 쌍치유 — 저체력 아군이 있으면 HP 비율 최저 2인을 회복(사제와 동일 회복량).
+      if (!lowestRatioAlly(0.8)) return false;
+      performDualHeal(unit, meta);
       return true;
+    }
+    default:
+      // First Class Expansion 01: 확장 16종은 데이터 logic(skills.js) → executor가 처리.
+      return meta.logic ? runDataSkill(unit, meta) : false;
+  }
+}
+
+// ── First Class Expansion 01 — 확장 직업 공통 헬퍼/상태 ──────────────────
+function aliveEnemies() {
+  return gameState.enemies.filter((u) => !u.isDead);
+}
+function frontEnemies() {
+  const a = aliveEnemies();
+  const f = a.filter((u) => u.role === "front");
+  return f.length ? f : a;
+}
+function highGaugeEnemy() {
+  const a = aliveEnemies();
+  if (!a.length) return null;
+  return a.reduce((x, y) => ((x.actionGauge || 0) >= (y.actionGauge || 0) ? x : y));
+}
+function highHpEnemy() {
+  const a = aliveEnemies();
+  if (!a.length) return null;
+  return a.reduce((x, y) => (x.hp / x.maxHp >= y.hp / y.maxHp ? x : y));
+}
+function frontEnemyNoPoison() {
+  return frontEnemies().find((e) => !hasStatus(e, "poison")) || null;
+}
+function lowestRatioAllyAny() {
+  const a = aliveParty();
+  if (!a.length) return null;
+  return a.reduce((x, y) => (x.hp / x.maxHp <= y.hp / y.maxHp ? x : y));
+}
+function applyStatus(unit, status) {
+  if (!Array.isArray(unit.statuses)) unit.statuses = [];
+  const ex = unit.statuses.find((s) => s.type === status.type);
+  if (ex) {
+    ex.duration = Math.max(ex.duration, status.duration);
+    if (status.pct != null) ex.pct = status.pct;
+  } else {
+    unit.statuses.push({ ...status });
+  }
+}
+function healUnit(unit, amount) {
+  const before = unit.hp;
+  unit.hp = Math.min(unit.maxHp, unit.hp + Math.max(0, amount));
+  return unit.hp - before;
+}
+function removeNegStatus(unit) {
+  const neg = ["poison", "atkDown", "slow"];
+  const before = (unit.statuses || []).length;
+  unit.statuses = (unit.statuses || []).filter((s) => !neg.includes(s.type));
+  return before !== unit.statuses.length;
+}
+function skillShout(caster, text, kind) {
+  playSupportFx({ casterInstanceId: caster.instanceId, text, kind, heals: [] });
+}
+
+// First Class Expansion 01 — 데이터 logic 기반 스킬 executor(확장 16종).
+//   cond 미충족이면 false 반환 → performAction이 기본 공격으로 fallback.
+//   반응형(보복 counter / 결속 redirect / 성역 면역)은 안전 최소 구현(근사·마커·1회 무효). WATCH.
+function runDataSkill(unit, meta) {
+  const L = meta.logic;
+  switch (L.type) {
+    case "gaugeStrike": { // 워든 습격
+      const t = highGaugeEnemy();
+      if (!t) return false;
+      performAttack(unit, t, { mult: L.mult, skill: meta });
+      t.actionGauge = Math.max(0, (t.actionGauge || 0) * (1 - L.drainPct));
+      applyStatus(t, { type: "atkDown", duration: L.atkDownTurns, pct: L.atkDownPct });
+      return true;
+    }
+    case "counterStance": { // 파수궁 보복(근사: 게이지 높은 적 즉시 견제)
+      const t = highGaugeEnemy();
+      if (!t) return false;
+      performAttack(unit, t, { mult: L.mult, lineType: "ranged", skill: meta });
+      return true;
+    }
+    case "poison": { // 덫꾼 중독
+      const t = frontEnemyNoPoison();
+      if (!t) return false;
+      applyStatus(t, { type: "poison", duration: L.duration });
+      playActionFx({
+        sourceInstanceId: unit.instanceId, sourceUnitId: unit.id, targetInstanceId: t.instanceId,
+        lineType: "disrupt", kind: "disrupt", isHeal: false, amount: 0,
+        shoutText: meta.name + "!", shoutKind: meta.kind, shoutTier: "skill",
+      });
+      pushLog(`${unit.name}${josa(unit.name, "이가")} ${t.name}${josa(t.name, "을를")} 중독시켰다.`);
+      return true;
+    }
+    case "strikeHealShield": { // 성기사 성휘
+      const t = selectAttackTarget(aliveEnemies());
+      if (!t) return false;
+      performAttack(unit, t, { mult: L.mult, skill: meta });
+      const selfHealed = healUnit(unit, L.selfHeal);
+      const ally = lowestRatioAllyAny();
+      if (ally) grantShieldTo(unit, ally, L.allyShield);
+      playSupportFx({
+        casterInstanceId: unit.instanceId, text: null, kind: meta.kind,
+        heals: selfHealed > 0 ? [{ targetInstanceId: unit.instanceId, amount: selfHealed }] : [],
+        guardInstanceId: ally ? ally.instanceId : null,
+      });
+      return true;
+    }
+    case "aoeStrike": { // 선봉 진군 (전열 전체 + 미량 회복)
+      const targets = L.scope === "front" ? frontEnemies() : aliveEnemies();
+      if (targets.length === 0) return false;
+      targets.forEach((t, i) =>
+        performAttack(unit, t, { mult: L.mult, skill: i === 0 ? meta : undefined, noShout: i !== 0 })
+      );
+      if (L.healFactor) {
+        const amt = Math.round((unit.atk || 0) * 1.5 * L.healFactor);
+        const heals = [];
+        aliveParty().forEach((a) => {
+          const h = healUnit(a, amt);
+          if (h > 0) heals.push({ targetInstanceId: a.instanceId, amount: h });
+        });
+        if (heals.length) playSupportFx({ casterInstanceId: unit.instanceId, text: null, kind: "heal", heals });
+      }
+      return true;
+    }
+    case "bondOffense": { // 금제 악의 결속 — 타격 + 결속(금제 피격 시 60/40 분배: applyDamage)
+      const t = selectAttackTarget(aliveEnemies());
+      if (!t) return false;
+      performAttack(unit, t, { mult: L.mult, skill: meta });
+      // 대상 생존 시 결속 링크 갱신(다음 행동까지). 사망이면 해제.
+      unit.bondOffenseTarget = t.isDead ? null : t.instanceId;
+      if (!t.isDead) applyStatus(t, { type: "mark", duration: 1 });
+      return true;
+    }
+    case "bondDefense": { // 성벽 선의 결속 — 최저 아군에 결속(그 아군 피격 시 50/50 분담: applyDamage)
+      const others = aliveParty().filter((a) => a !== unit && a.hp < a.maxHp);
+      const ally = others.sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+      if (!ally) return false;
+      ally.protectedBy = unit.instanceId; // 그 아군이 받는 피해의 50%를 성벽이 대신
+      grantShieldTo(unit, ally, L.shield);
+      applyStatus(ally, { type: "mark", duration: 1 });
+      playSupportFx({ casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind, guardInstanceId: ally.instanceId });
+      return true;
+    }
+    case "snipeHeal": { // 치유궁 치유사격
+      const t = selectArcherTarget(aliveEnemies());
+      if (!t) return false;
+      performAttack(unit, t, { mult: L.mult, lineType: "ranged", skill: meta });
+      const ally = lowestRatioAllyHurt(0.95);
+      if (ally) {
+        const amt = healUnit(ally, Math.round(unit.atk * L.healFactor));
+        if (amt > 0) playSupportFx({ casterInstanceId: unit.instanceId, text: null, kind: "heal", heals: [{ targetInstanceId: ally.instanceId, amount: amt }] });
+      }
+      return true;
+    }
+    case "cleanse": { // 정화사 정화
+      const ally = lowestRatioAllyHurt(1) || aliveParty().find((a) => (a.statuses || []).some((s) => ["poison", "atkDown", "slow"].includes(s.type)));
+      if (!ally) return false;
+      const removed = removeNegStatus(ally);
+      const amt = healUnit(ally, Math.round(unit.atk * L.healFactor));
+      if (removed) grantShieldTo(unit, ally, L.shield);
+      playSupportFx({
+        casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind,
+        heals: amt > 0 ? [{ targetInstanceId: ally.instanceId, amount: amt }] : [],
+        guardInstanceId: removed ? ally.instanceId : null,
+      });
+      return true;
+    }
+    case "charge": { // 마도/현자 — 집중 → 광역 폭발 (2행동, 무한 방지)
+      if (!unit.charging) {
+        unit.charging = true;
+        skillShout(unit, L.chargeName + "!", meta.kind);
+        pushLog(`${unit.name}${josa(unit.name, "이가")} ${L.chargeName}…`);
+        if (L.allyHaste) {
+          const pool = aliveParty().filter((a) => a !== unit);
+          shuffle(pool).slice(0, L.allyHaste.count).forEach((a) => { a.actionGauge += 100 * L.allyHaste.pct; });
+        }
+        return true;
+      }
+      unit.charging = false;
+      const targets = aliveEnemies();
+      targets.forEach((t, i) =>
+        performAttack(unit, t, { mult: L.mult, lineType: "ranged", skill: i === 0 ? { name: L.releaseName, kind: meta.kind } : undefined, noShout: i !== 0 })
+      );
+      pushLog(`${unit.name}${josa(unit.name, "이가")} ${L.releaseName}!`);
+      return true;
+    }
+    case "rhythmTempo": { // 바드 리듬&템포
+      if (aliveEnemies().length === 0) return false;
+      const allies = aliveParty().filter((a) => a !== unit);
+      const ally = (allies.length ? allies : [unit])[Math.floor(Math.random() * (allies.length || 1))];
+      applyStatus(ally, { type: "rhythm", duration: 1 });
+      aliveEnemies()
+        .slice()
+        .sort((a, b) => (b.actionGauge || 0) - (a.actionGauge || 0))
+        .slice(0, L.enemyTempo)
+        .forEach((e) => {
+          e.actionGauge = Math.max(0, (e.actionGauge || 0) - 100 * L.drainPct);
+          applyStatus(e, { type: "slow", duration: 1 });
+        });
+      playSupportFx({ casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind, guardInstanceId: ally.instanceId });
+      return true;
+    }
+    case "taunt": { // 수문장 도발
+      if (hasStatus(unit, "taunt")) return false; // 이미 도발 중이면 기본 공격
+      applyStatus(unit, { type: "taunt", duration: L.turns });
+      if (L.alsoStrike) {
+        const t = selectAttackTarget(aliveEnemies());
+        if (t) performAttack(unit, t, { noShout: true });
+      }
+      playSupportFx({ casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind, guardInstanceId: unit.instanceId });
+      return true;
+    }
+    case "aim": { // 추적자 조준 → 추격 (2행동)
+      if (!unit.aimTarget) {
+        const t = highHpEnemy();
+        if (!t) return false;
+        unit.aimTarget = t.instanceId;
+        unit.aimFullHp = t.hp >= t.maxHp;
+        applyStatus(t, { type: "mark", duration: 2 });
+        skillShout(unit, meta.name + "!", meta.kind);
+        pushLog(`${unit.name}${josa(unit.name, "이가")} ${t.name}${josa(t.name, "을를")} 조준했다.`);
+        return true;
+      }
+      const t = aliveEnemies().find((e) => e.instanceId === unit.aimTarget);
+      unit.aimTarget = null;
+      if (!t) return false; // 이미 처치됨 → 기본 공격
+      const mult = L.mult + (unit.aimFullHp ? L.fullHpBonus : 0);
+      performAttack(unit, t, { mult, lineType: "ranged", skill: { name: L.releaseName, kind: meta.kind } });
+      return true;
+    }
+    case "pierce": { // 용창 관통 (전열 + 후열, 처치 시 1회 추가 — 무한 방지)
+      const target = frontEnemies()[0] || aliveEnemies()[0];
+      if (!target) return false;
+      performAttack(unit, target, { mult: L.mult, skill: meta });
+      const back = aliveEnemies().filter((e) => e.role !== "front" && e !== target);
+      if (back.length) {
+        performAttack(unit, back[0], { mult: L.mult * 0.7, lineType: "ranged", noShout: true });
+        if (back[0].isDead) {
+          const more = aliveEnemies().filter((e) => e.role !== "front");
+          if (more.length) performAttack(unit, more[0], { mult: L.mult * 0.7, lineType: "ranged", noShout: true });
+        }
+      }
+      return true;
+    }
+    case "sanctuary": { // 성황 — 도발 보유 + (저체력 아군 시) 1회 파티 피해 무효
+      if (!hasStatus(unit, "taunt")) applyStatus(unit, { type: "taunt", duration: 1 });
+      const allies = aliveParty();
+      const lowExists = allies.some((a) => a.hp / a.maxHp < L.allyHpThreshold);
+      if (lowExists && !unit.sanctUsed) {
+        unit.sanctUsed = true;
+        allies.forEach((a) => { a.damageImmune = true; });
+        playSupportFx({
+          casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind,
+          heals: allies.map((a) => ({ targetInstanceId: a.instanceId, amount: 0 })),
+        });
+        pushLog(`${unit.name}${josa(unit.name, "이가")} 성역을 펼쳤다. 파티 피해 1회 무효.`);
+        return true;
+      }
+      return false; // 성역 미발동 — 도발만 갱신하고 기본 공격
     }
     default:
       return false;
   }
+}
+
+// 보조: 일정 비율 미만으로 "피해 입은" 최저 아군(없으면 null) — 확장 스킬 공용.
+function lowestRatioAllyHurt(maxRatio) {
+  return lowestRatioAlly(maxRatio);
+}
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 
 // 스킬 보조 셀렉터 ---------------------------------------------------------
@@ -629,9 +899,13 @@ function grantShieldTo(caster, target, amount) {
   target.shield = Math.max(target.shield || 0, amount);
 }
 
-// Combat Grammar Polish 02 — 피해 적용: shield 우선 흡수 → 초과분만 HP. 사망 판정은 HP 기준.
-//   poison/기본 공격/교란 등 모든 피해가 이 경로를 탄다(공통). 음수 방지.
-function applyDamage(target, dmg) {
+// Combat Grammar Polish 02 — 실제 피해 적용(raw): 성역 1회 무효 → shield 흡수 → 초과분 HP.
+//   결속/반격 무한연쇄 차단을 위해 "분배된 피해"는 항상 이 raw 경로로만 적용된다(재분배 없음).
+function dealRaw(target, dmg) {
+  if (target.damageImmune) { // First Class Expansion 01: 성역(성황) 1회 피해 무효
+    target.damageImmune = false;
+    return;
+  }
   let remaining = Math.max(0, dmg);
   const sh = target.shield || 0;
   if (sh > 0) {
@@ -640,6 +914,42 @@ function applyDamage(target, dmg) {
     remaining -= absorbed;
   }
   if (remaining > 0) target.hp -= remaining;
+}
+
+// 분배된 피해로 사망한 유닛(결속 파트너 등) 정리 — 호출부가 못 보는 사망을 여기서 마킹.
+function killIfDead(unit) {
+  if (unit && !unit.isDead && unit.hp <= 0) {
+    unit.hp = 0;
+    unit.isDead = true;
+    pushLog(`${unit.name}${josa(unit.name, "이가")} 쓰러졌다.`);
+  }
+}
+
+// First Class Expansion 01A — 피해 적용 + 결속 피해 분배.
+//   금제 악의 결속: 금제 60% / 결속 대상(적) 40%.  성벽 선의 결속: 대상 50% / 성벽 50%.
+//   분배분은 dealRaw로만 적용 → 한 피해 이벤트당 분배 1회, 무한 연쇄 없음. 연결 사망 시 링크 해제.
+function applyDamage(target, dmg) {
+  if (target.bondOffenseTarget) {
+    const partner = gameState.enemies.find((e) => e.instanceId === target.bondOffenseTarget && !e.isDead);
+    if (partner) {
+      dealRaw(target, dmg * 0.6);
+      dealRaw(partner, dmg * 0.4);
+      killIfDead(partner);
+      return;
+    }
+    target.bondOffenseTarget = null;
+  }
+  if (target.protectedBy) {
+    const wall = gameState.party.find((u) => u.instanceId === target.protectedBy && !u.isDead);
+    if (wall && wall !== target) {
+      dealRaw(target, dmg * 0.5);
+      dealRaw(wall, dmg * 0.5);
+      killIfDead(wall);
+      return;
+    }
+    target.protectedBy = null;
+  }
+  dealRaw(target, dmg);
 }
 
 // 교란: 게이지 -25(0 미만 방지) + 아주 약한 피해. 보라/분홍 왜곡선.
@@ -713,6 +1023,9 @@ function performSanctuary(saint, meta) {
 
 function selectAttackTarget(pool) {
   const alive = pool.filter((u) => !u.isDead);
+  // First Class Expansion 01: 도발(taunt) 대상이 있으면 우선 공격(수문장/성황). 적은 taunt를 안 가짐.
+  const taunting = alive.filter((u) => hasStatus(u, "taunt"));
+  if (taunting.length > 0) return taunting[0];
   const front = alive.filter((u) => u.role === "front");
   return front.length > 0 ? front[0] : alive[0] ?? null;
 }
@@ -766,10 +1079,22 @@ function attackLineType(attacker) {
 //   noShout = 외침 생략(수호 후 동반 공격 등). 미지정이면 기본 공격 "공격!".
 function performAttack(attacker, target, opts = {}) {
   // Status & Effect Foundation 01: guard — 받는 피해 최소 보정(음수/0 방지, 최소 1).
+  // First Class Expansion 01: atkDown(워든 습격) — 공격자의 공격력 일시 감소.
+  let atk = attacker.atk;
+  const ad = Array.isArray(attacker.statuses) && attacker.statuses.find((s) => s.type === "atkDown");
+  if (ad) atk = Math.max(1, Math.round(atk * (1 - (ad.pct || 0))));
+
   const base = hasStatus(target, "guard")
-    ? Math.max(1, attacker.atk - GUARD_DAMAGE_REDUCTION)
-    : attacker.atk;
-  const damage = Math.max(1, Math.round(base * (opts.mult || 1)));
+    ? Math.max(1, atk - GUARD_DAMAGE_REDUCTION)
+    : atk;
+  let mult = opts.mult || 1;
+  // rhythm(바드 리듬): 다음 공격 무조건 치명 → 소모. crit 옵션도 동일 계열.
+  if (hasStatus(attacker, "rhythm")) {
+    mult *= 1.6;
+    attacker.statuses = attacker.statuses.filter((s) => s.type !== "rhythm");
+  }
+  if (opts.crit) mult *= 1.5;
+  const damage = Math.max(1, Math.round(base * mult));
   // Combat Grammar Polish 02: 보호막 우선 흡수 → 초과분만 HP.
   applyDamage(target, damage);
 
@@ -798,6 +1123,38 @@ function performAttack(attacker, target, opts = {}) {
     target.isDead = true;
     pushLog(`${target.name}${josa(target.name, "이가")} 쓰러졌다.`);
   }
+
+  // First Class Expansion 01A — 파수궁 보복: 적이 후열 아군을 피격하면 살아있는 파수궁이 즉시
+  //   1회 원거리 보복. opts.isCounter면 발동 안 함(반격의 반격 금지) → 무한 연쇄 차단.
+  if (!opts.isCounter && attacker.team === "enemy" && gameState.party.includes(target) && target.role === "back") {
+    triggerWatchbowCounter(attacker);
+  }
+}
+
+// 후열 아군 피격 → 파수궁 보복(1회). 보복 자체는 적 대상이라 다시 보복을 트리거하지 않는다.
+function triggerWatchbowCounter(enemyAttacker) {
+  if (!enemyAttacker || enemyAttacker.isDead) return;
+  const watchbow = gameState.party.find((u) => !u.isDead && u.id === "watchbow");
+  if (!watchbow) return;
+  performAttack(watchbow, enemyAttacker, {
+    mult: 1.0, lineType: "ranged", skill: skillOf("watchbow"), isCounter: true,
+  });
+}
+
+// 01A — 성직자 쌍치유: HP 비율 최저 2인 회복(사제와 동일 회복량). 단일 큰 회복 아님.
+function performDualHeal(saint, meta) {
+  const targets = aliveParty()
+    .slice()
+    .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)
+    .slice(0, 2);
+  const amount = Math.round(saint.atk * 1.5) + (gameState.run.bonuses.heal || 0);
+  const heals = [];
+  targets.forEach((a) => {
+    const h = healUnit(a, amount);
+    if (h > 0) heals.push({ targetInstanceId: a.instanceId, amount: h });
+  });
+  pushLog(`${saint.name}${josa(saint.name, "이가")} 두 아군을 치유했다.`);
+  playSupportFx({ casterInstanceId: saint.instanceId, text: meta.name + "!", kind: meta.kind, heals });
 }
 
 function performHeal(healer, target, opts = {}) {
