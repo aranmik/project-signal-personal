@@ -1,4 +1,4 @@
-import { stagePlan, BEGINNER_THEME } from "../data/stages.js";
+import { stagePlan, BEGINNER_THEME, STAGE_THEMES } from "../data/stages.js";
 import { availableFusions, slotPreference } from "../data/jobs.js";
 import { REWARDS } from "../data/rewards.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
@@ -26,11 +26,13 @@ export function renderGame(state) {
   const recruitPanel = document.getElementById("recruit-panel");
   const arrangePanel = document.getElementById("arrange-panel");
   const codexScreen = document.getElementById("codex-screen");
+  const stageSelect = document.getElementById("stage-select");
   const battleView = document.getElementById("battle-view");
 
   titleScreen.hidden = true;
   jobSelect.hidden = true;
   if (codexScreen) codexScreen.hidden = true;
+  if (stageSelect) stageSelect.hidden = true;
   growthPanel.hidden = true;
   fusionPanel.hidden = true;
   fusionResultPanel.hidden = true;
@@ -46,6 +48,15 @@ export function renderGame(state) {
   // Game Flow Foundation 01: 직업 선택 화면 (정적 카드 — 선택 상태는 main.js가 관리)
   if (state.screen === "jobSelect") {
     jobSelect.hidden = false;
+    return;
+  }
+
+  // Start Flow UX Polish 01: 스테이지 테마 선택 — 초보자의 길만 진입 가능.
+  if (state.screen === "stageSelect") {
+    if (stageSelect) {
+      stageSelect.hidden = false;
+      renderStageSelect();
+    }
     return;
   }
 
@@ -214,20 +225,50 @@ function renderFusionResultPanel(state) {
   if (!fusion) return;
   const [m1, m2] = fusion.materials;
 
+  // Start Flow UX Polish 01 — 합체 성공 강조: 큰 프레임 + 결과 sparkle/glow + 진입 축하 파티클.
+  //   프레임 안 직업명 텍스트는 계속 제거(아바타 단독). 결과 프레임만 특별 강조.
   document.getElementById("fusion-result-body").innerHTML = `
     <div class="flow-kicker">합체 성공</div>
     <h2 class="flow-heading">${jobName(fusion.result)} 탄생!</h2>
-    <div class="fusion-cast">
-      <span class="cast-card cast-mat" aria-label="${jobName(m1)}">${jobAvatarHTML(m1, "av-fit--cast")}</span>
+    <div class="fusion-cast fusion-cast--big">
+      <span class="cast-card cast-mat" aria-label="${jobName(m1)}">${jobAvatarHTML(m1, "av-fit--castbig")}</span>
       <span class="cast-plus">+</span>
-      <span class="cast-card cast-mat" aria-label="${jobName(m2)}">${jobAvatarHTML(m2, "av-fit--cast")}</span>
+      <span class="cast-card cast-mat" aria-label="${jobName(m2)}">${jobAvatarHTML(m2, "av-fit--castbig")}</span>
       <span class="cast-arrow">→</span>
-      <span class="cast-card cast-result" aria-label="${jobName(fusion.result)}">${jobAvatarHTML(fusion.result, "av-fit--cast")}</span>
+      <span class="cast-card cast-result" aria-label="${jobName(fusion.result)}">
+        ${jobAvatarHTML(fusion.result, "av-fit--castbig")}
+        <span class="cast-glow" aria-hidden="true"></span>
+        <span class="cast-sparkles" aria-hidden="true"></span>
+      </span>
     </div>
     <p class="flow-note">${fusion.birthLine || "두 영웅의 힘이 하나로 모였다."}<br>새로운 영웅 <b>${jobName(fusion.result)}</b> — 파티에 합류했다.</p>
     <p class="flow-note flow-note--dim">빈자리를 채울 새 동료를 영입하세요.</p>
     <button type="button" id="fusion-continue" data-fusion-continue>동료 영입하기</button>
   `;
+  spawnFusionCelebration();
+}
+
+// Start Flow UX Polish 01 — 합체 성공 진입 축하 연출(짧고 가벼운 confetti + 결과 sparkle).
+//   결과 프레임 안 .cast-sparkles에 작은 파티클을 잠깐 띄우고 animationend로 정리(누적 방지).
+//   반복 합체 시 이전 파티클을 먼저 비워 잔여가 남지 않게 한다.
+function spawnFusionCelebration() {
+  const host = document.querySelector("#fusion-result-body .cast-sparkles");
+  if (!host) return;
+  host.innerHTML = ""; // 이전 잔여 정리
+  const COLORS = ["#f0d36a", "#9fe6cf", "#9ad4f0", "#ffd2d8", "#c7a2ff"];
+  const N = 14;
+  for (let i = 0; i < N; i++) {
+    const p = document.createElement("span");
+    p.className = "cast-confetti";
+    const ang = (Math.PI * 2 * i) / N + Math.random() * 0.4;
+    const dist = 38 + Math.random() * 30;
+    p.style.setProperty("--dx", `${Math.cos(ang) * dist}px`);
+    p.style.setProperty("--dy", `${Math.sin(ang) * dist - 10}px`);
+    p.style.background = COLORS[i % COLORS.length];
+    p.style.animationDelay = `${Math.random() * 90}ms`;
+    p.addEventListener("animationend", () => p.remove());
+    host.appendChild(p);
+  }
 }
 
 // 영입 화면: 랜덤 후보(진입 시 확정, 최대 3) / 후보별 배치 예정 슬롯(선호 규칙) 안내.
@@ -240,12 +281,11 @@ function renderRecruitPanel(state) {
   const targetSlot = (id) => slotPreference(id).find((k) => !f[k]);
   const rows = candidates.length
     ? candidates.map((id) =>
+        // Start Flow UX Polish 01: 좌/중/우 3열 카드(#recruit-list grid). 카드 내부는 세로 구성.
         `<button type="button" class="recruit-card" data-recruit="${id}">
           <span class="recruit-ava">${jobAvatarHTML(id, "av-fit--recruit")}</span>
-          <span class="recruit-text">
-            <span class="job-name">${jobName(id)}</span>
-            <span class="recruit-slot">${SLOT_NAMES[targetSlot(id)] || ""} 배치</span>
-          </span>
+          <span class="job-name">${jobName(id)}</span>
+          <span class="recruit-slot">${SLOT_NAMES[targetSlot(id)] || ""}</span>
         </button>`
       ).join("")
     : `<p class="flow-note">영입 가능한 동료가 없습니다.</p>`;
@@ -288,6 +328,36 @@ export function renderArrangePanel(state) {
     <p class="flow-note">슬롯을 눌러 위치를 바꾸고, 다음 전투를 준비하세요.</p>
     <div id="arrange-grid">${boxes}</div>
     <button type="button" id="arrange-done" data-arrange-done>다음 스테이지</button>
+  `;
+}
+
+// Start Flow UX Polish 01 — 스테이지 테마 선택 화면.
+//   5개 테마를 보여주되 초보자의 길만 진입 가능(나머지 잠금/dimmed). 전투 로직 불변.
+function renderStageSelect() {
+  const host = document.getElementById("stage-select-inner");
+  if (!host) return;
+
+  const cards = STAGE_THEMES.map((t) => {
+    const lock = t.locked
+      ? `<span class="theme-lock">잠김</span>`
+      : `<span class="theme-go">▶</span>`;
+    return `<button type="button" class="theme-card${t.locked ? " locked" : ""}"
+        data-theme="${t.id}"${t.locked ? " disabled aria-disabled=\"true\"" : ""}>
+      <span class="theme-name">${t.name}</span>
+      <span class="theme-desc">${t.desc}</span>
+      ${lock}
+    </button>`;
+  }).join("");
+
+  host.innerHTML = `
+    <div class="stage-header">
+      <button type="button" id="stage-back" data-stage-back>← 타이틀로</button>
+      <div class="stage-title-wrap">
+        <h2>스테이지 선택</h2>
+        <p>지금은 <b>초보자의 길</b>만 열려 있습니다. 다른 길은 곧 공개됩니다.</p>
+      </div>
+    </div>
+    <div class="theme-list">${cards}</div>
   `;
 }
 

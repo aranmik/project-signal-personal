@@ -167,6 +167,19 @@ export function goTitle() {
   renderGame(gameState);
 }
 
+// Start Flow UX Polish 01 — 타이틀/파티준비 → 스테이지 테마 선택 화면.
+//   실제 진입 가능 테마는 초보자의 길 하나뿐(나머지 잠금). 전투 로직은 불변.
+export function showStageSelect() {
+  clearInterval(tickTimer);
+  tickTimer = null;
+  clearFinish();
+  gameState.battle.isRunning = false;
+  gameState.battle.status = "ready";
+  gameState.run.result = null;
+  gameState.screen = "stageSelect";
+  renderGame(gameState);
+}
+
 // Job Codex Entry Foundation — 타이틀 → 직업 도감(관람용 화면).
 //   전투/선택과 분리된 창구. 여기서 직업을 골라도 파티/게임에 아무 영향이 없다.
 export function showCodex() {

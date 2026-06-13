@@ -28,12 +28,21 @@
         <div id="codex-inner"></div>
       </section>
 
+      <!-- Start Flow UX Polish 01: 스테이지 테마 선택 (초보자의 길만 진입, 나머지 잠금) -->
+      <section id="stage-select" hidden>
+        <div id="stage-select-inner"></div>
+      </section>
+
       <!-- Game Flow 01 → Fusion Flow 01: 직업 선택 + 배치 화면
            기본 6직업 중 3명 선택 → 전열2/후열2 슬롯 배치 → 모험 시작.
            30종 확장은 카드 추가만으로 가능. 배치 상태는 main.js가 관리. -->
       <section id="job-select" hidden>
         <div id="job-select-inner">
-          <p id="job-kicker">초보자의 길</p>
+          <!-- Start Flow UX Polish 01: 파티 준비 화면 좌상단 → 스테이지 선택 복귀 -->
+          <div id="job-topbar">
+            <button id="to-stage-btn" type="button">← 스테이지 선택</button>
+            <p id="job-kicker">초보자의 길</p>
+          </div>
           <h2 id="job-heading">동료 3명을 선택하세요</h2>
           <!-- Combat Readability Polish 02: data-avatar = 전투 유닛과 같은 avatarKey 참조 hook
                (.job-ava.avatar-{key} placeholder — 추후 루다 아바타를 카드/전투 공통 적용) -->

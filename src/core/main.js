@@ -6,6 +6,7 @@ import {
   startRun, goTitle, applyReward, cycleSpeed, startPreview, showJobSelect,
   applyFusion, skipFusion, applyRecruit, skipRecruit,
   swapFormationSlots, confirmArrange, continueAfterFusion, showCodex,
+  showStageSelect,
 } from "./battle.js";
 
 console.log("Project Signal Personal — init", gameState);
@@ -20,8 +21,18 @@ document.querySelectorAll("#job-grid .job-card").forEach((card) => {
   if (slot) slot.innerHTML = avatarFigureHTML(spec.sr, spec.parts, "av-fit--card");
 });
 
-// Game Flow Foundation 01: 타이틀 → 직업 선택 → 런 시작.
-document.getElementById("title-start").addEventListener("click", showJobSelect);
+// Start Flow UX Polish 01: 타이틀 → 스테이지 선택 → (초보자의 길) → 직업 선택.
+document.getElementById("title-start").addEventListener("click", showStageSelect);
+
+document.getElementById("stage-select").addEventListener("click", (e) => {
+  if (e.target.closest("[data-stage-back]")) { goTitle(); return; }
+  const card = e.target.closest(".theme-card");
+  if (!card || card.classList.contains("locked")) return; // 잠금 테마는 진입 불가
+  if (card.dataset.theme === "beginner") showJobSelect();
+});
+
+// 파티 준비 화면 좌상단 → 스테이지 선택으로 복귀.
+document.getElementById("to-stage-btn").addEventListener("click", showStageSelect);
 
 // Job Codex Entry Foundation: 타이틀 → 직업 도감 / 도감 → 타이틀.
 document.getElementById("title-codex").addEventListener("click", showCodex);

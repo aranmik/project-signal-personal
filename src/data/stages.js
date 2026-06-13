@@ -26,6 +26,17 @@ export function stagePlan(stage) {
   return BEGINNER_THEME.stages[stage - 1] || BEGINNER_THEME.stages[0];
 }
 
+// Start Flow UX Polish 01 — 스테이지 테마 선택 목록(관람/구성 안내용).
+//   현재 실제 플레이 가능 테마는 "초보자의 길"(beginner) 하나뿐 — 나머지 4개는 잠금 표시만.
+//   잠금 테마는 클릭해도 진입 불가(실제 적 구성/전투 구현 없음). 미래 테마 추가 자리.
+export const STAGE_THEMES = [
+  { id: "beginner",  name: "초보자의 길",   desc: "슬라임과 고블린의 길 — 첫 모험.", locked: false },
+  { id: "goblin",    name: "고블린 소굴",   desc: "고블린 무리가 모여드는 굴.",       locked: true },
+  { id: "naga",      name: "나가의 늪지",   desc: "독과 안개가 깔린 늪.",             locked: true },
+  { id: "troll",     name: "트롤의 대지",   desc: "거대한 트롤이 버티는 황야.",        locked: true },
+  { id: "assassin",  name: "암살자 집단",   desc: "그림자 속의 칼날들.",             locked: true },
+];
+
 // Fusion Flow Foundation 01 — 스테이지 클리어 이벤트(보상 선택 후 진입).
 //   S3/S8: 합체 기회. 공통 규칙(battle.js applyFusion): 합체를 "실행"하면 인원이 1명
 //   줄어드므로 반드시 동료 영입으로 보충한다. 합체 없음/스킵이면 영입도 없다.
