@@ -506,6 +506,10 @@ const AVATAR_PARTS = {
   wolf: ["shadow", "tail", "wolf-body", "leg one", "leg two", "wolf-head", "ear left", "ear right", "snout", "eye"],
 };
 
+// Beginner Theme Actor 01 — 조합형 bt 액터의 고정 6파츠(개체/역할/등급은 btClass로 결정).
+//   R&D avatar-museum-01의 .bt 구조(shadow/extra/role/body/head/ears)를 그대로 가져온다.
+const BT_PARTS = ["shadow", "extra", "role", "body", "head", "ears"];
+
 // Tempo Smooth 01: 매 tick innerHTML 전체 교체 → instanceId 키 기반 reconcile.
 //   유닛 DOM(아바타/파츠)을 유지해 idle 애니메이션이 tick마다 리셋되지 않게 한다.
 //   변하는 값(HP/속도 게이지/사망 상태)만 기존 요소에 갱신 → 전투 흐름이 끊기지 않음.
@@ -749,9 +753,12 @@ function createFieldUnit(unit) {
       ? `hero-slot-${unit.slotKey}`
       : `${id}-pos`;
   const sizeClass = unit.sizeClass ? ` ${unit.sizeClass}` : "";
+  // Beginner Theme Actor 01: bt 액터는 .unit에 is-bt 마커 — 정예/보스 컨테이너 스케일을 bt 전용으로
+  //   오버라이드(bt-elite/bt-boss가 파츠를 이미 키우므로 mon-elite/mon-boss 과확대 방지).
+  const btUnit = unit.btClass ? " is-bt" : "";
 
   const wrap = document.createElement("div");
-  wrap.className = `unit ${unit.team} ${posClass}${sizeClass} ${facingClass}${deadClass}`;
+  wrap.className = `unit ${unit.team} ${posClass}${sizeClass}${btUnit} ${facingClass}${deadClass}`;
   wrap.dataset.instanceId = unit.instanceId;
   // Party & Formation Integrity 01: 슬롯-좌표 계약 추적 키(reconcile에서 재배치 감지용)
   if (unit.team === "party") wrap.dataset.slotKey = unit.slotKey || "";
@@ -769,6 +776,12 @@ function createFieldUnit(unit) {
   if (isParty) {
     const spec = avatarSpec(avatarKey);
     figureHTML = avatarFigureHTML(spec.sr, spec.parts);
+  } else if (unit.btClass) {
+    // Beginner Theme Actor 01: 조합형 bt 액터 — .monster.bt.bt-actor에 개체/역할/등급 클래스를 얹고
+    //   고정 6파츠를 그린다. 박스 76×82(R&D 좌표계 그대로). 아군 SR 아바타와 동일하게 .av-fit
+    //   래퍼로 전투 scale(0.8)을 받아 유닛 박스에 맞춘다(idle은 자식 .monster가 담당, 합성).
+    const parts = BT_PARTS.map((p) => `<span class="part ${p}"></span>`).join("");
+    figureHTML = `<div class="av-fit"><div class="monster bt bt-actor ${unit.btClass} job-${id}">${parts}</div></div>`;
   } else {
     const parts = (AVATAR_PARTS[visual] || [])
       .map((p) => `<span class="part ${p}"></span>`)
@@ -838,6 +851,15 @@ const SOURCE_ANCHORS = {
   wolf: { fx: 0.16, fy: 0.52 },    // snout (적은 좌측 대면)
   slime: { fx: 0.5, fy: 0.55 },    // body front
   goblin: { fx: 0.5, fy: 0.52 },
+  // Beginner Theme Actor 01: bt 액터 시작점(적은 좌하단 영웅을 대면) — 없으면 중심 fallback.
+  bear: { fx: 0.42, fy: 0.5 },     // 곰 몸통/방패 앞
+  fox: { fx: 0.3, fy: 0.5 },       // 잎여우 앞발/주둥이
+  bird: { fx: 0.32, fy: 0.42 },    // 깃새 부리/사선
+  dewslime: { fx: 0.5, fy: 0.55 }, // 슬라임 몸 앞
+  lamb: { fx: 0.45, fy: 0.5 },     // 풀양 앞
+  owl: { fx: 0.5, fy: 0.45 },      // 정예 — 중앙 상체
+  deer: { fx: 0.42, fy: 0.46 },    // 정예 — 앞쪽
+  lion: { fx: 0.5, fy: 0.5 },      // 보스 — 몸 중앙
 };
 const TARGET_HIT = { fx: 0.5, fy: 0.5 };       // body / hit-point
 const TARGET_HEAL = { fx: 0.5, fy: 0.32 };     // heal-point (상단)

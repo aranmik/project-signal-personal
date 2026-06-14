@@ -66,7 +66,10 @@ export function createStageEnemies(stage) {
     const u = createUnit(UNIT_TEMPLATES.enemies[key], `st${stage}-${key}-${i}`);
     u.slot = rank === "boss" ? "boss" : i;
     if (rank && RANK_OVERRIDES[rank]) {
-      Object.assign(u, RANK_OVERRIDES[rank], { name: RANK_PREFIX[rank] + u.name });
+      // Beginner Theme Actor 01: 고유명 정예/보스(keepName)는 "정예/보스 " 접두를 붙이지 않는다
+      //   (HUD가 ELITE/BOSS 라벨을 따로 표시 — "정예 숲올빼미 현자" 같은 중복 방지). 수치만 override.
+      const name = u.keepName ? u.name : RANK_PREFIX[rank] + u.name;
+      Object.assign(u, RANK_OVERRIDES[rank], { name });
     }
     return u;
   });

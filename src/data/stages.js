@@ -4,21 +4,26 @@
 //   정예/보스 수치·표현(sizeClass/tier)은 state.js createStageEnemies에서 부여 —
 //   Boss Presence Foundation의 presence/hit/death 기반을 그대로 재사용한다.
 //   테마/스테이지 구조는 미래 테마 추가(중급자 등) 시 이 형태로 늘린다.
+// Beginner Theme Actor 01 — 초보자 "동물 연합 / 새싹 숲" 라인업으로 교체.
+//   고블린 제외(추후 고블린 전용 테마). 소형 5종(곰방패/잎여우/깃새/이슬말랑/풀양) 분산,
+//   정예 2종(S5 숲올빼미 현자, S9 사슴수호자), 보스(S10 새싹숲 사자왕).
+//   tier 구조(정예 위치 수·보스 1종)·적 수치(RANK_OVERRIDES)는 기존 그대로 — "얼굴 교체"이며
+//   전투 밸런스/Run Structure 변경이 아니다. 이벤트(S3 합체/S5 영입/S8 합체)는 stage 번호 기준이라 불변.
 export const BEGINNER_THEME = {
   id: "beginner",
   name: "초보자의 길",
   maxStage: 10,
   stages: [
-    { tier: "normal", label: "일반 전투", enemies: ["slime", "slime"] },
-    { tier: "normal", label: "일반 전투", enemies: ["slime", "goblin"] },
-    { tier: "normal", label: "일반 전투", enemies: ["slime", "goblin", "wolf"] },
-    { tier: "normal", label: "일반 전투", enemies: ["goblin", "goblin", "slime"] },
-    { tier: "elite",  label: "정예 전투", enemies: ["goblin:elite", "slime", "goblin"] },
-    { tier: "normal", label: "일반 전투", enemies: ["wolf", "slime", "slime"] },
-    { tier: "normal", label: "일반 전투", enemies: ["goblin", "wolf", "slime"] },
-    { tier: "normal", label: "일반 전투", enemies: ["slime", "goblin", "wolf", "goblin"] },
-    { tier: "normal", label: "일반 전투", enemies: ["wolf", "wolf", "goblin", "slime"] },
-    { tier: "boss",   label: "보스 전투", enemies: ["goblin:boss"] },
+    { tier: "normal", label: "일반 전투", enemies: ["bear", "dewslime"] },
+    { tier: "normal", label: "일반 전투", enemies: ["fox", "bird"] },
+    { tier: "normal", label: "일반 전투", enemies: ["bear", "lamb", "dewslime"] },
+    { tier: "normal", label: "일반 전투", enemies: ["fox", "bird", "lamb"] },
+    { tier: "elite",  label: "정예 전투", enemies: ["owl:elite", "dewslime", "lamb"] },
+    { tier: "normal", label: "일반 전투", enemies: ["bear", "fox", "bird"] },
+    { tier: "normal", label: "일반 전투", enemies: ["dewslime", "lamb", "fox"] },
+    { tier: "normal", label: "일반 전투", enemies: ["bear", "fox", "bird", "dewslime"] },
+    { tier: "elite",  label: "정예 전투", enemies: ["deer:elite", "lamb"] },
+    { tier: "boss",   label: "보스 전투", enemies: ["lion:boss"] },
   ],
 };
 

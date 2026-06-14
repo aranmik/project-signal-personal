@@ -144,6 +144,8 @@ export const UNIT_TEMPLATES = {
   },
 
   enemies: {
+    // 레거시 임시 몬스터(슬라임/고블린/늑대) — 프리뷰/dev 및 향후 고블린 전용 테마용으로 보존.
+    //   초보자 테마(stages.js)는 더 이상 이들을 쓰지 않는다(Beginner Theme Actor 01에서 교체).
     slime: {
       id: "slime",
       name: "슬라임",
@@ -176,5 +178,20 @@ export const UNIT_TEMPLATES = {
       atk: 10,
       speed: 8,
     },
+
+    // Beginner Theme Actor 01 — 초보자 "동물 연합 / 새싹 숲" 라인업(루다 presentation-lab avatar-museum-01).
+    //   btClass = R&D 조합형 CSS 클래스(bt-{개체} bt-{역할} [bt-elite|bt-boss]). render는 .monster.bt.bt-actor에
+    //   이 클래스를 얹고 6파츠(shadow/extra/role/body/head/ears)를 그린다(아바타 박스 76×82 = R&D 동일).
+    //   수치는 기존 임시 소형/정예/보스 범위 내(밸런스 변경 아님 — 얼굴 교체). 정예/보스는 stages의
+    //   :elite/:boss 접미사로 RANK_OVERRIDES(170/520 등) 적용 → 기존 정예/보스 난이도 그대로.
+    //   keepName: 고유명 정예/보스는 "정예/보스" 접두 중복을 막는다(HUD가 ELITE/BOSS 라벨을 따로 표시).
+    bear:     { id: "bear",     name: "곰방패",        team: "enemy", type: "bear",     btClass: "bt-bear bt-tank",                role: "front", maxHp: 60, atk: 6,  speed: 5 },
+    fox:      { id: "fox",      name: "잎여우",        team: "enemy", type: "fox",      btClass: "bt-fox bt-melee",                role: "front", maxHp: 48, atk: 10, speed: 8 },
+    bird:     { id: "bird",     name: "깃새",          team: "enemy", type: "bird",     btClass: "bt-bird bt-ranged",              role: "back",  maxHp: 42, atk: 9,  speed: 9 },
+    dewslime: { id: "dewslime", name: "이슬말랑",      team: "enemy", type: "dewslime", btClass: "bt-slime bt-support",            role: "back",  maxHp: 52, atk: 6,  speed: 6 },
+    lamb:     { id: "lamb",     name: "풀양",          team: "enemy", type: "lamb",     btClass: "bt-lamb bt-healer",              role: "back",  maxHp: 50, atk: 5,  speed: 6 },
+    owl:      { id: "owl",      name: "숲올빼미 현자", team: "enemy", type: "owl",      btClass: "bt-owl bt-elite bt-support", keepName: true, role: "back",  maxHp: 170, atk: 12, speed: 5 },
+    deer:     { id: "deer",     name: "사슴수호자",    team: "enemy", type: "deer",     btClass: "bt-deer bt-elite bt-healer", keepName: true, role: "front", maxHp: 170, atk: 12, speed: 5 },
+    lion:     { id: "lion",     name: "새싹숲 사자왕", team: "enemy", type: "lion",     btClass: "bt-lion bt-boss",            keepName: true, role: "front", maxHp: 520, atk: 15, speed: 5 },
   },
 };
