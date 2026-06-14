@@ -3,7 +3,7 @@ import { createInitialParty, createPreviewEnemies, createStageEnemies, createRou
 import { FUSION_RECIPES, BASE_JOBS, prefersFront, slotPreference } from "../data/jobs.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
-import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, alertnessFromFusions } from "../data/routes.js";
+import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions } from "../data/routes.js";
 import { rewardById } from "../data/rewards.js";
 import { renderGame, playActionFx, playStatusTickFx, playSupportFx } from "../ui/render.js";
 import { skillOf } from "../data/skills.js";
@@ -466,6 +466,8 @@ export function advanceStage(routeType = gameState.run.currentRouteType) {
       partySize: gameState.party.length,
     });
     if (ready.log) gameState.logs.push(ready.log);
+    // Boss Readiness Pressure 02 — 위압 상태(활성/해제)도 진입 시 체감 로그로 알린다.
+    gameState.logs.push(bossMenace(gameState.run.bossKeys || 0).log);
   }
 
   startBattle();
@@ -588,6 +590,15 @@ function performAction(unit) {
   unit.actionCount = (unit.actionCount || 0) + 1;
 
   const isParty = gameState.party.includes(unit);
+
+  // Boss Readiness Pressure 02 — 위압: 사자왕은 행동할 때마다 공격력이 오른다(상한까지). 시간 압박.
+  //   기준 atk(menaceBaseAtk)에 누적 단계를 곱한다 → 장기전이면 미완성 파티가 버티지 못한다.
+  if (!isParty && unit.menace && unit.menace.atkStepPct > 0) {
+    const prev = unit.menaceStacks || 0;
+    unit.menaceStacks = Math.min(prev + 1, unit.menace.atkMaxStacks);
+    unit.atk = Math.max(1, Math.round((unit.menaceBaseAtk || unit.atk) * (1 + unit.menaceStacks * unit.menace.atkStepPct)));
+    if (prev === 0) pushLog(`${unit.name}${josa(unit.name, "이가")} 위압을 두른다 — 시간이 흐를수록 공격이 거세진다.`);
+  }
 
   // 영웅: 스킬 조건을 만족하면 스킬 사용(아니면 기본 공격으로 fallback). 적은 스킬 없음.
   if (isParty && trySkill(unit)) {
@@ -1013,6 +1024,9 @@ function killIfDead(unit) {
 //   금제 악의 결속: 금제 60% / 결속 대상(적) 40%.  성벽 선의 결속: 대상 50% / 성벽 50%.
 //   분배분은 dealRaw로만 적용 → 한 피해 이벤트당 분배 1회, 무한 연쇄 없음. 연결 사망 시 링크 해제.
 function applyDamage(target, dmg) {
+  // Boss Readiness Pressure 02 — 위압 중 사자왕은 받는 피해 감소(모든 피해원 공통: 공격/중독/교란/분배 전 단계).
+  //   최소 1 보장. 위압 비활성(열쇠 2+) 보스에는 menace가 없어 영향 없음.
+  if (target.menace && target.menace.dr > 0) dmg = Math.max(1, dmg * (1 - target.menace.dr));
   if (target.bondOffenseTarget) {
     const partner = gameState.enemies.find((e) => e.instanceId === target.bondOffenseTarget && !e.isDead);
     if (partner) {
@@ -1317,7 +1331,11 @@ function applyFinish(outcome) {
     // Run Structure 01A: 정예 전투 승리 시 보스 열쇠 획득(보스문이 다음 여정 선택지로 열린다).
     if (gameState.run.currentRouteType === "elite") {
       gameState.run.bossKeys += 1;
-      pushLog(`정예를 물리쳤다 — 보스 열쇠 +1 (보유 ${gameState.run.bossKeys}).`);
+      // Boss Readiness Pressure 02 — 첫 열쇠=보스문 개방 / 둘째 열쇠=사자왕 위압 해제. 단계별 체감 로그.
+      const keys = gameState.run.bossKeys;
+      if (keys === 1) pushLog("보스 열쇠를 얻었다 — 새싹 왕의 문이 열린다.");
+      else if (keys === 2) pushLog("두 번째 열쇠가 사자왕의 위압을 걷어냈다. 정예의 시험을 모두 넘었다.");
+      else pushLog(`정예를 물리쳤다 — 보스 열쇠 +1 (보유 ${keys}).`);
     }
     gameState.run.result = "victory";
     gameState.screen = "reward"; // Game Flow 01: 클리어 → 보상 선택 화면

@@ -1,5 +1,5 @@
 import { BEGINNER_THEME, STAGE_THEMES } from "../data/stages.js";
-import { ROUTE_TYPES, bossTimingLabel, bossFury, bossReadinessPressure, PRESSURE_HELP } from "../data/routes.js";
+import { ROUTE_TYPES, bossTimingLabel, bossFury, bossReadinessPressure, bossMenace, PRESSURE_HELP } from "../data/routes.js";
 import { availableFusions, slotPreference } from "../data/jobs.js";
 import { REWARDS } from "../data/rewards.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
@@ -157,8 +157,9 @@ function renderEncounterHud(state) {
     hud.dataset.iid = unit.instanceId;
     hud.dataset.tier = unit.tier;
     // Run Structure 01B — 보스 심도 강화 단계를 라벨에 반영(분노/광폭).
+    // Boss Readiness Pressure 02 — 위압 활성(보스에 menace 메타) 시 라벨에 "· 위압" 추가(분노/광폭과 별개 축).
     const label = unit.tier === "boss"
-      ? (unit.bossFury >= 2 ? "BOSS · 광폭" : unit.bossFury >= 1 ? "BOSS · 분노" : "BOSS")
+      ? (unit.bossFury >= 2 ? "BOSS · 광폭" : unit.bossFury >= 1 ? "BOSS · 분노" : "BOSS") + (unit.menace ? " · 위압" : "")
       : "ELITE";
     hud.innerHTML = `
       <div class="enc-top">
@@ -377,7 +378,16 @@ function renderRoutePanel(state) {
       const warnClass = ready.level >= 2 ? " route-readiness--reckless" : ready.level === 1 ? " route-readiness--hasty" : "";
       const warnTag = ready.label ? ` · <b>${ready.label}</b>` : "";
       if (ready.level > 0) pressureClass = " route-card--boss-pressure";
+      // Boss Readiness Pressure 02 — Elite Key Seal: 열쇠 진행도 + 위압 남음/해제 상태를 카드에서 읽힌다.
+      //   열쇠 1개=문은 열리되 위압 남음(빠르지만 무모) / 열쇠 2개+=위압 해제(정예를 모두 넘은 정상 도전).
+      const menace = bossMenace(state.run.bossKeys || 0);
+      const keysShown = Math.min(state.run.bossKeys || 0, menace.needKeys);
+      if (menace.active) pressureClass = " route-card--boss-pressure";
+      const menaceHtml = menace.active
+        ? `<span class="route-menace route-menace--active"><b>열쇠 ${keysShown}/${menace.needKeys} · 위압 남음</b><br>사자왕이 피해를 덜 받고, 매턴 강해집니다.<br>두 번째 정예를 넘으면 위압 해제</span>`
+        : `<span class="route-menace route-menace--sealed"><b>열쇠 ${keysShown}/${menace.needKeys} · 위압 해제</b><br>정예의 시험을 넘어 사자왕의 가호가 약해졌습니다.</span>`;
       extra = `<span class="route-timing">${bossTimingLabel(state.run.depth)}${furyTag}</span>
+        ${menaceHtml}
         <span class="route-readiness${warnClass}">${ready.current}${warnTag}</span>
         <span class="route-recommend">${ready.recommend}</span>`;
     }
@@ -584,6 +594,8 @@ function renderRunStatus(state) {
     // Boss Early Challenge Pressure 01 — 전투 중에도 준비 부족 압박을 라벨로(분노/광폭과 별개 축).
     const ready = readinessOf(state);
     if (ready.label) hud += ` · ${ready.label}`;
+    // Boss Readiness Pressure 02 — 위압 상태(활성/해제)도 전투 HUD에 표시(열쇠 기반).
+    hud += ` · ${bossMenace(state.run.bossKeys || 0).label}`;
   }
   el.innerHTML = [
     `<span>심도 <b>${state.run.depth}</b></span>`,

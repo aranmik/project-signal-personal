@@ -2,7 +2,7 @@ import { UNIT_TEMPLATES } from "../data/units.js";
 import { stagePlan } from "../data/stages.js";
 import {
   ELITE_POOL, BOSS_ENCOUNTER,
-  depthScale, bossFury, bossReadinessPressure, normalFormation, eliteEscort, ROLE_ACTOR, FRONT_ROLES,
+  depthScale, bossFury, bossReadinessPressure, bossMenace, normalFormation, eliteEscort, ROLE_ACTOR, FRONT_ROLES,
 } from "../data/routes.js";
 
 // Boss Early Challenge Pressure 01 — 현재 배치(formation)의 채워진 슬롯 수 = 파티 인원.
@@ -136,11 +136,20 @@ export function createRouteEnemies(routeType, run) {
     const ready = bossReadinessPressure({
       depth, bossKeys: run.bossKeys || 0, fusionCount: run.fusionCount || 0, partySize: partySizeOf(run),
     });
+    // Boss Readiness Pressure 02 — Elite Key Seal: 열쇠 2개 미만이면 위압 활성(DR + 행동마다 atk 램프).
+    //   스탯 압박(ready)/심도 분노(fury)와 별개 축 — 보스에만, 보스전에서만 건다.
+    const menace = bossMenace(run.bossKeys || 0);
     const bscale = { hp: scale.hp * fury.hp * ready.hp, atk: scale.atk * fury.atk * ready.atk };
     const units = buildEnemies(BOSS_ENCOUNTER, prefix, { scale: bscale, slots: ["boss"] });
     units.forEach((u) => {
       if (fury.stage > 0) u.bossFury = fury.stage;
       if (ready.level > 0) u.bossReadiness = ready.level; // HUD/라벨 읽힘용
+      if (menace.active) {
+        // 위압 메타를 보스에 부여 — battle.js가 받는 피해 감소/행동 atk 램프에 사용.
+        u.menace = { dr: menace.dr, atkStepPct: menace.atkStepPct, atkMaxStacks: menace.atkMaxStacks };
+        u.menaceBaseAtk = u.atk; // 램프 기준 = 스케일 적용된 보스 atk
+        u.menaceStacks = 0;
+      }
     });
     return units;
   }

@@ -1911,6 +1911,12 @@ body {
 .route-readiness--reckless { color: #ff8a93; }
 .route-recommend { font-size: 10px; color: #8a98a8; }
 .route-card--boss-pressure { border-color: #c45a55; }
+/* Boss Readiness Pressure 02 — Elite Key Seal: 보스 카드 위압 남음/해제 상태(열쇠 진행도).
+   위압 남음 = 경고색(빨강 톤) / 위압 해제 = 안정색(청록 톤). 하드락 아님 — 상태 읽힘용. */
+.route-menace { display: block; font-size: 11px; line-height: 1.4; margin-top: 3px; }
+.route-menace b { font-weight: 800; }
+.route-menace--active { color: #ff9aa2; }
+.route-menace--sealed { color: #7fd6b0; }
 
 /* 상단 run 표시 한 줄(심도/열쇠/위험도/타입) */
 #run-status {

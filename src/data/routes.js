@@ -140,6 +140,40 @@ export function bossReadinessPressure({ depth = 1, bossKeys = 0, fusionCount = 0
 }
 
 /* =========================================================
+   Boss Readiness Pressure 02 — Elite Key Seal: "정예 2종을 모두 넘지 않으면 사자왕의 위압이 남는다."
+   첫 열쇠 = 보스문을 여는 조건(도전 가능). 둘째 열쇠 = 사자왕의 위압을 거두는 조건.
+   보스문 하드락 없음 — 열쇠 1개로도 도전 가능하되, 위압이 남아 "빠르지만 무모한 도전"이 된다.
+   위압(보스 전용, 보스전에서만):
+     - 받는 피해 감소(DR) — 짧은 화력으로는 끝나지 않는다(미완성 파티의 빠른 격파를 막는다).
+     - 매 행동마다 공격력 상승(상한) — 시간이 흐를수록 버티기 힘들어진다(긴 전투면 3인 파티가 무너지도록).
+   심도(분노/광폭화)·경계도(진형)·준비부족(스탯) 압박과 별개 축 — 함께 작동한다.
+   ========================================================= */
+export const BOSS_MENACE = {
+  keysToSeal: 2,      // 열쇠 2개를 모으면 위압 해제(첫 1개는 문 개방용 — 둘째가 위압을 걷는다)
+  dr: 0.40,           // 위압 중 사자왕이 받는 피해 -40%(후보 35~50% 중 보수적 중앙값)
+  atkStepPct: 0.10,   // 사자왕 행동마다 공격력 +10%(기준 atk 대비, 누적)
+  atkMaxStacks: 12,   // 상한 — 최대 +120%(폭주/거대수치 방지, 그래도 장기전이면 치명적)
+};
+
+// 보스 위압 상태 — bossKeys로만 판정(준비부족 스탯 압박과 독립). active면 보스에 DR/atk램프를 건다.
+//   label/log는 카드·HUD·전투로그 체감용. 해제(키 2+)도 의미 있는 상태라 별도 라벨/로그를 준다.
+export function bossMenace(bossKeys) {
+  const active = (bossKeys || 0) < BOSS_MENACE.keysToSeal;
+  return {
+    active,
+    keys: bossKeys || 0,
+    needKeys: BOSS_MENACE.keysToSeal,
+    dr: active ? BOSS_MENACE.dr : 0,
+    atkStepPct: active ? BOSS_MENACE.atkStepPct : 0,
+    atkMaxStacks: BOSS_MENACE.atkMaxStacks,
+    label: active ? "위압" : "위압 해제",
+    log: active
+      ? "사자왕의 위압이 남아 있다 — 피해를 덜 받고, 시간이 흐를수록 거세진다."
+      : "정예의 시험을 모두 넘었다 — 사자왕의 위압이 사라졌다.",
+  };
+}
+
+/* =========================================================
    01B — 경계도: "경계도는 적을 조직적으로 만든다."
    경계도 = 합체 진행도(합체 횟수). 파티가 합체로 강해질수록 몬스터가 더 대비한다 —
    합체를 막지 않되, 더 조직적인 진형(전열 방벽 + 후열 지원 + 정예 보호)으로 응답한다.
