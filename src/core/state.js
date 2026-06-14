@@ -1,6 +1,16 @@
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { stagePlan } from "../data/stages.js";
-import { NORMAL_POOL, DANGER_EXTRA, ELITE_POOL, BOSS_ENCOUNTER } from "../data/routes.js";
+import {
+  ELITE_POOL, BOSS_ENCOUNTER,
+  depthScale, bossFury, bossReadinessPressure, normalFormation, eliteEscort, ROLE_ACTOR, FRONT_ROLES,
+} from "../data/routes.js";
+
+// Boss Early Challenge Pressure 01 — 현재 배치(formation)의 채워진 슬롯 수 = 파티 인원.
+//   파티는 매 전투 formation에서 재구성되므로 formation이 인원의 단일 출처(전투 중 변동 없음).
+export function partySizeOf(run) {
+  const f = (run && run.formation) || {};
+  return SLOT_ORDER.filter((k) => f[k]).length;
+}
 
 function createUnit(template, instanceId, bonuses = { atk: 0, maxHp: 0 }) {
   const maxHp = template.maxHp + bonuses.maxHp;
@@ -62,44 +72,98 @@ const RANK_PREFIX = { elite: "정예 ", boss: "보스 " };
 
 // 적 명세 배열("키" / "키:elite" / "키:boss")을 유닛으로 빌드하는 공용 헬퍼.
 //   instanceId는 prefix로 유니크하게(스테이지/여정 전환 간 잔존 상태 차단). 정예/보스 override는 동일.
-function buildEnemies(specs, prefix) {
+//   opts.scale = 01B 심도 스케일({hp, atk} 배수), opts.slots = 진형 슬롯 배열(없으면 index).
+function buildEnemies(specs, prefix, opts = {}) {
+  const scale = opts.scale || { hp: 1, atk: 1 };
+  const slots = opts.slots;
   return specs.map((spec, i) => {
     const [key, rank] = spec.split(":");
     const u = createUnit(UNIT_TEMPLATES.enemies[key], `${prefix}-${key}-${i}`);
-    u.slot = rank === "boss" ? "boss" : i;
+    u.slot = slots ? (slots[i] ?? i) : (rank === "boss" ? "boss" : i);
     if (rank && RANK_OVERRIDES[rank]) {
       // Beginner Theme Actor 01: 고유명 정예/보스(keepName)는 "정예/보스 " 접두를 붙이지 않는다
       //   (HUD가 ELITE/BOSS 라벨을 따로 표시 — "정예 숲올빼미 현자" 같은 중복 방지). 수치만 override.
       const name = u.keepName ? u.name : RANK_PREFIX[rank] + u.name;
       Object.assign(u, RANK_OVERRIDES[rank], { name });
     }
+    // Run Structure 01B — 심도 스케일. RANK_OVERRIDES(정예/보스 기본치) 적용 후 곱해야 정예/보스도 심도를 받는다.
+    u.maxHp = Math.max(1, Math.round(u.maxHp * scale.hp));
+    u.hp = u.maxHp;
+    u.atk = Math.max(1, Math.round(u.atk * scale.atk));
     return u;
   });
 }
 
-export function createStageEnemies(stage) {
-  return buildEnemies(stagePlan(stage).enemies, `st${stage}`);
+// Run Structure 01B — 진형 슬롯. 전열(영웅 대면·중앙선 쪽)/후열(뒤·구석)을 CSS .enemy-slot-{slot}로 매핑.
+//   front 역할은 전열 슬롯부터, back 역할은 후열 슬롯부터 채우고 모자라면 반대 라인으로 흘려보낸다(상한 6).
+//   정예 핵심(ecf/ecb)·보스(boss)는 호출부에서 직접 지정한다.
+const FRONT_SLOTS = ["ef0", "ef1", "ef2"];
+const BACK_SLOTS = ["eb0", "eb1", "eb2"];
+function assignSlotsByFront(isFrontArr) {
+  let fi = 0, bi = 0;
+  return isFrontArr.map((isFront) =>
+    isFront
+      ? (FRONT_SLOTS[fi++] || BACK_SLOTS[bi++] || "ef2")
+      : (BACK_SLOTS[bi++] || FRONT_SLOTS[fi++] || "eb2")
+  );
+}
+function specIsFront(spec) {
+  const [key] = spec.split(":");
+  return UNIT_TEMPLATES.enemies[key]?.role === "front";
 }
 
-// Run Structure 01A — 길 선택이 정한 인카운터를 생성한다(createStageEnemies와 빌더 공유).
-//   normal/danger = 초보자 일반 풀 재활용(danger는 소형 +1·소량 강화), elite = 올빼미/사슴(열쇠),
-//   boss = 사자왕. 정예/보스 수치는 기존 RANK_OVERRIDES 그대로 — 밸런스 튜닝이 아니다.
+export function createStageEnemies(stage) {
+  const specs = stagePlan(stage).enemies;
+  const slots = assignSlotsByFront(specs.map(specIsFront));
+  return buildEnemies(specs, `st${stage}`, { slots });
+}
+
+// Run Structure 01A/01B — 길 선택이 인카운터를 만든다(createStageEnemies와 빌더 공유).
+//   01B: 심도(run.depth)→HP/atk 스케일, 경계도(run.alertness)→진형 두께/조직.
+//   normal/danger = 경계도 진형(역할→액터, danger는 한 단계 두껍게 + 소량 강화),
+//   elite = 정예 본체(올빼미/사슴 번갈아)를 중앙 핵심에 두고 경계도 호위로 보호 진형,
+//   boss = 사자왕(심도 fury 추가 강화). 정예/보스 본체 구성은 stages.js 재활용.
 export function createRouteEnemies(routeType, run) {
   const depth = run.depth;
-  if (routeType === "boss") return buildEnemies(BOSS_ENCOUNTER, `d${depth}`);
-  if (routeType === "elite") {
-    // 정예는 번갈아(올빼미 → 사슴 …). 이미 처치한 정예 수(bossKeys) 기준으로 순환.
-    const spec = ELITE_POOL[(run.bossKeys || 0) % ELITE_POOL.length];
-    return buildEnemies(spec, `d${depth}`);
+  const alertness = run.alertness || 0;
+  const scale = depthScale(depth);
+  const prefix = `d${depth}`;
+
+  if (routeType === "boss") {
+    const fury = bossFury(depth);
+    // Boss Early Challenge Pressure 01 — 심도 분노(fury)와 별개로 "준비 부족" 보정을 보스에만 곱한다.
+    //   빠른/얕은 도전을 막지 않되, 미완성 파티면 사자왕이 압도하도록(낮은 심도 보스의 약함을 보정).
+    const ready = bossReadinessPressure({
+      depth, bossKeys: run.bossKeys || 0, fusionCount: run.fusionCount || 0, partySize: partySizeOf(run),
+    });
+    const bscale = { hp: scale.hp * fury.hp * ready.hp, atk: scale.atk * fury.atk * ready.atk };
+    const units = buildEnemies(BOSS_ENCOUNTER, prefix, { scale: bscale, slots: ["boss"] });
+    units.forEach((u) => {
+      if (fury.stage > 0) u.bossFury = fury.stage;
+      if (ready.level > 0) u.bossReadiness = ready.level; // HUD/라벨 읽힘용
+    });
+    return units;
   }
 
-  const base = NORMAL_POOL[(run.stage - 1) % NORMAL_POOL.length].slice();
-  if (routeType === "danger") base.push(DANGER_EXTRA[(run.stage + depth) % DANGER_EXTRA.length]);
-  const units = buildEnemies(base, `d${depth}`);
-  if (routeType === "danger") {
-    // 위험 전투: "조금 더 버겁게" 소량 강화(밸런스 튜닝 아님 — 읽힘용). 보스/정예 override와 무관.
-    units.forEach((u) => { u.maxHp = Math.round(u.maxHp * 1.15); u.hp = u.maxHp; u.atk += 1; });
+  if (routeType === "elite") {
+    // 정예 본체(번갈아: 올빼미 → 사슴 …)는 role에 따라 전열중앙(ecf)/후열중앙(ecb)에 "주인공"으로 선다.
+    //   호위 소형이 전열/후열로 둘러싸 보호 진형이 읽힌다 — 정예 오른쪽 끝 밀림 해결.
+    const eliteSpec = ELITE_POOL[(run.bossKeys || 0) % ELITE_POOL.length][0];
+    const escort = eliteEscort(alertness);
+    const specs = [eliteSpec, ...escort.map((r) => ROLE_ACTOR[r])];
+    const escortSlots = assignSlotsByFront(escort.map((r) => FRONT_ROLES.has(r)));
+    const slots = [specIsFront(eliteSpec) ? "ecf" : "ecb", ...escortSlots];
+    return buildEnemies(specs, prefix, { scale, slots });
   }
+
+  // normal / danger — 경계도 진형. danger는 한 단계 두꺼운 진형 + 소량 강화(읽힘용).
+  const formAlert = routeType === "danger" ? alertness + 1 : alertness;
+  const roles = normalFormation(formAlert);
+  const specs = roles.map((r) => ROLE_ACTOR[r]);
+  const slots = assignSlotsByFront(roles.map((r) => FRONT_ROLES.has(r)));
+  const dscale = routeType === "danger" ? { hp: scale.hp * 1.12, atk: scale.atk } : scale;
+  const units = buildEnemies(specs, prefix, { scale: dscale, slots });
+  if (routeType === "danger") units.forEach((u) => { u.atk += 1; });
   return units;
 }
 
@@ -173,7 +237,9 @@ export const gameState = {
     // Run Structure 01A — 선택형 여정 레이어 상태(stage=이긴 전투 수와 분리).
     depth: 1,                   // 여정 깊이(전투 + 휴식 노드 수) — 보스 도전 타이밍 감각의 기준
     bossKeys: 0,                // 보스 열쇠(정예 전투 승리로 획득)
-    threat: 0,                  // 위험도(읽힘용 수치 — 위험/정예에서 상승)
+    threat: 0,                  // 위험도(내부 누적 — 위험/정예에서 상승. UI는 01B부터 경계도로 표시)
+    alertness: 0,               // 01B 경계도(합체 진행도 기반) — 적 진형 조직도를 결정
+    fusionCount: 0,             // 01B 합체 실행 누적 — 경계도 산정 기준
     routeChoices: null,         // 현재 제시된 여정 선택지(route id 배열) — 화면 갱신에도 고정
     currentRouteType: "normal", // 현재/직전 인카운터 타입(HUD 표시 + 승리 처리 분기)
     formation: null,      // null = 기본 4인 배치

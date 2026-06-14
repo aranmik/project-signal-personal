@@ -3,7 +3,7 @@ import { createInitialParty, createPreviewEnemies, createStageEnemies, createRou
 import { FUSION_RECIPES, BASE_JOBS, prefersFront, slotPreference } from "../data/jobs.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
-import { ROUTE_TYPES, rollRouteOffer } from "../data/routes.js";
+import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, alertnessFromFusions } from "../data/routes.js";
 import { rewardById } from "../data/rewards.js";
 import { renderGame, playActionFx, playStatusTickFx, playSupportFx } from "../ui/render.js";
 import { skillOf } from "../data/skills.js";
@@ -221,6 +221,8 @@ export function resetBattle() {
   gameState.run.depth = 1;
   gameState.run.bossKeys = 0;
   gameState.run.threat = 0;
+  gameState.run.alertness = 0;   // 01B 경계도/합체 누적도 런과 함께 초기화
+  gameState.run.fusionCount = 0;
   gameState.run.routeChoices = null;
   gameState.run.currentRouteType = "normal"; // 첫 전투는 고정 도입(일반)
 
@@ -344,6 +346,10 @@ export function applyFusion(resultId) {
   const freed = slots.find((k) => k !== inherit);
   f[inherit] = recipe.result;
   f[freed] = null;
+  // Run Structure 01B — 합체 실행 = 경계도 상승. 파티가 합체로 강해질수록 몬스터가 더 대비한다
+  //   (합체를 막지 않는다 — 대신 다음 인카운터가 더 조직적인 진형으로 응답한다).
+  gameState.run.fusionCount = (gameState.run.fusionCount || 0) + 1;
+  gameState.run.alertness = alertnessFromFusions(gameState.run.fusionCount);
   // First Class Trial 01: 합체 로그를 레시피 데이터 기반으로(15종 1차 직업 공통). 이름은 직업 템플릿.
   const jn = (id) => UNIT_TEMPLATES.party[id]?.name || id;
   gameState.logs.push(`합체! ${jn(recipe.materials[0])} + ${jn(recipe.materials[1])} → ${jn(recipe.result)}`);
@@ -447,6 +453,20 @@ export function advanceStage(routeType = gameState.run.currentRouteType) {
 
   const label = ROUTE_TYPES[routeType]?.hud || "전투";
   gameState.logs.push(`심도 ${gameState.run.depth} — ${label} 시작!`);
+
+  // Run Structure 01B — 보스 심도 강화 체감(로그). 늦게 도전할수록 사자왕이 숲의 깊이에 반응한다.
+  //   Boss Early Challenge Pressure 01 — 준비 부족(인원/합체/심도)이면 별개 축으로 위압 로그를 더한다.
+  if (routeType === "boss") {
+    const fury = bossFury(gameState.run.depth);
+    if (fury.log) gameState.logs.push(fury.log);
+    const ready = bossReadinessPressure({
+      depth: gameState.run.depth,
+      bossKeys: gameState.run.bossKeys || 0,
+      fusionCount: gameState.run.fusionCount || 0,
+      partySize: gameState.party.length,
+    });
+    if (ready.log) gameState.logs.push(ready.log);
+  }
 
   startBattle();
 }

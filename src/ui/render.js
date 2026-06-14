@@ -1,9 +1,9 @@
 import { BEGINNER_THEME, STAGE_THEMES } from "../data/stages.js";
-import { ROUTE_TYPES, bossTimingLabel } from "../data/routes.js";
+import { ROUTE_TYPES, bossTimingLabel, bossFury, bossReadinessPressure, PRESSURE_HELP } from "../data/routes.js";
 import { availableFusions, slotPreference } from "../data/jobs.js";
 import { REWARDS } from "../data/rewards.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
-import { SLOT_ORDER, SLOT_NAMES } from "../core/state.js";
+import { SLOT_ORDER, SLOT_NAMES, partySizeOf } from "../core/state.js";
 import { avatarSpec, avatarFigureHTML, CODEX_ENTRIES, CODEX_STATUS_LABEL } from "../data/avatars.js";
 
 function jobName(id) {
@@ -156,7 +156,10 @@ function renderEncounterHud(state) {
   if (hud.dataset.iid !== unit.instanceId) {
     hud.dataset.iid = unit.instanceId;
     hud.dataset.tier = unit.tier;
-    const label = unit.tier === "boss" ? "BOSS" : "ELITE";
+    // Run Structure 01B — 보스 심도 강화 단계를 라벨에 반영(분노/광폭).
+    const label = unit.tier === "boss"
+      ? (unit.bossFury >= 2 ? "BOSS · 광폭" : unit.bossFury >= 1 ? "BOSS · 분노" : "BOSS")
+      : "ELITE";
     hud.innerHTML = `
       <div class="enc-top">
         <span class="enc-label">${label}</span>
@@ -342,6 +345,17 @@ export function renderArrangePanel(state) {
   `;
 }
 
+// Boss Early Challenge Pressure 01 — 현재 런 상태에서 보스 준비 압박을 계산(카드/HUD 공용).
+//   파티 인원은 state.js와 동일하게 formation 기준(partySizeOf)으로 본다 — 보스 스케일과 라벨 일치.
+function readinessOf(state) {
+  return bossReadinessPressure({
+    depth: state.run.depth,
+    bossKeys: state.run.bossKeys || 0,
+    fusionCount: state.run.fusionCount || 0,
+    partySize: partySizeOf(state.run),
+  });
+}
+
 // Run Structure 01A — 여정 선택 화면.
 //   "전투는 자동이지만, 여정은 내가 고른다." 2~3개 카드(읽히는 반고정). 각 카드는 짧은 이름/설명.
 //   보스문 카드는 열쇠 보유 시에만 오퍼에 포함되며 도전 타이밍 감각(이른/빠른/적정…)을 함께 보여준다.
@@ -350,10 +364,24 @@ function renderRoutePanel(state) {
   const cards = choices.map((id) => {
     const rt = ROUTE_TYPES[id];
     if (!rt) return "";
-    const extra = id === "boss"
-      ? `<span class="route-timing">${bossTimingLabel(state.run.depth)} · 열쇠 ${state.run.bossKeys}</span>`
-      : "";
-    return `<button type="button" class="route-card route-card--${id}" data-route="${id}">
+    let extra = "";
+    let pressureClass = "";
+    if (id === "boss") {
+      // Run Structure 01B — 보스 카드에 도전 타이밍 + 심도 강화 단계(분노/광폭)를 함께 보여준다.
+      const fury = bossFury(state.run.depth);
+      const furyTag = fury.label ? ` · ${fury.label}` : "";
+      // Boss Early Challenge Pressure 01 — 준비 상태(현재/권장)와 무모/성급 경고를 카드에서 읽힌다.
+      //   보스문은 그래도 누를 수 있다(하드락 없음) — 경고는 "이대로 가면 압도당한다"는 신호.
+      //   준비 양호(level 0)면 경고 테두리를 붙이지 않는다(적정 도전 오경보 방지).
+      const ready = readinessOf(state);
+      const warnClass = ready.level >= 2 ? " route-readiness--reckless" : ready.level === 1 ? " route-readiness--hasty" : "";
+      const warnTag = ready.label ? ` · <b>${ready.label}</b>` : "";
+      if (ready.level > 0) pressureClass = " route-card--boss-pressure";
+      extra = `<span class="route-timing">${bossTimingLabel(state.run.depth)}${furyTag}</span>
+        <span class="route-readiness${warnClass}">${ready.current}${warnTag}</span>
+        <span class="route-recommend">${ready.recommend}</span>`;
+    }
+    return `<button type="button" class="route-card route-card--${id}${pressureClass}" data-route="${id}">
       <span class="route-title">${rt.title}</span>
       <span class="route-sub">${rt.sub}</span>
       ${extra}
@@ -366,9 +394,10 @@ function renderRoutePanel(state) {
     <p class="flow-note">전투는 자동이지만, 여정은 내가 고른다.</p>
     <div class="route-status">
       <span class="route-stat">심도 <b>${state.run.depth}</b></span>
+      <span class="route-stat">경계도 <b>${state.run.alertness}</b></span>
       <span class="route-stat">보스 열쇠 <b>${state.run.bossKeys}</b></span>
-      <span class="route-stat">위험도 <b>${state.run.threat}</b></span>
     </div>
+    <p class="route-help">${PRESSURE_HELP}</p>
     <div id="route-list">${cards}</div>
   `;
 }
@@ -547,11 +576,20 @@ function renderRunStatus(state) {
     return;
   }
   const rt = ROUTE_TYPES[state.run.currentRouteType];
+  // Run Structure 01B — 위험도 표시를 경계도로 교체(심도/경계도/열쇠). 보스전이면 심도 강화 단계도.
+  let hud = rt ? rt.hud : "";
+  if (state.run.currentRouteType === "boss") {
+    const fury = bossFury(state.run.depth);
+    if (fury.label) hud += ` · ${fury.label}`;
+    // Boss Early Challenge Pressure 01 — 전투 중에도 준비 부족 압박을 라벨로(분노/광폭과 별개 축).
+    const ready = readinessOf(state);
+    if (ready.label) hud += ` · ${ready.label}`;
+  }
   el.innerHTML = [
     `<span>심도 <b>${state.run.depth}</b></span>`,
-    `<span>보스 열쇠 <b>${state.run.bossKeys}</b></span>`,
-    `<span>위험도 <b>${state.run.threat}</b></span>`,
-    `<span>${rt ? rt.hud : ""}</span>`,
+    `<span>경계도 <b>${state.run.alertness}</b></span>`,
+    `<span>열쇠 <b>${state.run.bossKeys}</b></span>`,
+    `<span>${hud}</span>`,
   ].join("");
   el.hidden = false;
 }

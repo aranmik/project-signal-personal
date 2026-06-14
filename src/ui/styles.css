@@ -211,6 +211,19 @@ body {
 /* 보스 단독 — 상단 우측 70 영역을 "장악"하는 큰 적(모서리/중앙 허수아비 아님) */
 #battle-field .enemy-slot-boss { right: 72px; top: 24px; }
 
+/* Run Structure 01B — 경계도 진형 슬롯(2열 + 정예 핵심).
+   전열(ef): 영웅 대면(중앙선 쪽=right 큰값)·세로 분산. 후열(eb): 뒤(오른쪽 구석=right 작은값).
+   정예 핵심(ecf 전열중앙 / ecb 후열중앙): 정예가 "전장의 주인공"으로 중앙에 서고 호위가 둘러싼다.
+   소형 부대가 6체까지 차도 전열/후열이 갈려 진형이 읽히고, 정예는 오른쪽 끝으로 밀리지 않는다. */
+#battle-field .enemy-slot-ef0 { right: 150px; top: 26px; }
+#battle-field .enemy-slot-ef1 { right: 164px; top: 96px; }
+#battle-field .enemy-slot-ef2 { right: 146px; top: 152px; }
+#battle-field .enemy-slot-eb0 { right: 20px;  top: 14px; }
+#battle-field .enemy-slot-eb1 { right: 34px;  top: 86px; }
+#battle-field .enemy-slot-eb2 { right: 18px;  top: 150px; }
+#battle-field .enemy-slot-ecf { right: 120px; top: 100px; } /* 정예 — 전열 중앙(영웅 대면, 관문형 사슴) */
+#battle-field .enemy-slot-ecb { right: 88px;  top: 38px; }  /* 정예 — 후열 중앙(지휘형 올빼미) */
+
 /* 정예/보스처럼 보이게 — 크기만 키운다(.unit.enemy scale 오버라이드, 발밑/머리 고정).
    임시 스타일: 정식 정예/보스 시스템 아님. */
 #battle-field .unit.enemy.mon-elite {
@@ -733,6 +746,13 @@ body {
 #battle-field .bt-lion .head { background: var(--main); box-shadow: 0 0 0 5px rgba(255,240,156,.18); }
 #battle-field .bt-lion .head::after { left: 9px; bottom: 4px; width: 22px; height: 11px; border-radius: 50%; background: radial-gradient(circle at 50% 35%, #3c271f 0 2px, transparent 3px), #f4d89a; }
 #battle-field .bt-lion .ears { left: 18px; top: 4px; border-radius: 50%; box-shadow: 32px 0 0 var(--edge); }
+/* Boss Early Challenge Pressure 01 + Lion Face Hotfix — 사자왕 얼굴(보스 전용) 정렬.
+   보스 크기 head(border-box 42×36, padding box 34×28)에서 기존 눈동자(::before)는 작은 머리 기준
+   좌표라 오른쪽 눈이 코(::after 머즐 내부 점)와 겹쳐 읽혔다. 보스 한정으로만 눈을 위로 올리고
+   좌우 대칭(코 중심 x17 기준)으로 두고, 코는 머즐 안쪽 아래(62%)로 내려 눈/코가 겹치지 않게 한다.
+   .bt-lion(비보스)은 게임에 등장하지 않으며, 스코프가 .bt-boss로 한정돼 다른 bt 액터엔 무영향. */
+#battle-field .bt-lion.bt-boss .head::before { left: 7px; top: 7px; width: 5px; height: 5px; box-shadow: 15px 0 0 #10151d; }
+#battle-field .bt-lion.bt-boss .head::after { left: 6px; bottom: 3px; width: 22px; height: 12px; background: radial-gradient(circle at 50% 62%, #3c271f 0 2.5px, transparent 3.5px), #f4d89a; }
 #battle-field .bt-owl { --main: #9cb98a; --edge: #f1ef9c; --deep: #4a5a45; }
 #battle-field .bt-owl .head { border-radius: 15px 15px 50% 50%; }
 #battle-field .bt-owl .ears { left: 20px; top: 1px; width: 13px; height: 14px; clip-path: polygon(0 0, 100% 100%, 0 100%); border-radius: 0; box-shadow: 25px 0 0 var(--edge); }
@@ -1835,6 +1855,15 @@ body {
 }
 .route-status b { color: #e6edf5; }
 
+/* Run Structure 01B — 압박 안내 문구(심도/경계도 설명). 작게, 모바일에서 답답하지 않게. */
+.route-help {
+  margin: -2px 0 2px;
+  font-size: 10.5px;
+  line-height: 1.4;
+  text-align: center;
+  color: #6c7c8c;
+}
+
 #route-list {
   display: flex;
   flex-direction: column;
@@ -1874,6 +1903,14 @@ body {
   background: linear-gradient(180deg, rgba(185, 67, 79, 0.22), #181018);
 }
 .route-card--boss:hover { border-color: #e0606c; }
+/* Boss Early Challenge Pressure 01 — 보스 카드 준비 상태(현재/권장)와 무모/성급 경고.
+   보스문은 그대로 누를 수 있다 — 색/문구는 "이대로 가면 압도당한다"는 신호일 뿐(하드락 아님). */
+.route-readiness { font-size: 11px; color: #c7d2dd; margin-top: 3px; line-height: 1.35; }
+.route-readiness b { font-weight: 800; }
+.route-readiness--hasty { color: #f0c040; }
+.route-readiness--reckless { color: #ff8a93; }
+.route-recommend { font-size: 10px; color: #8a98a8; }
+.route-card--boss-pressure { border-color: #c45a55; }
 
 /* 상단 run 표시 한 줄(심도/열쇠/위험도/타입) */
 #run-status {
