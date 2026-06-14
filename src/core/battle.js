@@ -1,6 +1,7 @@
 import { gameState } from "./state.js";
 import { createInitialParty, createPreviewEnemies, createStageEnemies, SLOT_ORDER, DEFAULT_FORMATION } from "./state.js";
 import { FUSION_RECIPES, BASE_JOBS, prefersFront, slotPreference } from "../data/jobs.js";
+import { UNIT_TEMPLATES } from "../data/units.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
 import { rewardById } from "../data/rewards.js";
 import { renderGame, playActionFx, playStatusTickFx, playSupportFx } from "../ui/render.js";
@@ -285,7 +286,9 @@ export function applyFusion(resultId) {
   const freed = slots.find((k) => k !== inherit);
   f[inherit] = recipe.result;
   f[freed] = null;
-  gameState.logs.push(`합체! ${recipe.result === "rogue" ? "전사 + 궁수 → 도적" : "사제 + 신관 → 성직자"}`);
+  // First Class Trial 01: 합체 로그를 레시피 데이터 기반으로(15종 1차 직업 공통). 이름은 직업 템플릿.
+  const jn = (id) => UNIT_TEMPLATES.party[id]?.name || id;
+  gameState.logs.push(`합체! ${jn(recipe.materials[0])} + ${jn(recipe.materials[1])} → ${jn(recipe.result)}`);
 
   // Fusion Moment 01: 합체는 탄생 — 짧은 결과 확인 화면을 먼저 보여준다.
   //   영입 후보는 지금 굴려 고정(공통 규칙: 합체 실행 = 반드시 영입으로 보충).
