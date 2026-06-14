@@ -1,5 +1,5 @@
 import { BEGINNER_THEME, STAGE_THEMES } from "../data/stages.js";
-import { ROUTE_TYPES, bossTimingLabel, bossFury, bossReadinessPressure, bossMenace, PRESSURE_HELP } from "../data/routes.js";
+import { ROUTE_TYPES, bossTimingLabel, bossFury, bossReadinessPressure, bossMenace, depthAtmosphere, PRESSURE_HELP } from "../data/routes.js";
 import { availableFusions, slotPreference } from "../data/jobs.js";
 import { REWARDS } from "../data/rewards.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
@@ -398,6 +398,12 @@ function renderRoutePanel(state) {
     </button>`;
   }).join("");
 
+  // Run Structure 01C — 여정 선택 화면에서도 심도 분위기를 보여 "지금 너무 깊다"가 읽히게.
+  const atmo = depthAtmosphere(state.run.depth);
+  const atmoLine = atmo.label
+    ? `<p class="route-atmo route-atmo--${atmo.tier}">${atmo.label}</p>`
+    : "";
+
   document.getElementById("route-body").innerHTML = `
     <div class="flow-kicker">${BEGINNER_THEME.name} · 심도 ${state.run.depth}</div>
     <h2 class="flow-heading">다음 여정을 고르세요</h2>
@@ -407,6 +413,7 @@ function renderRoutePanel(state) {
       <span class="route-stat">경계도 <b>${state.run.alertness}</b></span>
       <span class="route-stat">보스 열쇠 <b>${state.run.bossKeys}</b></span>
     </div>
+    ${atmoLine}
     <p class="route-help">${PRESSURE_HELP}</p>
     <div id="route-list">${cards}</div>
   `;
@@ -558,6 +565,8 @@ function renderHud(state) {
     field.dataset.fast = speed > 1 ? "1" : "0";
     const tick = state.battle.tickInterval ?? 500;
     field.style.setProperty("--tick", `${tick}ms`);
+    // Run Structure 01C — 심도 분위기 class hook(전장 배경 붉은 기운). 프리뷰는 분위기 없음.
+    field.dataset.depthTier = state.battle.previewKind ? "" : depthAtmosphere(state.run.depth).tier;
   }
 }
 
@@ -597,11 +606,14 @@ function renderRunStatus(state) {
     // Boss Readiness Pressure 02 — 위압 상태(활성/해제)도 전투 HUD에 표시(열쇠 기반).
     hud += ` · ${bossMenace(state.run.bossKeys || 0).label}`;
   }
+  // Run Structure 01C — 심도 분위기 문구(30+ 위협 / 40+ 분노). 일반 전투에서도 "숲이 거칠어졌다"가 읽힘.
+  const atmo = depthAtmosphere(state.run.depth);
   el.innerHTML = [
     `<span>심도 <b>${state.run.depth}</b></span>`,
     `<span>경계도 <b>${state.run.alertness}</b></span>`,
     `<span>열쇠 <b>${state.run.bossKeys}</b></span>`,
     `<span>${hud}</span>`,
+    atmo.label ? `<span class="depth-atmo depth-atmo--${atmo.tier}">${atmo.label}</span>` : "",
   ].join("");
   el.hidden = false;
 }
@@ -1442,7 +1454,18 @@ function spawnPulse(layer, t, isHeal) {
   layer.appendChild(p);
 }
 
-function spawnNumber(layer, t, targetInstanceId, isHeal, amount, variant) {
+// Run Structure 01C — 피해 숫자 규격: 의미별로만 색을 둔다(임의 색 줄이기). 영웅/몬스터 동일 규칙.
+//   기본=빨강(dmg) / 치명=주황(crit, 굵게·크게·폭발 후 축소) / 중독=보라(poison) / 회복=청록(heal).
+//   알 수 없는 변주(roar/hit 등)는 기본 빨강으로 흡수 → "알록달록" 방지.
+//   tag(향후 관통/분쇄/처형): 빨강 숫자 앞에 짧은 텍스트 태그. 구조만 준비(현재 미사용).
+function damageNumberClass(isHeal, variant) {
+  if (isHeal) return "fx-number--heal";
+  if (variant === "poison") return "fx-number--poison";
+  if (variant === "crit") return "fx-number--crit";
+  return "fx-number--dmg";
+}
+
+function spawnNumber(layer, t, targetInstanceId, isHeal, amount, variant, tag) {
   // FX Density Guard 01: 숫자 상한 초과 시 가장 오래된 것 제거(MAX/다수전 누적 방지)
   const nums = layer.querySelectorAll(".fx-number");
   if (nums.length >= MAX_FX_NUMBERS) nums[0].remove();
@@ -1455,10 +1478,15 @@ function spawnNumber(layer, t, targetInstanceId, isHeal, amount, variant) {
   const step = Math.min(idx, 4);
 
   const n = document.createElement("span");
-  n.className =
-    `fx-number ${isHeal ? "fx-number--heal" : "fx-number--dmg"}` +
-    (variant ? ` fx-number--${variant}` : ""); // 상태 tick 변주(poison 등)
-  n.textContent = `${isHeal ? "+" : "-"}${amount}`;
+  n.className = `fx-number ${damageNumberClass(isHeal, variant)}`;
+  const sign = isHeal ? "+" : "-";
+  if (tag) {
+    // 향후 특수 피해(관통/분쇄/처형) — 빨강 숫자에 짧은 텍스트 태그가 붙는 구조.
+    n.classList.add("fx-number--tagged");
+    n.innerHTML = `<span class="fx-number-tag">${tag}</span>${sign}${amount}`;
+  } else {
+    n.textContent = `${sign}${amount}`;
+  }
   n.style.left = `${t.x}px`;
   n.style.top = `${Math.max(2, t.y - step * 15)}px`; // 위로 쌓기(화면 상단 밖 이탈 방지 clamp)
   if (step > 0) n.style.animationDelay = `${step * 80}ms`;

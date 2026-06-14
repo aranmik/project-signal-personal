@@ -1,9 +1,9 @@
 import { gameState } from "./state.js";
 import { createInitialParty, createPreviewEnemies, createStageEnemies, createRouteEnemies, SLOT_ORDER, DEFAULT_FORMATION } from "./state.js";
-import { FUSION_RECIPES, BASE_JOBS, prefersFront, slotPreference } from "../data/jobs.js";
+import { FUSION_RECIPES, BASE_JOBS, prefersFront, slotPreference, availableFusions } from "../data/jobs.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
-import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions } from "../data/routes.js";
+import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions, depthSpeedFactor } from "../data/routes.js";
 import { rewardById } from "../data/rewards.js";
 import { renderGame, playActionFx, playStatusTickFx, playSupportFx } from "../ui/render.js";
 import { skillOf } from "../data/skills.js";
@@ -247,17 +247,38 @@ export function applyReward(id) {
 
   gameState.logs = [`보상: ${reward.name} Lv.${lv[id]} — 다음 전투부터 적용`];
 
-  // Fusion Flow 01: 보상 후 스테이지 클리어 이벤트(S3/S8 합체, S5 영입) 라우팅.
-  //   이벤트 타이밍은 STAGE_CLEAR_EVENTS(stage data)로 관리 — 테마/층수가 바뀌면 데이터만 수정.
+  // Run Structure 01C — 보상 후 이벤트 라우팅(우선순위로 정리해 danger 합체와 기존 S3/S8/S5가 충돌 없게).
+  //   합체 가능 = 현재 파티에서 실행 가능한 레시피가 하나라도 있는가(availableFusions).
   const ev = STAGE_CLEAR_EVENTS[gameState.run.stage];
-  if (ev) {
-    if (ev.type === "recruit") {
-      rollRecruitOffer(); // 영입 후보는 진입 시 1회 확정
-      gameState.run.recruitContext = "expand"; // 4인 확장 영입 — 문구 분기용
-    }
-    gameState.screen = ev.type; // "fusion" | "recruit"
+  const canFuse = availableFusions(partyJobIds()).length > 0;
+
+  // 1) S5 영입(4인 확장)은 그대로 우선 — danger 합체가 확장 기회를 덮지 않게.
+  if (ev && ev.type === "recruit") {
+    rollRecruitOffer(); // 영입 후보는 진입 시 1회 확정
+    gameState.run.recruitContext = "expand"; // 4인 확장 영입 — 문구 분기용
+    gameState.screen = "recruit";
     renderGame(gameState);
     return;
+  }
+
+  // 2) 깊은 수풀(danger) 클리어 = 합체 기회 보장. 합체 후보가 있으면 무조건 합체 화면으로
+  //    (억지 진입 아님 — 후보가 있을 때만). 하드 제한/강제 합체 아님: 스킵은 그대로 가능.
+  if (gameState.run.currentRouteType === "danger" && canFuse) {
+    gameState.screen = "fusion";
+    renderGame(gameState);
+    return;
+  }
+
+  // 3) 기존 스테이지 합체 이벤트(S3/S8) — 빈 합체 화면 방지를 위해 후보 있을 때만.
+  if (ev && ev.type === "fusion" && canFuse) {
+    gameState.screen = "fusion";
+    renderGame(gameState);
+    return;
+  }
+
+  // 4) 깊은 수풀이었지만 합체 후보가 없으면 짧은 안내 후 다음 여정으로(억지 합체 화면 X).
+  if (gameState.run.currentRouteType === "danger" && !canFuse) {
+    pushLog("깊은 수풀을 헤쳤지만 아직 합체할 조합이 없습니다.");
   }
 
   proceedNextStage();
@@ -353,6 +374,8 @@ export function applyFusion(resultId) {
   // First Class Trial 01: 합체 로그를 레시피 데이터 기반으로(15종 1차 직업 공통). 이름은 직업 템플릿.
   const jn = (id) => UNIT_TEMPLATES.party[id]?.name || id;
   gameState.logs.push(`합체! ${jn(recipe.materials[0])} + ${jn(recipe.materials[1])} → ${jn(recipe.result)}`);
+  // Run Structure 01C — 경계도는 "실제 합체 횟수"로만 오른다(길 선택만으로는 안 오름). 규칙을 로그로 명확히.
+  gameState.logs.push(`경계도 ${gameState.run.alertness} — 강해진 파티에 몬스터가 더 조직적으로 대비한다.`);
 
   // Fusion Moment 01: 합체는 탄생 — 짧은 결과 확인 화면을 먼저 보여준다.
   //   영입 후보는 지금 굴려 고정(공통 규칙: 합체 실행 = 반드시 영입으로 보충).
@@ -487,10 +510,15 @@ function battleTick() {
     ...gameState.enemies.filter((u) => !u.isDead),
   ];
 
+  // Run Structure 01C — 심도 속도 압박: 심도 30+/40+에서 몬스터 게이지 충전 가속(×1.3/×1.5). 영웅 불변.
+  //   계산식은 게이지 "충전량"만 — tick 간격/배속 루프와 무관하므로 2x/MAX에서도 안전.
+  const enemySpeedMult = depthSpeedFactor(gameState.run.depth || 1);
   allUnits.forEach((u) => {
     // First Class Expansion 01: slow(감속) — 속도 게이지 상승 -40%(바드 템포). 자기 행동 시 1턴 만료.
     const slowed = Array.isArray(u.statuses) && u.statuses.some((s) => s.type === "slow");
-    u.actionGauge += slowed ? u.speed * 0.6 : u.speed;
+    let gain = slowed ? u.speed * 0.6 : u.speed;
+    if (gameState.enemies.includes(u)) gain *= enemySpeedMult; // 몬스터(보스 포함)만 가속
+    u.actionGauge += gain;
   });
 
   const ready = allUnits

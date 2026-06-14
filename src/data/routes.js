@@ -70,6 +70,25 @@ export function depthScale(depth) {
   return { hp, atk };
 }
 
+// Run Structure 01C — 심도 분위기: 심도가 깊어질수록 "숲의 온도/공기"가 바뀐다(읽힘용).
+//   1~29 기본 / 30+ 위협 / 40+ 분노. tier=전장·패널 class hook, label=문구. "보스를 오래 미룬 대가"를
+//   숫자가 아니라 전장 분위기로도 보이게 한다.
+export function depthAtmosphere(depth) {
+  const d = Math.max(1, depth || 1);
+  if (d >= 40) return { tier: "fury",   label: "숲이 분노로 가득찹니다" };
+  if (d >= 30) return { tier: "threat", label: "숲이 위협으로 가득찹니다" };
+  return { tier: "", label: "" };
+}
+
+// Run Structure 01C — 심도 속도 압박: 심도 30+/40+에서 몬스터 행동 게이지 충전 가속(영웅 불변).
+//   일반 전투 행동 빈도로도 "숲이 거칠어졌다"가 느껴지게. 보수적 상한(×1.5) — 폭주 방지.
+export function depthSpeedFactor(depth) {
+  const d = Math.max(1, depth || 1);
+  if (d >= 40) return 1.5;
+  if (d >= 30) return 1.3;
+  return 1;
+}
+
 // 보스 심도 강화(광폭화) — 늦게 도전할수록 사자왕이 강해진다. depthScale 위에 곱하는 추가 배수.
 //   도전을 "막지" 않는다 — 빠른 도전도 가능하되, 늦으면 보스가 숲의 깊이에 반응한다.
 //   stage 0=평상 / 1=분노(늦은) / 2=광폭화(과심도). label·log는 UI/로그 체감용.

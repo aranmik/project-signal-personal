@@ -104,6 +104,31 @@ body {
   pointer-events: none;
 }
 
+/* Run Structure 01C — 심도 분위기: 깊은 심도일수록 전장에 옅은 붉은 기운.
+   배경(background-image)으로만 입혀 유닛/행동선/숫자 위로 덮지 않는다 → 전투 가독성 보장.
+   모바일 390px에서도 과하지 않게 보수적 농도. 30+ 위협 / 40+ 분노(조금 더 강하게). */
+#battle-field[data-depth-tier="threat"] {
+  background-image:
+    radial-gradient(130% 80% at 72% 8%, rgba(190, 45, 30, 0.10), transparent 60%),
+    linear-gradient(rgba(120, 150, 190, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 150, 190, 0.04) 1px, transparent 1px);
+}
+#battle-field[data-depth-tier="fury"] {
+  background-color: #120a0c;
+  background-image:
+    radial-gradient(140% 95% at 70% 6%, rgba(220, 50, 32, 0.18), transparent 62%),
+    linear-gradient(rgba(120, 150, 190, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 150, 190, 0.04) 1px, transparent 1px);
+}
+
+/* 심도 분위기 문구(run-status / route-panel) */
+.depth-atmo { font-weight: 700; }
+.depth-atmo--threat { color: #ff9a6a; }
+.depth-atmo--fury { color: #ff6a5a; }
+.route-atmo { margin: 2px 0 0; font-size: 12px; font-weight: 700; text-align: center; }
+.route-atmo--threat { color: #ff9a6a; }
+.route-atmo--fury { color: #ff6a5a; }
+
 /* 유닛 무대 — 화면 중앙 밴드로 고정 (배경은 화면 전체, 캐릭터는 일정 구도)
    Shell 01: 하단 UI 제거로 전투 영역 확대 → 밴드 560px */
 #unit-layer {
@@ -1387,10 +1412,23 @@ body {
 }
 /* FX Density Guard 01: MAX에선 숫자도 더 빨리 사라지게(누적 방지) */
 #battle-field[data-speed="MAX"] .fx-number { animation-duration: 0.55s; }
-.fx-number--dmg { color: #f4b1a6; }
-.fx-number--heal { color: #9fe6cf; }
-/* Status & Effect Foundation 01: 상태 tick 숫자(poison) — 작고 약하게, 행동 숫자와 결 구분 */
-.fx-number--poison { color: #a8d98a; font-size: 16px; opacity: 0.9; }
+/* Run Structure 01C — 피해 숫자 규격화: 의미별로만 색을 둔다(임의 색 줄이기).
+   기본=빨강 / 치명=주황 / 중독=보라 / 회복=청록. 영웅·몬스터 동일 규칙. */
+.fx-number--dmg { color: #ff8f7e; }            /* 기본 공격 — 빨강 계열(통일) */
+.fx-number--heal { color: #9fe6cf; }           /* 회복 — 청록 */
+.fx-number--poison { color: #c79bff; text-shadow: 0 0 6px rgba(150,90,255,.45), 0 1px 2px rgba(0,0,0,.6); } /* 중독 — 보라(기본과 동일 크기) */
+/* 치명타 — 주황·굵게·크게, 폭발 후 제자리 축소+fade. (타입 준비 — 실제 치명 시스템은 후속) */
+.fx-number--crit {
+  color: #ffb24d;
+  font-size: 28px;
+  font-weight: 900;
+  text-shadow: 0 0 9px rgba(255,150,40,.65), 0 1px 2px rgba(0,0,0,.6);
+  animation: fx-number-crit 0.72s ease-out forwards;
+}
+#battle-field[data-speed="MAX"] .fx-number--crit { animation-duration: 0.5s; }
+/* 향후 특수 피해 태그(관통/분쇄/처형) — 빨강 숫자 앞 짧은 텍스트. 구조만 준비. */
+.fx-number--tagged { white-space: nowrap; }
+.fx-number-tag { font-size: 11px; font-weight: 700; opacity: 0.85; margin-right: 3px; vertical-align: 1px; }
 /* 같은 대상 동시 숫자 — queue offset (늦게, 우상단으로) */
 .fx-number--queued {
   animation-name: fx-number-queued;
@@ -1439,6 +1477,13 @@ body {
   0% { opacity: 0; transform: translate(0, 2px); }
   30% { opacity: 1; transform: translate(9px, -6px); }
   100% { opacity: 0; transform: translate(11px, -22px); }
+}
+/* 치명타 — 크게 등장 → 제자리 축소 + fade(폭발 의미). 기본 피해의 위로-떠오름과 결을 구분. */
+@keyframes fx-number-crit {
+  0% { opacity: 0; transform: scale(1.7); }
+  18% { opacity: 1; transform: scale(1.25); }
+  55% { opacity: 1; transform: scale(1.0); }
+  100% { opacity: 0; transform: scale(0.85) translateY(-8px); }
 }
 @media (prefers-reduced-motion: reduce) {
   .fx-svg, .fx-svg .fx-path, .fx-svg .fx-head,
