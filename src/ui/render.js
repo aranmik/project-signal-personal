@@ -1,4 +1,5 @@
-import { stagePlan, BEGINNER_THEME, STAGE_THEMES } from "../data/stages.js";
+import { BEGINNER_THEME, STAGE_THEMES } from "../data/stages.js";
+import { ROUTE_TYPES, bossTimingLabel } from "../data/routes.js";
 import { availableFusions, slotPreference } from "../data/jobs.js";
 import { REWARDS } from "../data/rewards.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
@@ -25,6 +26,7 @@ export function renderGame(state) {
   const fusionResultPanel = document.getElementById("fusion-result-panel");
   const recruitPanel = document.getElementById("recruit-panel");
   const arrangePanel = document.getElementById("arrange-panel");
+  const routePanel = document.getElementById("route-panel");
   const codexScreen = document.getElementById("codex-screen");
   const stageSelect = document.getElementById("stage-select");
   const battleView = document.getElementById("battle-view");
@@ -38,6 +40,7 @@ export function renderGame(state) {
   fusionResultPanel.hidden = true;
   recruitPanel.hidden = true;
   arrangePanel.hidden = true;
+  if (routePanel) routePanel.hidden = true;
   battleView.hidden = true;
 
   if (state.screen === "title") {
@@ -99,6 +102,15 @@ export function renderGame(state) {
   if (state.screen === "arrange") {
     arrangePanel.hidden = false;
     renderArrangePanel(state);
+    return;
+  }
+
+  // Run Structure 01A: 여정 선택 화면 (전투 후 다음 길을 고른다)
+  if (state.screen === "route") {
+    if (routePanel) {
+      routePanel.hidden = false;
+      renderRoutePanel(state);
+    }
     return;
   }
 
@@ -330,6 +342,37 @@ export function renderArrangePanel(state) {
   `;
 }
 
+// Run Structure 01A — 여정 선택 화면.
+//   "전투는 자동이지만, 여정은 내가 고른다." 2~3개 카드(읽히는 반고정). 각 카드는 짧은 이름/설명.
+//   보스문 카드는 열쇠 보유 시에만 오퍼에 포함되며 도전 타이밍 감각(이른/빠른/적정…)을 함께 보여준다.
+function renderRoutePanel(state) {
+  const choices = state.run.routeChoices || [];
+  const cards = choices.map((id) => {
+    const rt = ROUTE_TYPES[id];
+    if (!rt) return "";
+    const extra = id === "boss"
+      ? `<span class="route-timing">${bossTimingLabel(state.run.depth)} · 열쇠 ${state.run.bossKeys}</span>`
+      : "";
+    return `<button type="button" class="route-card route-card--${id}" data-route="${id}">
+      <span class="route-title">${rt.title}</span>
+      <span class="route-sub">${rt.sub}</span>
+      ${extra}
+    </button>`;
+  }).join("");
+
+  document.getElementById("route-body").innerHTML = `
+    <div class="flow-kicker">${BEGINNER_THEME.name} · 심도 ${state.run.depth}</div>
+    <h2 class="flow-heading">다음 여정을 고르세요</h2>
+    <p class="flow-note">전투는 자동이지만, 여정은 내가 고른다.</p>
+    <div class="route-status">
+      <span class="route-stat">심도 <b>${state.run.depth}</b></span>
+      <span class="route-stat">보스 열쇠 <b>${state.run.bossKeys}</b></span>
+      <span class="route-stat">위험도 <b>${state.run.threat}</b></span>
+    </div>
+    <div id="route-list">${cards}</div>
+  `;
+}
+
 // Start Flow UX Polish 01 — 스테이지 테마 선택 화면.
 //   5개 테마를 보여주되 초보자의 길만 진입 가능(나머지 잠금/dimmed). 전투 로직 불변.
 function renderStageSelect() {
@@ -402,7 +445,7 @@ function growthSummaryText(state) {
 
 function renderRewardPanel(state) {
   document.getElementById("growth-stage-label").textContent =
-    `${BEGINNER_THEME.name} ${state.run.stage} / ${state.run.maxStage} 클리어!`;
+    `${BEGINNER_THEME.name} · 심도 ${state.run.depth} 클리어!`;
   document.getElementById("growth-subtitle").innerHTML =
     "훈련을 하나 선택하세요.<br><span class='growth-hint'>선택한 훈련은 이번 모험 동안 유지되고, 다음 전투부터 적용됩니다.</span>";
 
@@ -446,18 +489,19 @@ function renderResultOverlay(state) {
 }
 
 function renderHud(state) {
-  // Game Flow Foundation 01: "초보자의 길 3 / 10 · 일반 전투" — 스테이지 위치/타입이 읽힌다.
+  // Run Structure 01A: "초보자의 길 · 심도 5 · 정예 전투" — 여정 깊이/현재 인카운터 타입이 읽힌다.
   //   프리뷰 장면은 정식 런이 아니므로 PREVIEW 표기.
   const stageEl = document.getElementById("stage-label");
   if (state.battle.previewKind) {
     stageEl.textContent = "PREVIEW";
   } else {
-    const plan = stagePlan(state.run.stage);
+    const rt = ROUTE_TYPES[state.run.currentRouteType];
     stageEl.textContent =
-      `${BEGINNER_THEME.name} ${state.run.stage} / ${state.run.maxStage} · ${plan.label}`;
+      `${BEGINNER_THEME.name} · 심도 ${state.run.depth} · ${rt ? rt.hud : "전투"}`;
   }
   document.getElementById("status-label").textContent = state.battle.status;
   renderPartyBonus(state.run.bonuses);
+  renderRunStatus(state);
 
   // Combat Breath Preview 01: 배속 라벨(1x~MAX) + 강조 + 전장 --tick/data-fast
   //   --tick(=현재 tick 간격)으로 tempo fill transition을 cadence에 자동 정합 → 모든 배속 부드럽게.
@@ -490,6 +534,25 @@ function renderPartyBonus(bonuses) {
   if (maxHp > 0) parts.push(`최대 HP +${maxHp}`);
   if (heal > 0) parts.push(`회복 +${heal}`); // Reward & Growth 01: 회복 훈련도 HUD 요약에
   el.textContent = `파티 강화: ${parts.join(" · ")}`;
+  el.hidden = false;
+}
+
+// Run Structure 01A — 상단 run 표시(심도 / 보스 열쇠 / 위험도 / 현재 여정 타입).
+//   전투 화면 한 줄 요약. 프리뷰는 정식 런이 아니므로 숨긴다.
+function renderRunStatus(state) {
+  const el = document.getElementById("run-status");
+  if (!el) return;
+  if (state.battle.previewKind) {
+    el.hidden = true;
+    return;
+  }
+  const rt = ROUTE_TYPES[state.run.currentRouteType];
+  el.innerHTML = [
+    `<span>심도 <b>${state.run.depth}</b></span>`,
+    `<span>보스 열쇠 <b>${state.run.bossKeys}</b></span>`,
+    `<span>위험도 <b>${state.run.threat}</b></span>`,
+    `<span>${rt ? rt.hud : ""}</span>`,
+  ].join("");
   el.hidden = false;
 }
 

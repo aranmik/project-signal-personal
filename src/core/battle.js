@@ -1,8 +1,9 @@
 import { gameState } from "./state.js";
-import { createInitialParty, createPreviewEnemies, createStageEnemies, SLOT_ORDER, DEFAULT_FORMATION } from "./state.js";
+import { createInitialParty, createPreviewEnemies, createStageEnemies, createRouteEnemies, SLOT_ORDER, DEFAULT_FORMATION } from "./state.js";
 import { FUSION_RECIPES, BASE_JOBS, prefersFront, slotPreference } from "../data/jobs.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
+import { ROUTE_TYPES, rollRouteOffer } from "../data/routes.js";
 import { rewardById } from "../data/rewards.js";
 import { renderGame, playActionFx, playStatusTickFx, playSupportFx } from "../ui/render.js";
 import { skillOf } from "../data/skills.js";
@@ -216,7 +217,14 @@ export function resetBattle() {
   gameState.run.lastFusion = null;
   gameState.run.recruitContext = null;
 
-  gameState.logs = ["초보자의 길 1 / 10 — 모험 시작!"];
+  // Run Structure 01A: 여정 레이어 초기화. stage=이긴 전투 수, depth=여정 깊이(별개).
+  gameState.run.depth = 1;
+  gameState.run.bossKeys = 0;
+  gameState.run.threat = 0;
+  gameState.run.routeChoices = null;
+  gameState.run.currentRouteType = "normal"; // 첫 전투는 고정 도입(일반)
+
+  gameState.logs = ["새싹 숲 입구 — 모험 시작! 첫 전투가 끝나면 여정을 고른다."];
 
   renderGame(gameState);
 }
@@ -256,9 +264,59 @@ export function applyReward(id) {
 // Fusion Flow Foundation 01 — 합체/영입 Flow.
 //   모든 판단은 run.formation(슬롯→jobId)과 데이터(FUSION_RECIPES/BASE_JOBS) 기반.
 //   파티 유닛은 다음 스테이지 진입 시 formation에서 재구성된다(전투 중 변경 없음).
+// Run Structure 01A: 전투 후(보상/합체/영입/배치 이후) 다음 전투로 직행하지 않고 "여정 선택"을 거친다.
+//   모든 전투 후 경로(보상 직행 / 합체 스킵 / 재배치 확정)가 여기 한 곳으로 모이므로 단일 진입점.
 function proceedNextStage() {
+  showRouteChoice();
+}
+
+// Run Structure 01A — 여정 선택 화면 표시. depth/bossKeys로 선택지(읽히는 반고정)를 굴려 고정한다.
+function showRouteChoice() {
+  clearFinish();
+  gameState.battle.isRunning = false;
+  gameState.battle.status = "ready";
+  gameState.run.result = null;
+  gameState.run.routeChoices = rollRouteOffer({
+    depth: gameState.run.depth,
+    bossKeys: gameState.run.bossKeys,
+  });
+  gameState.screen = "route";
+  renderGame(gameState);
+}
+
+// Run Structure 01A — 길 선택. 휴식=전투 없이 한 박자(다시 선택), 그 외=인카운터 생성 후 전투.
+//   "내가 보스 도전 타이밍을 정한다" — 보스문은 열쇠가 있을 때만 오퍼에 포함된다(여기서도 방어).
+export function chooseRoute(routeType) {
+  const rt = ROUTE_TYPES[routeType];
+  if (!rt) return;
+  if (!(gameState.run.routeChoices || []).includes(routeType)) return;
+
+  gameState.run.depth += 1;
+  gameState.run.currentRouteType = routeType;
+  gameState.run.routeChoices = null;
+
+  if (rt.kind === "rest") {
+    restParty();
+    gameState.run.threat = Math.max(0, gameState.run.threat - 1);
+    pushLog("이슬 쉼터에서 한 박자 정비했다.");
+    showRouteChoice(); // 전투 없이 다시 여정 선택으로
+    return;
+  }
+
+  // 위험/정예는 위험도(읽힘용) 상승. 보스/일반은 변동 없음.
+  if (routeType === "danger") gameState.run.threat += 2;
+  else if (routeType === "elite") gameState.run.threat += 1;
+
   gameState.screen = "battle";
-  advanceStage();
+  advanceStage(routeType);
+}
+
+// 휴식 정비 — 01A 한정 가벼운 회복. 현재 모델은 매 전투 파티가 풀피로 재생성되므로 실효는 거의 없다.
+//   (전투 간 영구 HP 유지는 후속 레이어 — 그때 이 회복이 실제 의미를 갖는다. WATCH)
+function restParty() {
+  gameState.party.forEach((u) => {
+    if (!u.isDead) u.hp = Math.min(u.maxHp, u.hp + Math.round(u.maxHp * 0.3));
+  });
 }
 
 export function partyJobIds() {
@@ -372,12 +430,14 @@ export function confirmArrange() {
   proceedNextStage();
 }
 
-export function advanceStage() {
+// Run Structure 01A: stage(이긴 전투 수)는 합체 S3/S8·영입 S5와 일반 풀 인덱스를 계속 구동한다.
+//   다만 다음 인카운터는 stage 플랜이 아니라 "고른 길"(routeType)이 정한다 — createRouteEnemies.
+export function advanceStage(routeType = gameState.run.currentRouteType) {
   gameState.run.stage += 1;
 
   // Fusion Flow 01: 현재 배치(합체/영입 반영) 기준으로 파티 재구성.
   gameState.party = createInitialParty(gameState.run.bonuses, gameState.run.formation || undefined);
-  gameState.enemies = createStageEnemies(gameState.run.stage); // 스테이지 플랜(5 정예/10 보스)
+  gameState.enemies = createRouteEnemies(routeType, gameState.run); // 길 선택이 인카운터를 만든다
 
   gameState.battle.tick = 0;
   gameState.battle.status = "ready";
@@ -385,7 +445,8 @@ export function advanceStage() {
   gameState.battle.result = null;
   gameState.run.result = null;
 
-  gameState.logs.push(`초보자의 길 ${gameState.run.stage} / ${gameState.run.maxStage} — 전투 시작!`);
+  const label = ROUTE_TYPES[routeType]?.hud || "전투";
+  gameState.logs.push(`심도 ${gameState.run.depth} — ${label} 시작!`);
 
   startBattle();
 }
@@ -1203,7 +1264,8 @@ function checkBattleEnd() {
   }
 
   if (allEnemiesDead) {
-    return { outcome: gameState.run.stage < gameState.run.maxStage ? "victory" : "clear" };
+    // Run Structure 01A: 보스문 승리 = 런 클리어. 그 외 전투 승리 = 보상 후 여정 선택으로.
+    return { outcome: gameState.run.currentRouteType === "boss" ? "clear" : "victory" };
   }
   return { outcome: "defeat" };
 }
@@ -1232,12 +1294,17 @@ function applyFinish(outcome) {
   if (gameState.battle.status !== "ended") return; // 그 사이 새 전투 시작 시 무시(방어)
 
   if (outcome === "victory") {
+    // Run Structure 01A: 정예 전투 승리 시 보스 열쇠 획득(보스문이 다음 여정 선택지로 열린다).
+    if (gameState.run.currentRouteType === "elite") {
+      gameState.run.bossKeys += 1;
+      pushLog(`정예를 물리쳤다 — 보스 열쇠 +1 (보유 ${gameState.run.bossKeys}).`);
+    }
     gameState.run.result = "victory";
     gameState.screen = "reward"; // Game Flow 01: 클리어 → 보상 선택 화면
-    pushLog(`초보자의 길 ${gameState.run.stage} 클리어! 보상을 선택하세요.`);
+    pushLog(`심도 ${gameState.run.depth} 클리어! 보상을 선택하세요.`);
   } else if (outcome === "clear") {
     gameState.run.result = "clear";
-    pushLog("초보자의 길 클리어! ▶ 다시 시작");
+    pushLog("새싹숲 사자왕 격파 — 런 클리어! ▶ 다시 시작");
   } else if (outcome === "defeat") {
     gameState.battle.result = "defeat";
     gameState.run.result = "defeat";

@@ -102,6 +102,11 @@
         <div id="arrange-body"></div>
       </section>
 
+      <!-- Run Structure 01A: 여정 선택 화면 (전투 후 다음 길을 고른다) -->
+      <section id="route-panel" class="flow-panel" hidden>
+        <div id="route-body"></div>
+      </section>
+
       <!-- 보상 선택 화면 (Reward & Growth 01: 버튼은 REWARDS 데이터에서 렌더) -->
       <section id="growth-panel" hidden>
         <div id="growth-stage-label"></div>
@@ -122,6 +127,9 @@
         </header>
 
         <div id="party-bonus" hidden></div>
+
+        <!-- Run Structure 01A: run 표시(심도/보스 열쇠/위험도/여정 타입) -->
+        <div id="run-status" hidden></div>
 
         <!-- Combat Grammar Polish 02: 프리뷰 디버깅 바 제거(사용자 화면에서 숨김).
              dev용 startPreview 함수는 코드에 남아있으나 UI 진입점은 없음. -->

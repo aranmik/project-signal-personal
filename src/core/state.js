@@ -1,5 +1,6 @@
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { stagePlan } from "../data/stages.js";
+import { NORMAL_POOL, DANGER_EXTRA, ELITE_POOL, BOSS_ENCOUNTER } from "../data/routes.js";
 
 function createUnit(template, instanceId, bonuses = { atk: 0, maxHp: 0 }) {
   const maxHp = template.maxHp + bonuses.maxHp;
@@ -59,11 +60,12 @@ const RANK_OVERRIDES = {
 };
 const RANK_PREFIX = { elite: "정예 ", boss: "보스 " };
 
-export function createStageEnemies(stage) {
-  const plan = stagePlan(stage);
-  return plan.enemies.map((spec, i) => {
+// 적 명세 배열("키" / "키:elite" / "키:boss")을 유닛으로 빌드하는 공용 헬퍼.
+//   instanceId는 prefix로 유니크하게(스테이지/여정 전환 간 잔존 상태 차단). 정예/보스 override는 동일.
+function buildEnemies(specs, prefix) {
+  return specs.map((spec, i) => {
     const [key, rank] = spec.split(":");
-    const u = createUnit(UNIT_TEMPLATES.enemies[key], `st${stage}-${key}-${i}`);
+    const u = createUnit(UNIT_TEMPLATES.enemies[key], `${prefix}-${key}-${i}`);
     u.slot = rank === "boss" ? "boss" : i;
     if (rank && RANK_OVERRIDES[rank]) {
       // Beginner Theme Actor 01: 고유명 정예/보스(keepName)는 "정예/보스 " 접두를 붙이지 않는다
@@ -73,6 +75,32 @@ export function createStageEnemies(stage) {
     }
     return u;
   });
+}
+
+export function createStageEnemies(stage) {
+  return buildEnemies(stagePlan(stage).enemies, `st${stage}`);
+}
+
+// Run Structure 01A — 길 선택이 정한 인카운터를 생성한다(createStageEnemies와 빌더 공유).
+//   normal/danger = 초보자 일반 풀 재활용(danger는 소형 +1·소량 강화), elite = 올빼미/사슴(열쇠),
+//   boss = 사자왕. 정예/보스 수치는 기존 RANK_OVERRIDES 그대로 — 밸런스 튜닝이 아니다.
+export function createRouteEnemies(routeType, run) {
+  const depth = run.depth;
+  if (routeType === "boss") return buildEnemies(BOSS_ENCOUNTER, `d${depth}`);
+  if (routeType === "elite") {
+    // 정예는 번갈아(올빼미 → 사슴 …). 이미 처치한 정예 수(bossKeys) 기준으로 순환.
+    const spec = ELITE_POOL[(run.bossKeys || 0) % ELITE_POOL.length];
+    return buildEnemies(spec, `d${depth}`);
+  }
+
+  const base = NORMAL_POOL[(run.stage - 1) % NORMAL_POOL.length].slice();
+  if (routeType === "danger") base.push(DANGER_EXTRA[(run.stage + depth) % DANGER_EXTRA.length]);
+  const units = buildEnemies(base, `d${depth}`);
+  if (routeType === "danger") {
+    // 위험 전투: "조금 더 버겁게" 소량 강화(밸런스 튜닝 아님 — 읽힘용). 보스/정예 override와 무관.
+    units.forEach((u) => { u.maxHp = Math.round(u.maxHp * 1.15); u.hp = u.maxHp; u.atk += 1; });
+  }
+  return units;
 }
 
 // Combat Breath Preview 01: 개발/프리뷰용 전투 장면.
@@ -142,6 +170,12 @@ export const gameState = {
     result: null,
     bonuses: { atk: 0, maxHp: 0, heal: 0 }, // 누적 성장값 — 파티 재생성 시 아군 전체 적용
     rewardLevels: {}, // Reward & Growth 01: 보상별 선택 횟수(Lv 표시용 — 효과는 bonuses가 담당)
+    // Run Structure 01A — 선택형 여정 레이어 상태(stage=이긴 전투 수와 분리).
+    depth: 1,                   // 여정 깊이(전투 + 휴식 노드 수) — 보스 도전 타이밍 감각의 기준
+    bossKeys: 0,                // 보스 열쇠(정예 전투 승리로 획득)
+    threat: 0,                  // 위험도(읽힘용 수치 — 위험/정예에서 상승)
+    routeChoices: null,         // 현재 제시된 여정 선택지(route id 배열) — 화면 갱신에도 고정
+    currentRouteType: "normal", // 현재/직전 인카운터 타입(HUD 표시 + 승리 처리 분기)
     formation: null,      // null = 기본 4인 배치
     startFormation: null, // 직업 선택 화면에서 정한 시작 배치
     recruitOffer: null,   // 영입 화면 진입 시 굴린 랜덤 후보(최대 3) — 화면 갱신에도 고정

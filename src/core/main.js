@@ -6,7 +6,7 @@ import {
   startRun, goTitle, applyReward, cycleSpeed, startPreview, showJobSelect,
   applyFusion, skipFusion, applyRecruit, skipRecruit,
   swapFormationSlots, confirmArrange, continueAfterFusion, showCodex,
-  showStageSelect,
+  showStageSelect, chooseRoute,
 } from "./battle.js";
 
 console.log("Project Signal Personal — init", gameState);
@@ -160,6 +160,12 @@ arrangePanel.addEventListener("click", (e) => {
     arrangePanel.dataset.picked = "";
     swapFormationSlots(picked, slot); // 같은 슬롯 클릭이면 교환해도 동일(집기 해제)
   }
+});
+
+// Run Structure 01A: 여정 선택 — 동적 카드는 위임으로 처리
+document.getElementById("route-panel").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-route]");
+  if (b) chooseRoute(b.dataset.route);
 });
 
 // 결과 오버레이 → 다시 시작 (시작 배치 유지로 새 런)
