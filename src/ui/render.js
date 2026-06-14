@@ -715,6 +715,29 @@ function updateFieldUnit(el, unit) {
     }
   }
 
+  // Combat Grammar Foundation 01 — 버프/디버프 상태칩(게이지 하단)도 변경 시에만 갱신(매 tick 재생성 방지).
+  const chipsEl = el.querySelector(".status-chips");
+  if (chipsEl) {
+    const chipsKey = statusChips(unit).join(",");
+    if (chipsEl.dataset.chips !== chipsKey) {
+      chipsEl.dataset.chips = chipsKey;
+      chipsEl.innerHTML = statusChipsHTML(unit);
+    }
+  }
+  // 도발 머리 위 "!" — tauntedBy 상태가 바뀌면 추가/제거.
+  const hasTauntMark = !!el.querySelector(".taunt-mark");
+  if (!!unit.tauntedBy !== hasTauntMark) {
+    if (unit.tauntedBy) {
+      const m = document.createElement("span");
+      m.className = "taunt-mark";
+      m.setAttribute("aria-label", "도발됨");
+      m.textContent = "!";
+      el.appendChild(m);
+    } else {
+      el.querySelector(".taunt-mark")?.remove();
+    }
+  }
+
   const hpFill = el.querySelector(".hp-bar-fill");
   if (hpFill) {
     const hpPct = unit.maxHp > 0
@@ -847,6 +870,26 @@ function statusMarkersHTML(markers) {
     .join("");
 }
 
+// Combat Grammar Foundation 01 — 버프/디버프 상태칩(HP/속도 게이지 하단). 작은 텍스트 기호로 읽힘.
+//   8종 공통 상태 + 도발. 점 마커(위)와 분리 — 이쪽은 "수치 효과"를 글자로 보여준다. 최대 4개(과밀 방지).
+const STATUS_CHIP = {
+  atkUp: { t: "공↑", c: "up" }, atkDown: { t: "공↓", c: "down" },
+  defUp: { t: "방↑", c: "up" }, defDown: { t: "방↓", c: "down" },
+  critUp: { t: "치↑", c: "up" }, critDown: { t: "치↓", c: "down" },
+  speedUp: { t: "속↑", c: "up" }, speedDown: { t: "속↓", c: "down" },
+  taunted: { t: "도발", c: "taunt" },
+};
+function statusChips(unit) {
+  return (unit.statuses || []).map((s) => s.type).filter((t) => STATUS_CHIP[t]);
+}
+function statusChipsHTML(unit) {
+  const chips = statusChips(unit);
+  if (chips.length === 0) return "";
+  return chips.slice(0, 4)
+    .map((t) => `<span class="status-chip status-chip--${STATUS_CHIP[t].c}">${STATUS_CHIP[t].t}</span>`)
+    .join("");
+}
+
 // Status & Effect Foundation 01 — 표시 마커 파생.
 //   실제 상태(unit.statuses)에서 마커를 파생하고, statusMarkers(표시 전용 — preview 등)는
 //   뒤에 합친다(중복 제거, 최대 3 유지). 실데이터와 표시 데이터가 여기서만 합류한다.
@@ -942,16 +985,23 @@ function createFieldUnit(unit) {
   // Boss Presence Foundation 01: 정예/보스만 약한 존재감 aura(느린 호흡). 아바타 뒤(낮은 z).
   const presenceAura = unit.tier ? `<span class="presence-aura" aria-hidden="true"></span>` : "";
 
+  // Combat Grammar Foundation 01 — 도발당한 대상 머리 위 "!"(작지만 명확). 행동 후 해제되면 사라진다.
+  const tauntMark = unit.tauntedBy ? `<span class="taunt-mark" aria-label="도발됨">!</span>` : "";
+  const chipsHTML = statusChipsHTML(unit);
+  const chipsKey = statusChips(unit).join(",");
+
   wrap.setAttribute("aria-label", unit.name);
   wrap.innerHTML = `
     ${presenceAura}
     ${rolePip}
+    ${tauntMark}
     <div class="status-slots" data-markers="${markersKey}">${statusMarkersHTML(markers)}</div>
     <div class="fig-react">
       ${figureHTML}
     </div>
     <span class="hp-bar"><span class="hp-bar-fill" style="width:${hpPct}%"></span><span class="hp-shield" style="width:${shieldPct}%"></span></span>
     <span class="tempo-bar${readyClass}"><span class="tempo-bar-fill" style="width:${gaugePct}%"></span></span>
+    <div class="status-chips" data-chips="${chipsKey}">${chipsHTML}</div>
   `;
 
   return wrap;
@@ -1152,7 +1202,7 @@ export function playActionFx(event) {
   // Job Grammar 01: kind = 직업 행동 분류(strike/protect/snipe/heal/attack).
   //   현재는 행동선 data-kind 기록만 — 시각 변화 없음. 미래 직업별 FX/로그 확장 hook.
   const { sourceInstanceId, sourceUnitId, targetInstanceId, lineType, kind, isHeal, amount,
-    shoutText, shoutKind, shoutTier } = event;
+    shoutText, shoutKind, shoutTier, numberVariant } = event;
   const layer = document.getElementById("fx-layer");
   const field = document.getElementById("battle-field");
   if (!layer || !field) return;
@@ -1189,7 +1239,8 @@ export function playActionFx(event) {
     spawnLine(layer, s, t, lineType, kind);
     spawnPulse(layer, t, isHeal);
     // First Class Expansion 01: 피해/회복 0(상태 부여형 스킬: 중독 등)은 숫자 생략.
-    if (amount > 0) spawnNumber(layer, tn, targetInstanceId, isHeal, amount);
+    // Combat Grammar Foundation 01: numberVariant(crit 등)로 피해 숫자 규격 분기.
+    if (amount > 0) spawnNumber(layer, tn, targetInstanceId, isHeal, amount, numberVariant);
     reactUnit(targetInstanceId, isHeal);
   };
   setTimeout(fire, lead);
@@ -1206,6 +1257,25 @@ export function playStatusTickFx({ targetInstanceId, amount, kind }) {
   const t = numberAnchor(targetInstanceId, field.getBoundingClientRect());
   if (!t) return;
   spawnNumber(layer, t, targetInstanceId, false, amount, kind);
+}
+
+// Combat Grammar Foundation 01 — 상태 적용 FX(머리 위 짧은 기호 팝). 버프/디버프가 "걸렸다"를 읽게.
+//   과하지 않게 — 작은 텍스트(공↑/속↓ 등)가 머리 위로 살짝 떠올랐다 사라진다. variant=up/down 색 구분.
+export function playStatusApplyFx(targetInstanceId, label, variant = "") {
+  if (!label) return;
+  if (dyingUnits.has(targetInstanceId) || cleanedDead.has(targetInstanceId)) return;
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  const p = unitPoint(targetInstanceId, { fx: 0.5, fy: 0.16 }, field.getBoundingClientRect());
+  if (!p) return;
+  const el = document.createElement("span");
+  el.className = `fx-status-pop${variant ? ` fx-status-pop--${variant}` : ""}`;
+  el.textContent = label;
+  el.style.left = `${p.x}px`;
+  el.style.top = `${p.y}px`;
+  el.addEventListener("animationend", () => el.remove());
+  layer.appendChild(el);
 }
 
 // Action Emphasis 01: source unit "행동 선언" cue.
@@ -1290,6 +1360,8 @@ const LINE_STYLE = {
   heal:     { bowF: 0.50, bowMin: 34, bowMax: 92, flip: -1, head: "cross",  draw: false },
   // Hero Skill 01: 교란 — 보라/분홍 거친 왜곡선(짧게 흔들림). 작은 혼란 표식(spark).
   disrupt:  { bowF: 0.22, bowMin: 14, bowMax: 44, flip: 1,  head: "spark",  draw: false, rough: true },
+  // Combat Grammar Foundation 01: 도발 — 노랑 점선(공격선/회복선과 구분). 화려하지 않게.
+  taunt:    { bowF: 0.20, bowMin: 14, bowMax: 44, flip: 1,  head: "spark",  draw: false },
   // legacy(미사용)
   straight: { bowF: 0.05, bowMin: 3,  bowMax: 8,  flip: 1,  head: "arrow", draw: true },
   slash:    { bowF: 0.36, bowMin: 26, bowMax: 82, flip: 1,  head: "slash", draw: true, ghost: true },

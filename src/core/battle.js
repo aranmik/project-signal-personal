@@ -5,7 +5,7 @@ import { UNIT_TEMPLATES } from "../data/units.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
 import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions, depthSpeedFactor } from "../data/routes.js";
 import { rewardById } from "../data/rewards.js";
-import { renderGame, playActionFx, playStatusTickFx, playSupportFx } from "../ui/render.js";
+import { renderGame, playActionFx, playStatusTickFx, playSupportFx, playStatusApplyFx } from "../ui/render.js";
 import { skillOf } from "../data/skills.js";
 
 let tickTimer = null;
@@ -514,10 +514,14 @@ function battleTick() {
   //   계산식은 게이지 "충전량"만 — tick 간격/배속 루프와 무관하므로 2x/MAX에서도 안전.
   const enemySpeedMult = depthSpeedFactor(gameState.run.depth || 1);
   allUnits.forEach((u) => {
-    // First Class Expansion 01: slow(감속) — 속도 게이지 상승 -40%(바드 템포). 자기 행동 시 1턴 만료.
-    const slowed = Array.isArray(u.statuses) && u.statuses.some((s) => s.type === "slow");
-    let gain = slowed ? u.speed * 0.6 : u.speed;
-    if (gameState.enemies.includes(u)) gain *= enemySpeedMult; // 몬스터(보스 포함)만 가속
+    // First Class Expansion 01: slow(감속, 바드 템포) ×0.6. Combat Grammar Foundation 01: speedUp/speedDown ±30%.
+    //   세 상태는 곱연산으로 합성(자기 행동 시 1턴 만료). 게이지 "충전량"만 조정 → 배속 루프와 무관.
+    let speedMod = 1;
+    if (hasStatus(u, "slow")) speedMod *= 0.6;
+    if (hasStatus(u, "speedDown")) speedMod *= (1 - statusPct(u, "speedDown"));
+    if (hasStatus(u, "speedUp")) speedMod *= (1 + statusPct(u, "speedUp"));
+    let gain = u.speed * speedMod;
+    if (gameState.enemies.includes(u)) gain *= enemySpeedMult; // 심도 30+/40+ 몬스터(보스 포함)만 가속
     u.actionGauge += gain;
   });
 
@@ -587,6 +591,64 @@ function hasStatus(unit, type) {
   return Array.isArray(unit.statuses) && unit.statuses.some((s) => s.type === type);
 }
 
+/* ── Combat Grammar Foundation 01 — 치명 / 공통 상태(버프·디버프) / 도발 기반 ──────────
+   "앞으로 모든 스킬이 얹힐 공통 전투 문법." 새 스킬을 늘리는 게 아니라 기반을 만든다.
+   기존 atkUp(올빼미)/atkDown(이슬말랑·사자왕 포효)/slow(바드)/guard/taunt(수문장 어그로)와 호환:
+   이 시스템은 같은 statuses 배열·applyStatus·performAttack/applyDamage 경로를 공유한다. */
+const CRIT_BASE = 0.10;        // 기본 치명 확률(상수화 — 추후 조정)
+const CRIT_MULT = 1.5;         // 치명 피해 배율
+const STATUS_PCT = 0.30;       // 공통 버프/디버프 1차 효과 크기(공/방/치/속 ±30%)
+const STATUS_MAX_TURNS = 3;    // 최대 지속 — 재적용 시 항상 3턴으로 갱신
+// 공통 버프/디버프 키: atkUp/atkDown(공격력) defUp/defDown(방어) critUp/critDown(치명) speedUp/speedDown(속도).
+//   taunted = 새 도발(도발당함 — 다음 기본 공격을 도발자에게). 기존 taunt(어그로 자석)와 별개 키.
+
+// 특정 상태의 효과 크기(pct)를 읽는다(없으면 0). 효과 계산 공용.
+function statusPct(unit, type) {
+  if (!Array.isArray(unit.statuses)) return 0;
+  const s = unit.statuses.find((x) => x.type === type);
+  return s ? (s.pct || 0) : 0;
+}
+
+// 공통 상태 부여 — 항상 STATUS_MAX_TURNS로 갱신(1~3턴 남아도 3으로). 머리 위 짧은 FX로 읽힘.
+function applyCombatStatus(target, type, pct = STATUS_PCT) {
+  applyStatus(target, { type, duration: STATUS_MAX_TURNS, pct });
+  playStatusApplyFx(target.instanceId, STATUS_FX_LABEL[type] || "", STATUS_FX_VARIANT[type] || "");
+}
+
+// 도발(신규 문법): 도발자→대상. 대상의 다음 "기본 공격" 타겟을 도발자로 강제(특수행동 X).
+//   여러 도발이 들어오면 마지막 도발자가 우선(tauntedBy 덮어쓰기). 단일 대상.
+function applyTaunt(caster, target) {
+  target.tauntedBy = caster.instanceId;
+  applyStatus(target, { type: "taunted", duration: STATUS_MAX_TURNS });
+  pushLog(`${caster.name}${josa(caster.name, "이가")} ${target.name}${josa(target.name, "을를")} 도발했다.`);
+  playActionFx({
+    sourceInstanceId: caster.instanceId, sourceUnitId: caster.id, targetInstanceId: target.instanceId,
+    lineType: "taunt", kind: "taunt", isHeal: false, amount: 0,
+    shoutText: "도발!", shoutKind: "taunt", shoutTier: "skill",
+  });
+}
+
+// 도발 리다이렉트 — 기본 공격 시 호출. 도발당한 상태면 타겟을 도발자로 바꾸고 도발을 소모(1회).
+//   특수행동(포효/회복/버프)은 이 경로를 안 타므로 도발에 끊기지 않는다(보스 포효 보호).
+function redirectIfTaunted(unit, intended) {
+  const id = unit.tauntedBy;
+  if (!id) return intended;
+  const taunter = [...gameState.party, ...gameState.enemies].find((u) => u.instanceId === id && !u.isDead);
+  unit.tauntedBy = null; // 1회 소모
+  unit.statuses = (unit.statuses || []).filter((s) => s.type !== "taunted");
+  return taunter || intended;
+}
+
+// 상태 적용 FX 라벨/색 변주(머리 위 짧은 기호). render.playStatusApplyFx가 사용.
+const STATUS_FX_LABEL = {
+  atkUp: "공↑", atkDown: "공↓", defUp: "방↑", defDown: "방↓",
+  critUp: "치↑", critDown: "치↓", speedUp: "속↑", speedDown: "속↓",
+};
+const STATUS_FX_VARIANT = {
+  atkUp: "up", atkDown: "down", defUp: "up", defDown: "down",
+  critUp: "up", critDown: "down", speedUp: "up", speedDown: "down",
+};
+
 // 행동 직전 상태 처리: poison 고정 피해 → duration 1 감소 → 만료 제거.
 //   poison으로 죽으면 행동하지 않는다(호출부에서 isDead 확인).
 function processStatusesBeforeAction(unit) {
@@ -605,6 +667,8 @@ function processStatusesBeforeAction(unit) {
 
   unit.statuses.forEach((s) => { s.duration -= 1; });
   unit.statuses = unit.statuses.filter((s) => s.duration > 0);
+  // Combat Grammar Foundation 01 — 도발이 만료(타임아웃)되면 강제 타겟(tauntedBy)도 함께 해제(영구 도발 방지).
+  if (unit.tauntedBy && !hasStatus(unit, "taunted")) unit.tauntedBy = null;
 }
 
 // ── Monster Identity 01 — 적 전투 개성(trait) ─────────────────────────────
@@ -641,16 +705,16 @@ function traitGuard(unit, heroes) {
     .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
   if (ward) applyStatus(ward, { type: "guard", duration: 2 });
   introTrait(unit, "곰방패가 방패를 세웠다.");
-  const t = selectAttackTarget(heroes);
+  const t = redirectIfTaunted(unit, selectAttackTarget(heroes)); // 도발당했으면 도발자 우선
   if (t) performAttack(unit, t);
   return true;
 }
 
 // 잎여우 — 근접 딜러: HP 가장 낮은 영웅의 빈틈을 파고든다(약하면 추가 피해).
 function traitHunter(unit, heroes) {
-  const t = heroes.reduce((a, b) => (a.hp <= b.hp ? a : b));
+  const t = redirectIfTaunted(unit, heroes.reduce((a, b) => (a.hp <= b.hp ? a : b)));
   introTrait(unit, "잎여우가 빈틈을 파고들었다.");
-  performAttack(unit, t, { mult: t.hp / t.maxHp < 0.5 ? 1.3 : 1 });
+  if (t) performAttack(unit, t, { mult: t.hp / t.maxHp < 0.5 ? 1.3 : 1 });
   return true;
 }
 
@@ -658,15 +722,15 @@ function traitHunter(unit, heroes) {
 function traitRangedFocus(unit, heroes) {
   const back = heroes.filter((h) => h.role === "back");
   const pool = back.length ? back : heroes;
-  const t = pool.reduce((a, b) => (a.hp <= b.hp ? a : b));
+  const t = redirectIfTaunted(unit, pool.reduce((a, b) => (a.hp <= b.hp ? a : b)));
   introTrait(unit, "깃새가 뒤쪽을 노렸다.");
-  performAttack(unit, t, { mult: 0.9, lineType: "ranged" });
+  if (t) performAttack(unit, t, { mult: 0.9, lineType: "ranged" });
   return true;
 }
 
 // 이슬말랑 — 서포터: 공격하며 대상의 다음 공격을 무디게(atkDown, 짧게). 쌓이지 않게 갱신형.
 function traitWeaken(unit, heroes) {
-  const t = selectAttackTarget(heroes);
+  const t = redirectIfTaunted(unit, selectAttackTarget(heroes));
   introTrait(unit, "이슬말랑이 힘을 흐리게 했다.");
   if (t) {
     performAttack(unit, t);
@@ -764,9 +828,11 @@ function performAction(unit) {
 
   // 기본 공격(fallback). snipe 문법(궁수/도적)은 약한 적 우선 원거리 타겟팅 유지.
   const targetPool = isParty ? gameState.enemies : gameState.party;
-  const attackTarget = isParty && grammarOf(unit) === "snipe"
+  let attackTarget = isParty && grammarOf(unit) === "snipe"
     ? selectArcherTarget(targetPool)
     : selectAttackTarget(targetPool);
+  // Combat Grammar Foundation 01 — 도발: 적의 기본 공격 타겟을 도발자로 강제(특수행동 X). 영웅엔 미적용.
+  if (!isParty) attackTarget = redirectIfTaunted(unit, attackTarget);
 
   if (attackTarget) {
     performAttack(unit, attackTarget);
@@ -815,6 +881,12 @@ function trySkill(unit) {
       return true;
     }
     case "guardian": {
+      // Combat Grammar Foundation 01 — 도발(주기): 2번째 행동마다 전열 적 1명을 도발한다.
+      //   그 적의 "다음 기본 공격"이 수호자를 향한다(탱커가 어그로를 끈다). 보스 포효 등 특수행동은 안 끊김.
+      if (unit.actionCount % 2 === 0) {
+        const foe = selectAttackTarget(enemies);
+        if (foe) { applyTaunt(unit, foe); return true; }
+      }
       // 수호: 피해 입었고 보호막 없는 아군 중 HP 비율 최저에게 보호막 부여(+그래도 기본 공격은 수행).
       const ward = damagedUnshieldedAlly();
       if (!ward) return false;
@@ -1029,18 +1101,21 @@ function runDataSkill(unit, meta) {
       pushLog(`${unit.name}${josa(unit.name, "이가")} ${L.releaseName}!`);
       return true;
     }
-    case "rhythmTempo": { // 바드 리듬&템포
+    case "rhythmTempo": { // 바드 리듬&템포 — Combat Grammar Foundation 01: 공통 버프/디버프 1차 사용처.
       if (aliveEnemies().length === 0) return false;
       const allies = aliveParty().filter((a) => a !== unit);
       const ally = (allies.length ? allies : [unit])[Math.floor(Math.random() * (allies.length || 1))];
+      // 아군 1명: 공격력 증가(공통 상태) — 리듬(치명 예약)도 함께 둬 바드 정체성 유지.
+      applyCombatStatus(ally, "atkUp");
       applyStatus(ally, { type: "rhythm", duration: 1 });
+      // 적 다수: 속도 감소(공통 상태) + 템포 드레인(게이지 깎기).
       aliveEnemies()
         .slice()
         .sort((a, b) => (b.actionGauge || 0) - (a.actionGauge || 0))
         .slice(0, L.enemyTempo)
         .forEach((e) => {
           e.actionGauge = Math.max(0, (e.actionGauge || 0) - 100 * L.drainPct);
-          applyStatus(e, { type: "slow", duration: 1 });
+          applyCombatStatus(e, "speedDown");
         });
       playSupportFx({ casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind, guardInstanceId: ally.instanceId });
       return true;
@@ -1345,20 +1420,34 @@ function performAttack(attacker, target, opts = {}) {
     ? Math.max(1, atk - GUARD_DAMAGE_REDUCTION)
     : atk;
   let mult = opts.mult || 1;
-  // rhythm(바드 리듬): 다음 공격 무조건 치명 → 소모. crit 옵션도 동일 계열.
+  // Combat Grammar Foundation 01 — 치명 판정. 기본 공격(스킬 아님)만 확률 롤. critUp/critDown 반영.
+  //   rhythm(바드 리듬)·opts.crit는 확정 치명. 치명은 일반 피해 배율만 — 중독/고정/회복엔 적용 안 됨(별 경로).
+  let isCrit = false;
   if (hasStatus(attacker, "rhythm")) {
-    mult *= 1.6;
+    isCrit = true;
     attacker.statuses = attacker.statuses.filter((s) => s.type !== "rhythm");
+  } else if (opts.crit) {
+    isCrit = true;
+  } else if (!opts.skill) {
+    const chance = Math.max(0, Math.min(1, CRIT_BASE + statusPct(attacker, "critUp") - statusPct(attacker, "critDown")));
+    if (Math.random() < chance) isCrit = true;
   }
-  if (opts.crit) mult *= 1.5;
-  const damage = Math.max(1, Math.round(base * mult));
+  if (isCrit) mult *= CRIT_MULT;
+  let damage = Math.max(1, Math.round(base * mult));
+  // Combat Grammar Foundation 01 — 방어 상태(대상): defUp 받는 피해↓ / defDown 받는 피해↑.
+  //   표시/로그 숫자에 반영되도록 여기서 적용(읽힘 우선 — 보이는 숫자 = 실제 피해).
+  const defUp = statusPct(target, "defUp");
+  const defDown = statusPct(target, "defDown");
+  if (defUp) damage = Math.max(1, Math.round(damage * (1 - defUp)));
+  if (defDown) damage = Math.max(1, Math.round(damage * (1 + defDown)));
   // Combat Grammar Polish 02: 보호막 우선 흡수 → 초과분만 HP.
   applyDamage(target, damage);
 
   const verb = attackVerb(attacker);
   const ro = josa(target.name, "을를");
 
-  pushLog(`${attacker.name}${josa(attacker.name, "이가")} ${target.name}${ro} ${verb}. ${damage} 피해.`);
+  // 치명 로그/외침은 최소로 — 별도 줄 없이 기존 피해 로그에 "(치명!)"만 덧붙인다(로그 과밀 방지).
+  pushLog(`${attacker.name}${josa(attacker.name, "이가")} ${target.name}${ro} ${verb}. ${damage} 피해${isCrit ? " (치명!)" : ""}.`);
 
   const line = opts.lineType || attackLineType(attacker);
   playActionFx({
@@ -1369,6 +1458,8 @@ function performAttack(attacker, target, opts = {}) {
     kind: actionKindOf(attacker, attacker.team === "party"),
     isHeal: false,
     amount: damage,
+    // Combat Grammar Foundation 01 — 치명이면 주황 치명 숫자 규격(01C), 아니면 기본 빨강.
+    numberVariant: isCrit ? "crit" : null,
     // 스킬이면 스킬명(더 큰 텍스트), 아니면 기본 "공격!". noShout면 외침 없음.
     shoutText: opts.noShout ? null : opts.skill ? opts.skill.name + "!" : "공격!",
     shoutKind: opts.skill ? opts.skill.kind : line === "ranged" ? "ranged" : "attack",

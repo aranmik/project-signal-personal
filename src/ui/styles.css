@@ -1191,6 +1191,75 @@ body {
   opacity: 0;
 }
 
+/* === Combat Grammar Foundation 01 — 버프/디버프 상태칩 (HP/속도 게이지 하단) === */
+#battle-field .unit .status-chips {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin: 2px auto 0;
+  width: 92%;
+  pointer-events: none;
+}
+#battle-field .unit .status-chip {
+  font-size: 8px;
+  line-height: 1;
+  font-weight: 800;
+  padding: 1px 2px;
+  border-radius: 3px;
+  color: #0c1018;
+  background: #9aa8b8;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+#battle-field .unit .status-chip--up    { background: #7fd6a0; }  /* 증가 — 초록 */
+#battle-field .unit .status-chip--down  { background: #e89a7e; }  /* 감소 — 주황빨강 */
+#battle-field .unit .status-chip--taunt { background: #f5d250; }  /* 도발 — 노랑 */
+#battle-field .unit.dead .status-chips { opacity: 0; }
+#battle-field .unit.is-encounter .status-chips { display: none; } /* 보스 HUD가 따로 — 칩 중복 방지 */
+
+/* 도발 머리 위 "!" — 작지만 명확. 행동 후 제거. */
+#battle-field .unit .taunt-mark {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(6px);
+  font-size: 15px;
+  font-weight: 900;
+  color: #f5d250;
+  text-shadow: 0 0 5px rgba(245, 200, 60, 0.7), 0 1px 2px rgba(0, 0, 0, 0.7);
+  z-index: 8;
+  pointer-events: none;
+  animation: taunt-mark-pulse 0.9s ease-in-out infinite;
+}
+@keyframes taunt-mark-pulse {
+  0%, 100% { transform: translateX(6px) scale(1); }
+  50% { transform: translateX(6px) scale(1.22); }
+}
+
+/* 상태 적용 FX — 머리 위 작은 기호 팝(공↑/속↓ 등). 과하지 않게 살짝 떠올랐다 사라진다. */
+.fx-status-pop {
+  position: absolute;
+  margin: -7px 0 0 -7px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  color: #e6edf5;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 9;
+  animation: fx-status-pop 0.8s ease-out forwards;
+}
+.fx-status-pop--up { color: #8fe6b0; }
+.fx-status-pop--down { color: #ffa784; }
+#battle-field[data-speed="MAX"] .fx-status-pop { animation-duration: 0.5s; }
+@keyframes fx-status-pop {
+  0% { opacity: 0; transform: translateY(3px) scale(0.85); }
+  25% { opacity: 1; transform: translateY(-3px) scale(1.05); }
+  100% { opacity: 0; transform: translateY(-13px) scale(1); }
+}
+
 /* === Action Feedback 01: source → target 행동선 / 피격 / 숫자 === */
 #fx-layer {
   position: absolute;
@@ -1306,6 +1375,7 @@ body {
 .fx-shout--heal    { color: #9fe6cf; }   /* 치유 — 청록 */
 .fx-shout--support { color: #ffe1a2; }   /* 지원/보호 — 금빛 */
 .fx-shout--disrupt { color: #e7a8ff; }   /* 교란 — 보라/분홍 */
+.fx-shout--taunt   { color: #f5d250; }   /* 도발 — 노랑 */
 #battle-field[data-speed="MAX"] .fx-shout { animation-duration: 0.5s; }
 @keyframes fx-shout {
   0%   { opacity: 0;    transform: translate(-50%, -42%) scale(0.85); }
@@ -1316,6 +1386,9 @@ body {
 /* Hero Skill 01 — 교란 왜곡선(보라) */
 .fx-svg--disrupt { color: rgba(208, 150, 240, 0.92); }
 .fx-svg--disrupt .fx-path { stroke-width: 2.4; stroke-dasharray: 4 3; }
+/* Combat Grammar Foundation 01 — 도발선: 노랑 점선(공격선 빨강·회복선 청록과 구분). */
+.fx-svg--taunt { color: rgba(245, 210, 80, 0.95); }
+.fx-svg--taunt .fx-path { stroke-width: 2.4; stroke-dasharray: 5 4; }
 
 /* Combat Breath Hotfix 01 — 치유선 가독성: 끝 잔상을 공격보다 약간 더 길게(잘 보이게). */
 .fx-svg--heal { animation-duration: 1.6s; }
