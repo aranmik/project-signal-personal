@@ -579,6 +579,127 @@ function processStatusesBeforeAction(unit) {
   unit.statuses = unit.statuses.filter((s) => s.duration > 0);
 }
 
+// ── Monster Identity 01 — 적 전투 개성(trait) ─────────────────────────────
+//   "몬스터를 더 세게 만드는 게 아니라, 자기 방식으로 싸우게 만든다." 초보자 8종에 한 줄 개성.
+//   매 턴형(guard/hunter/rangedFocus/weaken)은 공격을 자기 방식으로 수행(항상 true),
+//   주기형(healAlly/command/ward/bossRoar)은 2번째 행동마다 특수, 평소엔 false→기본 공격.
+//   상태/수치는 단순·짧게(읽힘 우선). 영웅 스킬/계산식/합체 흐름은 무변경. 적의 "아군"은 gameState.enemies.
+function introTrait(unit, text) {
+  if (unit.traitIntroduced) return; // 개성 소개 로그는 첫 행동에 1회만(로그 과밀 방지)
+  unit.traitIntroduced = true;
+  pushLog(text);
+}
+
+function tryEnemyTrait(unit) {
+  const heroes = gameState.party.filter((u) => !u.isDead);
+  if (heroes.length === 0) return false;
+  switch (unit.trait) {
+    case "guard":       return traitGuard(unit, heroes);
+    case "hunter":      return traitHunter(unit, heroes);
+    case "rangedFocus": return traitRangedFocus(unit, heroes);
+    case "weaken":      return traitWeaken(unit, heroes);
+    case "healAlly":    return traitHealAlly(unit);
+    case "command":     return traitCommand(unit);
+    case "ward":        return traitWard(unit);
+    case "bossRoar":    return traitBossRoar(unit, heroes);
+    default:            return false;
+  }
+}
+
+// 곰방패 — 전열 탱커: 가장 다친 아군(자신 포함)에 짧은 guard(받는 피해 -3) 후 평소처럼 공격.
+function traitGuard(unit, heroes) {
+  const ward = gameState.enemies
+    .filter((e) => !e.isDead && !hasStatus(e, "guard"))
+    .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+  if (ward) applyStatus(ward, { type: "guard", duration: 2 });
+  introTrait(unit, "곰방패가 방패를 세웠다.");
+  const t = selectAttackTarget(heroes);
+  if (t) performAttack(unit, t);
+  return true;
+}
+
+// 잎여우 — 근접 딜러: HP 가장 낮은 영웅의 빈틈을 파고든다(약하면 추가 피해).
+function traitHunter(unit, heroes) {
+  const t = heroes.reduce((a, b) => (a.hp <= b.hp ? a : b));
+  introTrait(unit, "잎여우가 빈틈을 파고들었다.");
+  performAttack(unit, t, { mult: t.hp / t.maxHp < 0.5 ? 1.3 : 1 });
+  return true;
+}
+
+// 깃새 — 원거리 딜러: 후열 영웅 우선(없으면 최저 HP)으로 정확한 원거리 견제(일반보다 약간 약함).
+function traitRangedFocus(unit, heroes) {
+  const back = heroes.filter((h) => h.role === "back");
+  const pool = back.length ? back : heroes;
+  const t = pool.reduce((a, b) => (a.hp <= b.hp ? a : b));
+  introTrait(unit, "깃새가 뒤쪽을 노렸다.");
+  performAttack(unit, t, { mult: 0.9, lineType: "ranged" });
+  return true;
+}
+
+// 이슬말랑 — 서포터: 공격하며 대상의 다음 공격을 무디게(atkDown, 짧게). 쌓이지 않게 갱신형.
+function traitWeaken(unit, heroes) {
+  const t = selectAttackTarget(heroes);
+  introTrait(unit, "이슬말랑이 힘을 흐리게 했다.");
+  if (t) {
+    performAttack(unit, t);
+    if (!t.isDead) applyStatus(t, { type: "atkDown", duration: 2, pct: 0.2 });
+  }
+  return true;
+}
+
+// 풀양 — 힐러: 2번째 행동마다 가장 다친 아군 몬스터를 소량 회복(낮게 — 장기전 방지). 평소엔 공격.
+function traitHealAlly(unit) {
+  if (unit.actionCount % 2 !== 0) return false;
+  const hurt = gameState.enemies.filter((e) => !e.isDead && e.hp < e.maxHp);
+  if (hurt.length === 0) return false;
+  const t = hurt.reduce((a, b) => (a.hp / a.maxHp <= b.hp / b.maxHp ? a : b));
+  const amt = healUnit(t, Math.max(1, Math.round(unit.atk * 0.9)));
+  pushLog("풀양이 새싹빛으로 회복했다.");
+  playSupportFx({ casterInstanceId: unit.instanceId, text: "회복", kind: "heal", heals: amt > 0 ? [{ targetInstanceId: t.instanceId, amount: amt }] : [] });
+  return true;
+}
+
+// 숲올빼미 현자 — 후열 지휘 정예: 2번째 행동마다 아군 하나에 짧은 공격력 강화(atkUp). 평소엔 공격.
+function traitCommand(unit) {
+  if (unit.actionCount % 2 !== 0) return false;
+  const allies = gameState.enemies.filter((e) => !e.isDead && e !== unit);
+  if (allies.length === 0) return false;
+  const t = allies.find((a) => !hasStatus(a, "atkUp")) || allies[0];
+  applyStatus(t, { type: "atkUp", duration: 3, pct: 0.25 });
+  pushLog("숲올빼미 현자가 친구들에게 지시했다.");
+  playSupportFx({ casterInstanceId: unit.instanceId, text: "지휘", kind: "buff", guardInstanceId: t.instanceId });
+  return true;
+}
+
+// 사슴수호자 — 전열 관문 정예: 2번째 행동마다 자신/후열 아군에 작은 보호막(결계). 평소엔 공격.
+function traitWard(unit) {
+  if (unit.actionCount % 2 !== 0) return false;
+  const allies = gameState.enemies.filter((e) => !e.isDead && (e === unit || e.role === "back"));
+  if (allies.length === 0) return false;
+  allies.forEach((a) => { a.shield = Math.max(a.shield || 0, 6); });
+  pushLog("사슴수호자가 숲의 결계를 펼쳤다.");
+  playSupportFx({ casterInstanceId: unit.instanceId, text: "결계", kind: "guard", guardInstanceId: unit.instanceId });
+  return true;
+}
+
+// 새싹숲 사자왕 — 보스: 2번째 행동마다 왕의 포효(파티 전체 피해). 위압(Elite Key Seal) 활성 시 더 강하고
+//   다음 공격 약화(atkDown)까지, 해제 시 포효만 약하게. 평소 행동은 단일 공격(false→기본 공격).
+//   menace.atk 램프가 performAction에서 먼저 적용되므로 포효도 램프된 atk를 따라간다(자연 강화).
+function traitBossRoar(unit, heroes) {
+  if (unit.actionCount % 2 !== 0) return false;
+  const menaceActive = !!unit.menace;
+  const dmg = Math.max(1, Math.round(unit.atk * (menaceActive ? 0.5 : 0.35)));
+  heroes.forEach((h) => {
+    applyDamage(h, dmg);
+    playStatusTickFx({ targetInstanceId: h.instanceId, amount: dmg, kind: "roar" });
+    if (menaceActive && !h.isDead) applyStatus(h, { type: "atkDown", duration: 1, pct: 0.2 });
+    killIfDead(h);
+  });
+  pushLog(menaceActive ? "왕의 위압이 파티 전체를 짓눌렀다." : "위압이 걷힌 사자왕의 포효가 약해졌다.");
+  playSupportFx({ casterInstanceId: unit.instanceId, text: "포효!", kind: "attack", heals: [] });
+  return true;
+}
+
 function performAction(unit) {
   processStatusesBeforeAction(unit);
   if (unit.isDead) {
@@ -598,6 +719,13 @@ function performAction(unit) {
     unit.menaceStacks = Math.min(prev + 1, unit.menace.atkMaxStacks);
     unit.atk = Math.max(1, Math.round((unit.menaceBaseAtk || unit.atk) * (1 + unit.menaceStacks * unit.menace.atkStepPct)));
     if (prev === 0) pushLog(`${unit.name}${josa(unit.name, "이가")} 위압을 두른다 — 시간이 흐를수록 공격이 거세진다.`);
+  }
+
+  // Monster Identity 01 — 적 전투 개성(trait). 처리하면(true) 기본 공격 대신 자기 방식으로 행동.
+  //   주기형(회복/지휘/결계/포효)은 특수 턴이 아니면 false → 아래 기본 공격으로 흐른다.
+  if (!isParty && tryEnemyTrait(unit)) {
+    unit.actionGauge -= 100;
+    return;
   }
 
   // 영웅: 스킬 조건을 만족하면 스킬 사용(아니면 기본 공격으로 fallback). 적은 스킬 없음.
@@ -1181,6 +1309,9 @@ function performAttack(attacker, target, opts = {}) {
   let atk = attacker.atk;
   const ad = Array.isArray(attacker.statuses) && attacker.statuses.find((s) => s.type === "atkDown");
   if (ad) atk = Math.max(1, Math.round(atk * (1 - (ad.pct || 0))));
+  // Monster Identity 01 — atkUp(숲올빼미 지휘): 공격력 일시 증가(적 전용 버프). 영웅엔 부여되지 않음.
+  const au = Array.isArray(attacker.statuses) && attacker.statuses.find((s) => s.type === "atkUp");
+  if (au) atk = Math.round(atk * (1 + (au.pct || 0)));
 
   const base = hasStatus(target, "guard")
     ? Math.max(1, atk - GUARD_DAMAGE_REDUCTION)

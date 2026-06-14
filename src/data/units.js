@@ -185,13 +185,16 @@ export const UNIT_TEMPLATES = {
     //   수치는 기존 임시 소형/정예/보스 범위 내(밸런스 변경 아님 — 얼굴 교체). 정예/보스는 stages의
     //   :elite/:boss 접미사로 RANK_OVERRIDES(170/520 등) 적용 → 기존 정예/보스 난이도 그대로.
     //   keepName: 고유명 정예/보스는 "정예/보스" 접두 중복을 막는다(HUD가 ELITE/BOSS 라벨을 따로 표시).
-    bear:     { id: "bear",     name: "곰방패",        team: "enemy", type: "bear",     btClass: "bt-bear bt-tank",                role: "front", maxHp: 60, atk: 6,  speed: 5 },
-    fox:      { id: "fox",      name: "잎여우",        team: "enemy", type: "fox",      btClass: "bt-fox bt-melee",                role: "front", maxHp: 48, atk: 10, speed: 8 },
-    bird:     { id: "bird",     name: "깃새",          team: "enemy", type: "bird",     btClass: "bt-bird bt-ranged",              role: "back",  maxHp: 42, atk: 9,  speed: 9 },
-    dewslime: { id: "dewslime", name: "이슬말랑",      team: "enemy", type: "dewslime", btClass: "bt-slime bt-support",            role: "back",  maxHp: 52, atk: 6,  speed: 6 },
-    lamb:     { id: "lamb",     name: "풀양",          team: "enemy", type: "lamb",     btClass: "bt-lamb bt-healer",              role: "back",  maxHp: 50, atk: 5,  speed: 6 },
-    owl:      { id: "owl",      name: "숲올빼미 현자", team: "enemy", type: "owl",      btClass: "bt-owl bt-elite bt-support", keepName: true, role: "back",  maxHp: 170, atk: 12, speed: 5 },
-    deer:     { id: "deer",     name: "사슴수호자",    team: "enemy", type: "deer",     btClass: "bt-deer bt-elite bt-healer", keepName: true, role: "front", maxHp: 170, atk: 12, speed: 5 },
-    lion:     { id: "lion",     name: "새싹숲 사자왕", team: "enemy", type: "lion",     btClass: "bt-lion bt-boss",            keepName: true, role: "front", maxHp: 520, atk: 15, speed: 5 },
+    //   Monster Identity 01 — trait = 전투 개성 키(battle.js가 적 행동 시 분기). "한 줄 개성" 1차.
+    //     guard(곰방패 보호) / hunter(잎여우 빈틈) / rangedFocus(깃새 후열견제) / weaken(이슬말랑 약화) /
+    //     healAlly(풀양 회복) / command(올빼미 지휘) / ward(사슴 결계) / bossRoar(사자왕 포효).
+    bear:     { id: "bear",     name: "곰방패",        team: "enemy", type: "bear",     btClass: "bt-bear bt-tank",                role: "front", maxHp: 60, atk: 6,  speed: 5, trait: "guard" },
+    fox:      { id: "fox",      name: "잎여우",        team: "enemy", type: "fox",      btClass: "bt-fox bt-melee",                role: "front", maxHp: 48, atk: 10, speed: 8, trait: "hunter" },
+    bird:     { id: "bird",     name: "깃새",          team: "enemy", type: "bird",     btClass: "bt-bird bt-ranged",              role: "back",  maxHp: 42, atk: 9,  speed: 9, trait: "rangedFocus" },
+    dewslime: { id: "dewslime", name: "이슬말랑",      team: "enemy", type: "dewslime", btClass: "bt-slime bt-support",            role: "back",  maxHp: 52, atk: 6,  speed: 6, trait: "weaken" },
+    lamb:     { id: "lamb",     name: "풀양",          team: "enemy", type: "lamb",     btClass: "bt-lamb bt-healer",              role: "back",  maxHp: 50, atk: 5,  speed: 6, trait: "healAlly" },
+    owl:      { id: "owl",      name: "숲올빼미 현자", team: "enemy", type: "owl",      btClass: "bt-owl bt-elite bt-support", keepName: true, role: "back",  maxHp: 170, atk: 12, speed: 5, trait: "command" },
+    deer:     { id: "deer",     name: "사슴수호자",    team: "enemy", type: "deer",     btClass: "bt-deer bt-elite bt-healer", keepName: true, role: "front", maxHp: 170, atk: 12, speed: 5, trait: "ward" },
+    lion:     { id: "lion",     name: "새싹숲 사자왕", team: "enemy", type: "lion",     btClass: "bt-lion bt-boss",            keepName: true, role: "front", maxHp: 520, atk: 15, speed: 5, trait: "bossRoar" },
   },
 };
