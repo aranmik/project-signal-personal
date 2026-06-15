@@ -237,8 +237,12 @@ body {
 #battle-field .enemy-slot-3 { right: 50px;  top: 118px; }
 #battle-field .enemy-slot-4 { right: 134px; top: 138px; }
 #battle-field .enemy-slot-5 { right: 200px; top: 110px; }
-/* 보스 단독 — Battlefield Layout Rebuild 01: 오른쪽에 크게(별도 boss anchor). 일반 슬롯과 분리. */
-#battle-field .enemy-slot-boss { right: 40px; top: 215px; }
+/* 보스 단독 — Battlefield Layout Rebuild 01 → Layout Tune 01: 우측 "상단"에 크게(별도 anchor).
+   화면 끝에 밀착하지 않게 — 머리 위(상단바)·오른쪽 끝과 소형 몬스터 1개 정도 여백을 둔다. */
+#battle-field .enemy-slot-boss { right: 100px; top: 56px; }
+/* 보스 2기 레이아웃 스트레스 테스트(Dev 프리뷰 전용) — 화면 좌/우에 사자왕 둘. */
+#battle-field .enemy-slot-boss-l { right: 244px; top: 64px; }
+#battle-field .enemy-slot-boss-r { right: 70px;  top: 64px; }
 
 /* Battlefield Layout Rebuild 01 — 몬스터 전열/후열을 화면 Y축으로 읽는다.
    위(top 작음)=후열/깊은 숲, 아래(top 큼)=전열/영웅 쪽. 좌우로 갈리던 진형을 위/아래 2밴드 지그재그로 교체.
@@ -246,23 +250,25 @@ body {
    x는 화면 가운데(cx≈100~305)에 모아 가장자리로 삐져나오지 않게. 전열이 후열보다 항상 아래(가까이).
    정예 핵심(ecf 전열중앙 사슴 관문 / ecb 후열·오른쪽 올빼미 지휘)은 밴드 안에서 중앙/우측 핵심으로 선다.
    right = 359 - 중심x (unit 62 / layer 390). 전열6·후열6까지 들어갈 지그재그 슬롯 구조. */
+/* Layout Tune 01 — 몬스터 그룹을 전체적으로 위로(상단 여유 활용). 전열 소형과 아군 사이 거리를 늘려
+   source→target 행동선이 읽히게. 후열은 상단(로그 영역을 약간 침범해도 OK), 전열은 중상단. */
 /* 후열 (상단 밴드 — 가로로 넓게 펼쳐 겹침 방지) */
-#battle-field .enemy-slot-eb0 { right: 231px; top: 85px; }
-#battle-field .enemy-slot-eb1 { right: 97px;  top: 85px; }
-#battle-field .enemy-slot-eb2 { right: 164px; top: 62px; }  /* 후열 정점(가장 깊은 가운데) */
-#battle-field .enemy-slot-eb3 { right: 264px; top: 140px; }
-#battle-field .enemy-slot-eb4 { right: 64px;  top: 140px; }
-#battle-field .enemy-slot-eb5 { right: 164px; top: 150px; }
-/* 전열 (하단 밴드 — 영웅에 더 가깝다) */
-#battle-field .enemy-slot-ef0 { right: 224px; top: 250px; }
-#battle-field .enemy-slot-ef1 { right: 89px;  top: 250px; }
-#battle-field .enemy-slot-ef2 { right: 159px; top: 320px; }  /* 전열 가운데-아래(지그재그) */
-#battle-field .enemy-slot-ef3 { right: 259px; top: 330px; }
-#battle-field .enemy-slot-ef4 { right: 59px;  top: 330px; }
-#battle-field .enemy-slot-ef5 { right: 159px; top: 290px; }
-/* 정예 핵심 */
-#battle-field .enemy-slot-ecf { right: 164px; top: 240px; } /* 정예 전열 중앙(관문형 사슴 — 영웅 대면) */
-#battle-field .enemy-slot-ecb { right: 104px; top: 72px; }  /* 정예 후열·오른쪽(지휘형 올빼미) */
+#battle-field .enemy-slot-eb0 { right: 231px; top: 34px; }
+#battle-field .enemy-slot-eb1 { right: 97px;  top: 34px; }
+#battle-field .enemy-slot-eb2 { right: 164px; top: 14px; }  /* 후열 정점(가장 깊은 가운데) */
+#battle-field .enemy-slot-eb3 { right: 264px; top: 92px; }
+#battle-field .enemy-slot-eb4 { right: 64px;  top: 92px; }
+#battle-field .enemy-slot-eb5 { right: 124px; top: 108px; }
+/* 전열 (중상단 밴드 — 영웅과 충분히 떨어져 행동선 확보). 좌우로 넓게 벌려 정예 핵심과 간격 확보. */
+#battle-field .enemy-slot-ef0 { right: 250px; top: 214px; }
+#battle-field .enemy-slot-ef1 { right: 62px;  top: 214px; }
+#battle-field .enemy-slot-ef2 { right: 159px; top: 280px; }  /* 전열 가운데-아래(지그재그) */
+#battle-field .enemy-slot-ef3 { right: 268px; top: 288px; }
+#battle-field .enemy-slot-ef4 { right: 50px;  top: 288px; }
+#battle-field .enemy-slot-ef5 { right: 119px; top: 252px; }
+/* 정예 핵심 — 소형과 "소형 1개 정도" 여백. 사슴은 전열 중앙에서 살짝 위로 서서 호위와 세로로도 분리된다. */
+#battle-field .enemy-slot-ecf { right: 164px; top: 170px; } /* 정예 전열 중앙(관문형 사슴 — 영웅 대면) */
+#battle-field .enemy-slot-ecb { right: 104px; top: 24px; }  /* 정예 후열·오른쪽(지휘형 올빼미) */
 
 /* 정예/보스처럼 보이게 — 크기만 키운다(.unit.enemy scale 오버라이드, 발밑/머리 고정).
    임시 스타일: 정식 정예/보스 시스템 아님. */
@@ -2048,6 +2054,80 @@ body {
   border-radius: 8px;
   cursor: pointer;
 }
+
+/* === Recruit UX Rebuild 01 — 단일 화면 영입(현재 파티 미리보기 + 후보 3 + 다음 여정으로) === */
+.party-preview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+  max-width: 270px;
+  margin: 4px auto 8px;
+}
+.pf-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px;
+  border: 1px solid #2a3a4a;
+  border-radius: 10px;
+  background: #14233b;
+}
+.pf-slot.pf-recruit { border-color: #f0c040; border-style: dashed; background: #1b2942; }
+.pf-role { font-size: 9px; color: #8aa0b4; letter-spacing: .02em; }
+.pf-ava { display: block; width: 46px; height: 46px; }
+.pf-empty-mark { font-size: 24px; color: #45596f; line-height: 46px; height: 46px; }
+.pf-job { font-size: 11px; font-weight: 700; color: #e6edf5; }
+.pf-slot.empty .pf-job { color: #6a7d92; }
+/* 후보 3개를 한 줄(왼쪽/가운데/오른쪽)로 — 아바타 위 / 이름 아래 */
+#recruit-list { flex-direction: row; gap: 8px; }
+.recruit-card {
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding: 10px 6px;
+}
+.recruit-card.selected {
+  border-color: #f0c040;
+  background: #26344f;
+  box-shadow: 0 0 9px rgba(240, 192, 64, 0.4);
+}
+.recruit-card .recruit-ava { display: block; width: 54px; height: 54px; margin: 0 auto; }
+.recruit-card .recruit-name { font-size: 12px; }
+/* 다음 여정으로 — 주요 액션. 미선택이면 딤드/비활성. */
+.recruit-next { color: #eef3f8; border-color: #3a6ea8; background: #1b2c4a; font-weight: 700; }
+.flow-next.is-disabled, .flow-next:disabled { opacity: 0.4; cursor: default; }
+.recruit-next.is-disabled { background: transparent; color: #6a7d92; }
+
+/* === Battlefield Preview & Layout Tune 01 — Dev 레이아웃 프리뷰 케이스 전환 바 === */
+#dev-bar {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: rgba(10, 14, 22, 0.95);
+  border-top: 1px solid #2a3a4a;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.dev-bar-label { font-size: 10px; color: #8aa0b4; flex-shrink: 0; }
+.dev-case {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: #16213e;
+  color: #c7d2dd;
+  border: 1px solid #2a3a4a;
+  cursor: pointer;
+}
+.dev-case.active { background: #2a4a6a; color: #fff; border-color: #3f6e9e; }
+.dev-exit { background: #3a1f2a; border-color: #6e3a4a; color: #ffb0bd; }
 
 /* === Run Structure 01A — 여정 선택 화면 / run 표시 === */
 .route-status {

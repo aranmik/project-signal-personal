@@ -226,6 +226,54 @@ export function createPreviewEnemies(kind) {
   return createInitialEnemies();
 }
 
+// Battlefield Preview & Layout Tune 01 — Dev 레이아웃 스트레스 테스트용 적 구성(시각 확인 전용).
+//   전투 계산/밸런스와 무관 — 슬롯 배치만 본다. 실 슬롯 시스템(ef/eb/ecf/ecb/boss + boss-l/r)을 그대로 쓴다.
+export const LAYOUT_PREVIEW_CASES = [
+  { id: "boss-solo",   label: "보스 단독" },
+  { id: "boss-duo",    label: "보스 2기" },
+  { id: "elite-deer",  label: "정예 사슴 단독" },
+  { id: "elite-owl",   label: "정예 올빼미 단독" },
+  { id: "elite-deer-mob", label: "사슴 정예+소형" },
+  { id: "elite-owl-mob",  label: "올빼미 정예+소형" },
+  { id: "alert-1", label: "경계도 1" },
+  { id: "alert-2", label: "경계도 2" },
+  { id: "alert-3", label: "경계도 3" },
+  { id: "alert-4", label: "경계도 4" },
+  { id: "alert-5", label: "경계도 5" },
+  { id: "alert-6", label: "경계도 6" },
+  { id: "small-12", label: "소형 12종" },
+];
+
+export function createLayoutPreviewEnemies(caseId) {
+  const run = { formation: { ...DEFAULT_FORMATION }, depth: 12, bossKeys: 2, alertness: 5, fusionCount: 2 };
+  const m = caseId.match(/^alert-(\d+)$/);
+  if (m) return createRouteEnemies("normal", { ...run, alertness: parseInt(m[1], 10) });
+
+  switch (caseId) {
+    case "boss-solo":
+      return createRouteEnemies("boss", run);
+    case "boss-duo": // 레이아웃 스트레스: 사자왕 둘을 좌/우 anchor에 (실제 콘텐츠 아님)
+      return buildEnemies(["lion:boss", "lion:boss"], "prevBoss", { slots: ["boss-l", "boss-r"] });
+    case "elite-deer":
+      return buildEnemies(["deer:elite"], "prevElite", { slots: ["ecf"] });
+    case "elite-owl":
+      return buildEnemies(["owl:elite"], "prevElite", { slots: ["ecb"] });
+    case "elite-deer-mob":
+      return createRouteEnemies("elite", { ...run, bossKeys: 1 }); // 사슴 코어 + 호위 소형
+    case "elite-owl-mob":
+      return createRouteEnemies("elite", { ...run, bossKeys: 0 }); // 올빼미 코어 + 호위 소형
+    case "small-12": { // 전열 6 + 후열 6 (지그재그 슬롯 겹침 스트레스 테스트)
+      const frontSpecs = ["bear", "fox", "bear", "fox", "bear", "fox"];
+      const backSpecs = ["bird", "dewslime", "lamb", "bird", "dewslime", "lamb"];
+      const front = buildEnemies(frontSpecs, "prevF", { slots: ["ef0", "ef1", "ef2", "ef3", "ef4", "ef5"] });
+      const back = buildEnemies(backSpecs, "prevB", { slots: ["eb0", "eb1", "eb2", "eb3", "eb4", "eb5"] });
+      return [...front, ...back];
+    }
+    default:
+      return createRouteEnemies("normal", { ...run, alertness: 5 });
+  }
+}
+
 export const gameState = {
   project: {
     id: "SIGNAL_PERSONAL",
@@ -255,6 +303,8 @@ export const gameState = {
     formation: null,      // null = 기본 4인 배치
     startFormation: null, // 직업 선택 화면에서 정한 시작 배치
     recruitOffer: null,   // 영입 화면 진입 시 굴린 랜덤 후보(최대 3) — 화면 갱신에도 고정
+    recruitSlot: null,    // Recruit UX Rebuild 01 — 영입으로 채울 고정 슬롯(미리보기 배치 대상)
+    recruitPreview: null, // Recruit UX Rebuild 01 — 현재 미리 배치한 후보(확정 전 교체 가능)
     // Fusion Moment 01: 합체 결과 화면용(직전 합체 정보) / 영입 화면 문맥(fusion=빈자리 보충, expand=4인 확장)
     lastFusion: null,
     recruitContext: null,

@@ -3,7 +3,7 @@ import { ROUTE_TYPES, bossTimingLabel, bossFury, bossReadinessPressure, bossMena
 import { availableFusions, slotPreference } from "../data/jobs.js";
 import { REWARDS } from "../data/rewards.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
-import { SLOT_ORDER, SLOT_NAMES, partySizeOf } from "../core/state.js";
+import { SLOT_ORDER, SLOT_NAMES, partySizeOf, LAYOUT_PREVIEW_CASES } from "../core/state.js";
 import { avatarSpec, avatarFigureHTML, CODEX_ENTRIES, CODEX_STATUS_LABEL } from "../data/avatars.js";
 
 function jobName(id) {
@@ -121,6 +121,20 @@ export function renderGame(state) {
   renderEncounterHud(state);
   renderLogOverlay(state);
   renderResultOverlay(state);
+  renderDevBar(state); // Battlefield Preview & Layout Tune 01 — 레이아웃 프리뷰 케이스 전환 바
+}
+
+// Battlefield Preview & Layout Tune 01 — Dev 레이아웃 프리뷰에서만 케이스 전환 바를 노출.
+function renderDevBar(state) {
+  const bar = document.getElementById("dev-bar");
+  if (!bar) return;
+  if (state.battle.previewKind !== "layout") { bar.hidden = true; return; }
+  bar.hidden = false;
+  const active = state.run.layoutCase;
+  const cases = LAYOUT_PREVIEW_CASES.map(
+    (c) => `<button type="button" class="dev-case${c.id === active ? " active" : ""}" data-dev-case="${c.id}">${c.label}</button>`
+  ).join("");
+  bar.innerHTML = `<span class="dev-bar-label">Dev 프리뷰</span>${cases}<button type="button" class="dev-case dev-exit" data-dev-exit>타이틀로</button>`;
 }
 
 // Combat Readability Polish 02 — Boss/Elite Encounter HUD.
@@ -288,37 +302,52 @@ function spawnFusionCelebration() {
 }
 
 // 영입 화면: 랜덤 후보(진입 시 확정, 최대 3) / 후보별 배치 예정 슬롯(선호 규칙) 안내.
+// Recruit UX Rebuild 01 — 현재 편성된 파티를 2×2 아바타 그리드로(텍스트 아님). recruitSlot 강조 + 미리보기 반영.
+function partyPreviewGridHTML(formation, recruitSlot) {
+  return SLOT_ORDER.map((k) => {
+    const job = formation?.[k];
+    const isRecruit = k === recruitSlot;
+    const ava = job
+      ? `<span class="pf-ava">${jobAvatarHTML(job, "av-fit--card")}</span>`
+      : `<span class="pf-empty-mark">＋</span>`;
+    return `<div class="pf-slot pf-${k}${job ? " filled" : " empty"}${isRecruit ? " pf-recruit" : ""}">
+      <span class="pf-role">${SLOT_NAMES[k]}</span>${ava}
+      <span class="pf-job">${job ? jobName(job) : "빈자리"}</span>
+    </div>`;
+  }).join("");
+}
+
+// Recruit UX Rebuild 01 — 동료 선택을 한 화면에서: 현재 파티(상단) + 설명(중단) + 후보 3(하단) + 다음 여정으로(최하단).
+//   후보를 누르면 현재 파티 미리보기에 즉시 반영되고, 다른 후보로 교체 가능. 별도 배치 단계 없음.
 function renderRecruitPanel(state) {
   const f = state.run.formation || {};
-  const emptySlot = SLOT_ORDER.find((k) => !f[k]);
-  // 후보는 battle.js가 진입 시 굴려둔 recruitOffer(랜덤 3) — 재렌더에도 고정.
-  const candidates = emptySlot ? state.run.recruitOffer || [] : [];
+  const recruitSlot = state.run.recruitSlot || SLOT_ORDER.find((k) => !f[k]) || null;
+  const candidates = state.run.recruitOffer || [];
+  const preview = state.run.recruitPreview;
 
-  const targetSlot = (id) => slotPreference(id).find((k) => !f[k]);
-  const rows = candidates.length
+  const cards = candidates.length
     ? candidates.map((id) =>
-        // Visual-First UI Cleanup 01: 영입 카드는 아바타 단독(직업명/슬롯 텍스트 제거).
-        //   새 동료를 "모습으로" 고르는 화면. 접근성 이름은 aria-label로 보존.
-        `<button type="button" class="recruit-card" data-recruit="${id}" aria-label="${jobName(id)}">
+        `<button type="button" class="recruit-card${preview === id ? " selected" : ""}" data-recruit="${id}" aria-label="${jobName(id)}">
           <span class="recruit-ava">${jobAvatarHTML(id, "av-fit--recruit")}</span>
+          <span class="recruit-name">${jobName(id)}</span>
         </button>`
       ).join("")
     : `<p class="flow-note">영입 가능한 동료가 없습니다.</p>`;
 
-  // Fusion Moment 01: 문맥별 문구 — 합체 후(빈자리 보충) vs 4인 확장 영입.
   const isFusionFill = state.run.recruitContext === "fusion";
   const heading = isFusionFill ? "빈자리를 채울 동료를 선택하세요" : "새 동료를 영입하세요";
-  const note = isFusionFill
-    ? "합체로 파티의 한 자리가 비었습니다.<br>현재 파티에 없는 동료가 찾아왔습니다."
-    : "현재 파티에 없는 기본 직업 동료가 찾아왔습니다.";
+  const note = "현재 파티에 없는 동료가 찾아왔습니다. 후보를 눌러 미리 배치해보세요.";
+
+  // 후보가 있으면 선택해야 활성, 후보가 없으면(영입 불가) 바로 진행 가능.
+  const canProceed = !!preview || candidates.length === 0;
 
   document.getElementById("recruit-body").innerHTML = `
-    <div class="flow-kicker">새 동료의 기척</div>
+    <div class="flow-kicker">현재 편성된 파티</div>
+    <div class="party-preview-grid">${partyPreviewGridHTML(f, recruitSlot)}</div>
     <h2 class="flow-heading">${heading}</h2>
     <p class="flow-note">${note}</p>
-    <div class="flow-formation">${formationLineHTML(f, emptySlot)}</div>
-    <div id="recruit-list">${rows}</div>
-    ${candidates.length ? "" : `<button type="button" class="flow-next" data-recruit-skip>다음으로</button>`}
+    <div id="recruit-list">${cards}</div>
+    <button type="button" class="flow-next recruit-next${canProceed ? "" : " is-disabled"}" data-recruit-confirm ${canProceed ? "" : "disabled"}>다음 여정으로</button>
   `;
 }
 
@@ -713,19 +742,8 @@ function updateFieldUnit(el, unit) {
     return;
   }
 
-  // Combat Readability Foundation 01: 상태 마커는 변경 시에만 갱신(매 tick 재생성 방지).
-  //   Status & Effect Foundation 01: 마커는 실제 상태(statuses) + 표시 전용(statusMarkers) 파생.
-  const slots = el.querySelector(".status-slots");
-  if (slots) {
-    const markers = displayMarkers(unit);
-    const key = markers.join(",");
-    if (slots.dataset.markers !== key) {
-      slots.dataset.markers = key;
-      slots.innerHTML = statusMarkersHTML(markers);
-    }
-  }
-
-  // Combat Grammar Foundation 01 — 버프/디버프 상태칩(게이지 하단)도 변경 시에만 갱신(매 tick 재생성 방지).
+  // Legacy Marker Cleanup 01 — 아바타 위 점 마커(status-slots) 갱신 제거(렌더에서 빠짐).
+  // Combat Grammar Foundation 01 — 버프/디버프 상태칩(게이지 하단)은 변경 시에만 갱신(매 tick 재생성 방지).
   const chipsEl = el.querySelector(".status-chips");
   if (chipsEl) {
     const chipsKey = statusChips(unit).join(",");
@@ -985,14 +1003,9 @@ function createFieldUnit(unit) {
   // Hit Reaction 01: 아바타를 .fig-react로 감싼다.
   //   transform 충돌 회피용 전용 레이어 — .unit(scale) / .fig-react(피격·회복 반응) / .avatar(idle)
   //   세 요소가 각자 transform을 가져 곱연산으로 합성된다.
-  // Combat Readability Foundation 01 → Avatar Import 01:
-  //   role-pip(좌상단 작은 도형)은 SR 아바타가 직업/역할을 실루엣으로 구분하면서
-  //   아바타 파츠처럼 섞여 보였다 → 제거. 역할 식별은 아바타 자체가 담당한다.
-  //   status-slots(상태이상)·타겟 cue·Boss HUD 같은 시스템 UI는 유지(기능 불변).
-  const rolePip = "";
-  const markers = displayMarkers(unit);
-  const markersKey = markers.join(",");
-  // Boss Presence Foundation 01: 정예/보스만 약한 존재감 aura(느린 호흡). 아바타 뒤(낮은 z).
+  // Legacy Marker Cleanup 01 — 아바타 위 점 마커(status-slots)는 의미가 불명확한 임시 도형이라 제거.
+  //   상태 정보는 "규칙이 정해진" 버프/디버프 칩(status-chips, 게이지 하단) + 도발 "!"만 남긴다.
+  //   상태 계산/도발/위압/치명 로직은 불변 — "표시"만 정리한다(displayMarkers는 Boss HUD에서만 계속 사용).
   const presenceAura = unit.tier ? `<span class="presence-aura" aria-hidden="true"></span>` : "";
 
   // Combat Grammar Foundation 01 — 도발당한 대상 머리 위 "!"(작지만 명확). 행동 후 해제되면 사라진다.
@@ -1003,9 +1016,7 @@ function createFieldUnit(unit) {
   wrap.setAttribute("aria-label", unit.name);
   wrap.innerHTML = `
     ${presenceAura}
-    ${rolePip}
     ${tauntMark}
-    <div class="status-slots" data-markers="${markersKey}">${statusMarkersHTML(markers)}</div>
     <div class="fig-react">
       ${figureHTML}
     </div>

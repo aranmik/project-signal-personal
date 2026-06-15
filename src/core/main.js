@@ -4,9 +4,9 @@ import { renderGame } from "../ui/render.js";
 import { avatarSpec, avatarFigureHTML } from "../data/avatars.js";
 import {
   startRun, goTitle, applyReward, cycleSpeed, startPreview, showJobSelect,
-  applyFusion, skipFusion, applyRecruit, skipRecruit,
+  applyFusion, skipFusion, previewRecruit, confirmRecruit,
   swapFormationSlots, confirmArrange, continueAfterFusion, showCodex,
-  showStageSelect, chooseRoute,
+  showStageSelect, chooseRoute, startLayoutPreview, showDevPreview,
 } from "./battle.js";
 
 console.log("Project Signal Personal — init", gameState);
@@ -48,6 +48,15 @@ document.getElementById("to-stage-btn").addEventListener("click", showStageSelec
 
 // Job Codex Entry Foundation: 타이틀 → 직업 도감 / 도감 → 타이틀.
 document.getElementById("title-codex").addEventListener("click", showCodex);
+
+// Battlefield Preview & Layout Tune 01: 타이틀 → Dev 전장 레이아웃 프리뷰. 케이스 전환 바는 위임 처리.
+document.getElementById("title-dev-preview").addEventListener("click", showDevPreview);
+document.getElementById("dev-bar").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if ("devExit" in b.dataset) goTitle();
+  else if (b.dataset.devCase) startLayoutPreview(b.dataset.devCase);
+});
 document.getElementById("codex-screen").addEventListener("click", (e) => {
   if (e.target.closest("[data-codex-back]")) goTitle();
 });
@@ -130,11 +139,12 @@ document.getElementById("fusion-result-panel").addEventListener("click", (e) => 
   if (b && "fusionContinue" in b.dataset) continueAfterFusion();
 });
 
+// Recruit UX Rebuild 01 — 단일 화면 영입: 후보 클릭=미리배치/교체, "다음 여정으로"=확정.
 document.getElementById("recruit-panel").addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b) return;
-  if (b.dataset.recruit) applyRecruit(b.dataset.recruit);
-  else if ("recruitSkip" in b.dataset) skipRecruit();
+  if (b.dataset.recruit) previewRecruit(b.dataset.recruit);
+  else if ("recruitConfirm" in b.dataset) confirmRecruit();
 });
 
 // Party & Formation Integrity 01 보강: 재배치 화면 — 슬롯 집기 → 교환.

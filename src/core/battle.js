@@ -1,5 +1,5 @@
 import { gameState } from "./state.js";
-import { createInitialParty, createPreviewEnemies, createStageEnemies, createRouteEnemies, SLOT_ORDER, DEFAULT_FORMATION } from "./state.js";
+import { createInitialParty, createPreviewEnemies, createStageEnemies, createRouteEnemies, createLayoutPreviewEnemies, SLOT_ORDER, DEFAULT_FORMATION } from "./state.js";
 import { FUSION_RECIPES, BASE_JOBS, prefersFront, slotPreference, availableFusions } from "../data/jobs.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
@@ -138,6 +138,31 @@ export function startPreview(kind) {
   startBattle();
 }
 
+// Battlefield Preview & Layout Tune 01 — Dev 레이아웃 프리뷰. 전투 계산을 돌리지 않고(틱 없음) 배치만 본다.
+//   previewKind="layout"로 두어 전투/보상 흐름과 완전 분리. 케이스 전환은 같은 화면에서 즉시(devBar).
+export function startLayoutPreview(caseId) {
+  clearInterval(tickTimer);
+  tickTimer = null;
+  clearFinish();
+  gameState.party = createInitialParty();           // 기본 4인 — 행동선 거리 확인용
+  gameState.enemies = createLayoutPreviewEnemies(caseId);
+  gameState.battle.tick = 0;
+  gameState.battle.status = "ready";
+  gameState.battle.isRunning = false;
+  gameState.battle.result = null;
+  gameState.battle.previewKind = "layout";
+  gameState.run.layoutCase = caseId;                // devBar 하이라이트용
+  gameState.run.currentRouteType = "normal";
+  gameState.screen = "battle";
+  gameState.logs = [`Dev 레이아웃 프리뷰 — ${caseId}`];
+  renderGame(gameState);                            // 정적 렌더(틱 없음)
+}
+
+// 타이틀 → Dev 프리뷰 진입(첫 케이스).
+export function showDevPreview() {
+  startLayoutPreview("alert-5");
+}
+
 // Game Flow Foundation 01: 타이틀 → 직업 선택 화면.
 export function showJobSelect() {
   clearInterval(tickTimer);
@@ -215,6 +240,8 @@ export function resetBattle() {
   gameState.battle.result = null;
   gameState.battle.previewKind = null; // 정식 런 — 프리뷰 모드 해제
   gameState.run.recruitOffer = null;
+  gameState.run.recruitSlot = null;
+  gameState.run.recruitPreview = null;
   gameState.run.lastFusion = null;
   gameState.run.recruitContext = null;
 
@@ -266,8 +293,7 @@ export function applyReward(id) {
   if (ev && ev.type === "recruit") {
     rollRecruitOffer(); // 영입 후보는 진입 시 1회 확정
     gameState.run.recruitContext = "expand"; // 4인 확장 영입 — 문구 분기용
-    gameState.screen = "recruit";
-    renderGame(gameState);
+    enterRecruit(); // Recruit UX Rebuild 01 — 단일 화면 영입(빈 슬롯 고정 + 미리보기)
     return;
   }
 
@@ -403,6 +429,15 @@ export function applyFusion(resultId) {
 
 // 합체 결과 확인 → 동료 영입으로 이어간다(후보는 applyFusion에서 이미 확정).
 export function continueAfterFusion() {
+  enterRecruit();
+}
+
+// Recruit UX Rebuild 01 — 영입 진입: 채울 빈 슬롯(recruitSlot)을 고정하고 미리보기 상태 초기화.
+//   한 화면에서 "현재 파티 확인 + 후보 미리배치/교체 + 다음 여정으로"를 모두 처리한다(별도 배치 단계 제거).
+function enterRecruit() {
+  const f = gameState.run.formation || {};
+  gameState.run.recruitSlot = SLOT_ORDER.find((k) => !f[k]) || null;
+  gameState.run.recruitPreview = null;
   gameState.screen = "recruit";
   renderGame(gameState);
 }
@@ -432,22 +467,29 @@ function rollRecruitOffer() {
   gameState.run.recruitOffer = pool.slice(0, 3);
 }
 
-// 영입 실행: 직업 슬롯 선호(전열/후열) 순서로 첫 빈 슬롯에 배치 — 점유 슬롯 배치 불가.
-export function applyRecruit(jobId) {
+// Recruit UX Rebuild 01 — 후보 미리배치(확정 전 교체 가능). 고정된 recruitSlot에 후보를 즉시 배치하고,
+//   다른 후보를 누르면 같은 슬롯을 덮어쓴다(미리보기 교체). 확정은 confirmRecruit(다음 여정으로).
+export function previewRecruit(jobId) {
   const f = gameState.run.formation;
-  const offered = gameState.run.recruitOffer || recruitCandidates();
-  if (!offered.includes(jobId) || !recruitCandidates().includes(jobId)) return;
-  const empty = slotPreference(jobId).find((k) => !f[k]);
-  if (!empty) return;
-  f[empty] = jobId;
-  gameState.run.recruitOffer = null;
-  gameState.logs.push(`새 동료 영입 완료.`);
-  showArrange(); // 파티 구성 변경 → 재배치 확인
+  const slot = gameState.run.recruitSlot;
+  if (!f || !slot) return;
+  const offered = gameState.run.recruitOffer || [];
+  if (!offered.includes(jobId)) return;
+  f[slot] = jobId;                       // 미리보기 배치(교체 가능)
+  gameState.run.recruitPreview = jobId;
+  renderGame(gameState);
 }
 
-export function skipRecruit() {
+// Recruit UX Rebuild 01 — 영입 확정 → 곧바로 여정 선택으로(별도 "새 파티를 배치하세요" 단계 우회).
+//   후보가 있는데 미선택이면 진행 차단(UI 버튼이 딤드라 사실상 안 옴). 후보가 없으면 그냥 진행.
+export function confirmRecruit() {
+  const hasCandidates = (gameState.run.recruitOffer || []).length > 0;
+  if (hasCandidates && !gameState.run.recruitPreview) return;
+  if (gameState.run.recruitPreview) gameState.logs.push("새 동료와 함께 — 다음 여정으로.");
   gameState.run.recruitOffer = null;
-  showArrange(); // 영입 단계까지 온 경우 파티가 변했거나 확인이 필요 — 재배치 확인
+  gameState.run.recruitPreview = null;
+  gameState.run.recruitSlot = null;
+  proceedNextStage(); // 배치 단계 건너뜀 — 한 화면에서 흐름이 이어진다
 }
 
 // Party & Formation Integrity 01 보강 — 재배치 확인 화면.
