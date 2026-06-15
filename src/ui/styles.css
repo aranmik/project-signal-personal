@@ -32,14 +32,15 @@ body {
   min-height: 100dvh;
 }
 
-/* 상단 HUD */
+/* 상단 HUD — Battlefield Layout Rebuild 01: 액자/테두리 느낌을 줄이고 얇은 한 줄로.
+   유지: 짧은 타이틀(여정/심도) · 속도 버튼 · 타이틀로. 전투 영역을 침범하지 않게 최소 높이. */
 #top-hud {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  background: #16213e;
-  font-size: 14px;
+  padding: 5px 12px;
+  background: rgba(12, 16, 26, 0.92);
+  font-size: 13px;
   color: #aaa;
   flex-shrink: 0;
 }
@@ -47,17 +48,18 @@ body {
 #stage-label {
   font-weight: bold;
   color: #e0e0e0;
+  font-size: 13px;
 }
 
-#status-label {
-  color: #7ec8e3;
-}
+/* status-label(ready/running)은 플레이어용 정보가 아니라 숨긴다(최소 HUD). */
+#status-label { display: none; }
+#hud-right { display: flex; align-items: center; gap: 8px; }
 
-/* 파티 강화 현황 */
+/* 파티 강화 현황 — 얇은 한 줄(접힌 느낌). 전투 영역을 빼앗지 않게. */
 #party-bonus {
-  padding: 4px 16px;
-  background: #16213e;
-  font-size: 11px;
+  padding: 2px 16px;
+  background: rgba(12, 16, 26, 0.85);
+  font-size: 10px;
   color: #f0c040;
   text-align: center;
   flex-shrink: 0;
@@ -129,22 +131,22 @@ body {
 .route-atmo--threat { color: #ff9a6a; }
 .route-atmo--fury { color: #ff6a5a; }
 
-/* 유닛 무대 — 화면 중앙 밴드로 고정 (배경은 화면 전체, 캐릭터는 일정 구도)
-   Shell 01: 하단 UI 제거로 전투 영역 확대 → 밴드 560px */
+/* 유닛 무대 — Battlefield Layout Rebuild 01: 전투 필드가 화면 대부분을 쓰도록 세로 밴드 확대(680px).
+   좌표계 = 390×680. 위(top 작음)=몬스터 후열/깊은 숲, 아래(top 큼/ bottom 작음)=영웅. 전열/후열은 Y축으로 읽힌다. */
 #unit-layer {
   position: absolute;
   left: 0;
   right: 0;
   top: 50%;
   transform: translateY(-50%);
-  height: min(100%, 560px);
+  height: min(100%, 680px);
 }
 
-/* 진영 라벨 */
+/* 진영 라벨 — Battlefield Layout Rebuild 01: 전투가 주인공이므로 더 흐리게(방해 최소). */
 #battle-field .team-label {
   position: absolute;
-  color: rgba(154, 168, 184, 0.7);
-  font-size: 10px;
+  color: rgba(154, 168, 184, 0.4);
+  font-size: 9px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   z-index: 1;
@@ -210,10 +212,12 @@ body {
    x 30~162(좌측 영역 안, 우상단 적 zone과 겹치지 않음), 두 밴드 높이차로 판독 분리. */
 /* Combat Breath Hotfix 01: 각 행의 가로 간격을 아주 소폭(≈10px) 넓혀 치유선/행동선이
    아바타 사이에 묻히지 않게. 사다리꼴(전열2/후열2) 감각·3인도 4슬롯 원칙·적 진영 거리 유지. */
-#battle-field .hero-slot-f0 { left: 166px; bottom: 178px; } /* 전열 1 — 적과 최근접(상단·안쪽) */
-#battle-field .hero-slot-f1 { left: 58px;  bottom: 156px; } /* 전열 2 — 상단·바깥쪽 */
-#battle-field .hero-slot-b0 { left: 132px; bottom: 60px; }  /* 후열 1 — 하단·안쪽 */
-#battle-field .hero-slot-b1 { left: 24px;  bottom: 30px; }  /* 후열 2 — 적과 최원거리(하단·바깥쪽) */
+/* Battlefield Layout Rebuild 01 — 영웅 파티를 화면 최하단에 가깝게(좌하단), 좌하단→우상단 사선 유지.
+   전열(f0/f1)=위(몬스터에 가까움)·후열(b0/b1)=아래(최하단). 모두 좌측에 모아 우상단 몬스터 무리를 바라본다. */
+#battle-field .hero-slot-f0 { left: 168px; bottom: 150px; } /* 전열 1 — 적과 최근접(상단·안쪽) */
+#battle-field .hero-slot-f1 { left: 60px;  bottom: 126px; } /* 전열 2 — 상단·바깥쪽 */
+#battle-field .hero-slot-b0 { left: 138px; bottom: 48px; }  /* 후열 1 — 하단·안쪽 */
+#battle-field .hero-slot-b1 { left: 26px;  bottom: 20px; }  /* 후열 2 — 적과 최원거리(최하단·바깥쪽) */
 
 /* 적은 상단 "우측 70(x 117~390)" 영역 전체를 넓게 사용(우상 한 점 정렬 아님).
    top 10~150으로 상단 절반의 폭·높이를 활용해 영역감을 살린다. */
@@ -233,21 +237,32 @@ body {
 #battle-field .enemy-slot-3 { right: 50px;  top: 118px; }
 #battle-field .enemy-slot-4 { right: 134px; top: 138px; }
 #battle-field .enemy-slot-5 { right: 200px; top: 110px; }
-/* 보스 단독 — 상단 우측 70 영역을 "장악"하는 큰 적(모서리/중앙 허수아비 아님) */
-#battle-field .enemy-slot-boss { right: 72px; top: 24px; }
+/* 보스 단독 — Battlefield Layout Rebuild 01: 오른쪽에 크게(별도 boss anchor). 일반 슬롯과 분리. */
+#battle-field .enemy-slot-boss { right: 40px; top: 215px; }
 
-/* Run Structure 01B — 경계도 진형 슬롯(2열 + 정예 핵심).
-   전열(ef): 영웅 대면(중앙선 쪽=right 큰값)·세로 분산. 후열(eb): 뒤(오른쪽 구석=right 작은값).
-   정예 핵심(ecf 전열중앙 / ecb 후열중앙): 정예가 "전장의 주인공"으로 중앙에 서고 호위가 둘러싼다.
-   소형 부대가 6체까지 차도 전열/후열이 갈려 진형이 읽히고, 정예는 오른쪽 끝으로 밀리지 않는다. */
-#battle-field .enemy-slot-ef0 { right: 150px; top: 26px; }
-#battle-field .enemy-slot-ef1 { right: 164px; top: 96px; }
-#battle-field .enemy-slot-ef2 { right: 146px; top: 152px; }
-#battle-field .enemy-slot-eb0 { right: 20px;  top: 14px; }
-#battle-field .enemy-slot-eb1 { right: 34px;  top: 86px; }
-#battle-field .enemy-slot-eb2 { right: 18px;  top: 150px; }
-#battle-field .enemy-slot-ecf { right: 120px; top: 100px; } /* 정예 — 전열 중앙(영웅 대면, 관문형 사슴) */
-#battle-field .enemy-slot-ecb { right: 88px;  top: 38px; }  /* 정예 — 후열 중앙(지휘형 올빼미) */
+/* Battlefield Layout Rebuild 01 — 몬스터 전열/후열을 화면 Y축으로 읽는다.
+   위(top 작음)=후열/깊은 숲, 아래(top 큼)=전열/영웅 쪽. 좌우로 갈리던 진형을 위/아래 2밴드 지그재그로 교체.
+   후열(eb): 상단 밴드(top 46~130) 가로 지그재그(아치). 전열(ef): 하단 밴드(top 262~345) 가로 지그재그.
+   x는 화면 가운데(cx≈100~305)에 모아 가장자리로 삐져나오지 않게. 전열이 후열보다 항상 아래(가까이).
+   정예 핵심(ecf 전열중앙 사슴 관문 / ecb 후열·오른쪽 올빼미 지휘)은 밴드 안에서 중앙/우측 핵심으로 선다.
+   right = 359 - 중심x (unit 62 / layer 390). 전열6·후열6까지 들어갈 지그재그 슬롯 구조. */
+/* 후열 (상단 밴드 — 가로로 넓게 펼쳐 겹침 방지) */
+#battle-field .enemy-slot-eb0 { right: 231px; top: 85px; }
+#battle-field .enemy-slot-eb1 { right: 97px;  top: 85px; }
+#battle-field .enemy-slot-eb2 { right: 164px; top: 62px; }  /* 후열 정점(가장 깊은 가운데) */
+#battle-field .enemy-slot-eb3 { right: 264px; top: 140px; }
+#battle-field .enemy-slot-eb4 { right: 64px;  top: 140px; }
+#battle-field .enemy-slot-eb5 { right: 164px; top: 150px; }
+/* 전열 (하단 밴드 — 영웅에 더 가깝다) */
+#battle-field .enemy-slot-ef0 { right: 224px; top: 250px; }
+#battle-field .enemy-slot-ef1 { right: 89px;  top: 250px; }
+#battle-field .enemy-slot-ef2 { right: 159px; top: 320px; }  /* 전열 가운데-아래(지그재그) */
+#battle-field .enemy-slot-ef3 { right: 259px; top: 330px; }
+#battle-field .enemy-slot-ef4 { right: 59px;  top: 330px; }
+#battle-field .enemy-slot-ef5 { right: 159px; top: 290px; }
+/* 정예 핵심 */
+#battle-field .enemy-slot-ecf { right: 164px; top: 240px; } /* 정예 전열 중앙(관문형 사슴 — 영웅 대면) */
+#battle-field .enemy-slot-ecb { right: 104px; top: 72px; }  /* 정예 후열·오른쪽(지휘형 올빼미) */
 
 /* 정예/보스처럼 보이게 — 크기만 키운다(.unit.enemy scale 오버라이드, 발밑/머리 고정).
    임시 스타일: 정식 정예/보스 시스템 아님. */
@@ -1260,6 +1275,77 @@ body {
   100% { opacity: 0; transform: translateY(-13px) scale(1); }
 }
 
+/* === Monster Identity 02 — Actor 역할 읽힘 FX (유닛 중심 확장 링 / 투사체 / 추격 lunge) ===
+   단일 링 1개·0.3~0.5초. 과한 파티클 금지, readability 우선. color로 역할 구분. */
+.fx-ring {
+  position: absolute;
+  width: 26px; height: 26px;
+  margin: -13px 0 0 -13px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 8;
+  animation: fx-ring 0.45s ease-out forwards;
+}
+@keyframes fx-ring {
+  0% { opacity: 0; transform: scale(0.5); }
+  30% { opacity: 0.85; transform: scale(1.3); }
+  100% { opacity: 0; transform: scale(2.4); }
+}
+.fx-ring--guard   { color: rgba(240, 211, 138, 0.9); }   /* 보호/결계 — 금빛 */
+.fx-ring--heal    { color: rgba(150, 226, 198, 0.9); box-shadow: 0 0 8px rgba(150,226,198,.35) inset; } /* 회복 — 청록 */
+.fx-ring--command { color: rgba(255, 220, 150, 0.92); }  /* 지휘 — 금/주황 */
+.fx-ring--rage    { color: rgba(235, 96, 82, 0.8); border-width: 2px; } /* 위압/분노 — 빨강(은은) */
+#battle-field[data-speed="MAX"] .fx-ring { animation-duration: 0.32s; }
+/* 포효 예고 gather — 바깥에서 안으로 수축(긴장) */
+.fx-ring--gather {
+  color: rgba(245, 130, 90, 0.85);
+  border-width: 3px;
+  animation: fx-ring-gather 0.34s ease-in forwards;
+}
+@keyframes fx-ring-gather {
+  0% { opacity: 0; transform: scale(2.6); }
+  55% { opacity: 0.95; transform: scale(0.9); }
+  100% { opacity: 0.5; transform: scale(0.6); }
+}
+/* 포효 순간 radial shock — 크게 퍼지는 충격(보스 존재감) */
+.fx-ring--roar {
+  color: rgba(245, 110, 90, 0.95);
+  border-width: 3px;
+  width: 34px; height: 34px; margin: -17px 0 0 -17px;
+  animation: fx-ring-roar 0.55s ease-out forwards;
+}
+@keyframes fx-ring-roar {
+  0% { opacity: 0; transform: scale(0.4); }
+  22% { opacity: 1; transform: scale(2.1); }
+  100% { opacity: 0; transform: scale(5); }
+}
+
+/* 깃새 투사체 — 작은 점이 source→target으로 날아간다(선보다 약한 보조 감각) */
+.fx-proj {
+  position: absolute;
+  width: 7px; height: 7px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: rgba(150, 220, 130, 0.95);
+  box-shadow: 0 0 6px rgba(150, 220, 130, 0.6);
+  pointer-events: none;
+  z-index: 9;
+  transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+/* 잎여우 추격 lunge — 짧은 전진 들썩(아바타만, 위치는 .unit 기준이라 안 밀림) */
+#battle-field .unit.enemy .fig-react.lunge { animation: fx-lunge 0.3s ease-out; }
+@keyframes fx-lunge {
+  0% { transform: translate(0, 0) scale(1); }
+  40% { transform: translate(-5px, 5px) scale(1.08); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-ring, .fx-proj { animation-duration: 0.01s; transition-duration: 0.01s; }
+}
+
 /* === Action Feedback 01: source → target 행동선 / 피격 / 숫자 === */
 #fx-layer {
   position: absolute;
@@ -2008,6 +2094,13 @@ body {
 .route-title { font-size: 15px; font-weight: 800; }
 .route-sub { font-size: 12px; color: #9aa8b8; }
 .route-timing { font-size: 11px; color: #f0c040; margin-top: 2px; }
+/* Reward Pressure 01 — 여정 카드 보상·위험 성격 태그(고민하는 맛). 보상 등급별 색. */
+.route-reward-tag { display: block; font-size: 11px; font-weight: 700; margin-top: 3px; color: #9fb4cf; }
+.route-reward-tag--low  { color: #8fa6bd; }   /* 일반 — 차분 */
+.route-reward-tag--high { color: #f0c040; }   /* 위험/정예 — 금빛(보상 좋음) */
+.route-reward-tag--none { color: #7f9a8c; }   /* 휴식 — 청록(회복) */
+/* 보상 화면 — 남은 선택 횟수 강조 */
+.growth-picks { color: #f0c040; font-weight: 800; }
 
 /* 타입별 색 신호(읽힘 보조) */
 .route-card--danger { border-color: #6e3a3a; }
@@ -2037,17 +2130,19 @@ body {
 .route-menace--sealed { color: #7fd6b0; }
 
 /* 상단 run 표시 한 줄(심도/열쇠/위험도/타입) */
+/* Battlefield Layout Rebuild 01 — run 표시도 얇은 한 줄(접힌 느낌). 전투 영역 보존. */
 #run-status {
   display: flex;
   justify-content: center;
-  gap: 12px;
-  padding: 3px 16px;
-  background: #16213e;
-  font-size: 11px;
+  gap: 10px;
+  padding: 2px 12px;
+  background: rgba(12, 16, 26, 0.85);
+  font-size: 10px;
   color: #9fb4cf;
   flex-shrink: 0;
 }
 #run-status b { color: #f0c040; }
+#run-status .depth-atmo { font-size: 10px; }
 
 /* Fusion Flow 01: 신규 직업 비주얼 — donor 파츠 + 틴트(전용 실루엣 전 임시) */
 #battle-field .avatar.job-cleric { filter: hue-rotate(150deg) brightness(1.05); }

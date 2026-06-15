@@ -1,5 +1,5 @@
 import { BEGINNER_THEME, STAGE_THEMES } from "../data/stages.js";
-import { ROUTE_TYPES, bossTimingLabel, bossFury, bossReadinessPressure, bossMenace, depthAtmosphere, PRESSURE_HELP } from "../data/routes.js";
+import { ROUTE_TYPES, bossTimingLabel, bossFury, bossReadinessPressure, bossMenace, depthAtmosphere, routeReward, PRESSURE_HELP } from "../data/routes.js";
 import { availableFusions, slotPreference } from "../data/jobs.js";
 import { REWARDS } from "../data/rewards.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
@@ -390,6 +390,10 @@ function renderRoutePanel(state) {
         ${menaceHtml}
         <span class="route-readiness${warnClass}">${ready.current}${warnTag}</span>
         <span class="route-recommend">${ready.recommend}</span>`;
+    } else {
+      // Reward Pressure 01 — 일반/위험/정예/휴식 카드에 보상·위험 성격 태그(고민하는 맛).
+      const rw = routeReward(id);
+      if (rw.cardTag) extra = `<span class="route-reward-tag route-reward-tag--${rw.rewardTier}">${rw.cardTag}</span>`;
     }
     return `<button type="button" class="route-card route-card--${id}${pressureClass}" data-route="${id}">
       <span class="route-title">${rt.title}</span>
@@ -490,10 +494,16 @@ function growthSummaryText(state) {
 }
 
 function renderRewardPanel(state) {
+  // Reward Pressure 01 — 방금 고른 길의 보상 성격(일반/위험/정예)과 남은 선택 횟수를 보여준다.
+  const rw = routeReward(state.run.currentRouteType);
+  const remaining = state.run.rewardPicks || 1;
+  const labelSuffix = rw.resultLabel ? ` · ${rw.resultLabel}` : "";
   document.getElementById("growth-stage-label").textContent =
-    `${BEGINNER_THEME.name} · 심도 ${state.run.depth} 클리어!`;
+    `${BEGINNER_THEME.name} · 심도 ${state.run.depth} 클리어!${labelSuffix}`;
+  const pickWord = remaining >= 2 ? `훈련을 ${remaining}개 선택하세요` : "훈련을 하나 선택하세요";
+  const pickHint = remaining >= 2 ? ` <b class="growth-picks">남은 선택 ${remaining}</b>` : "";
   document.getElementById("growth-subtitle").innerHTML =
-    "훈련을 하나 선택하세요.<br><span class='growth-hint'>선택한 훈련은 이번 모험 동안 유지되고, 다음 전투부터 적용됩니다.</span>";
+    `${pickWord}.${pickHint}<br><span class='growth-hint'>선택한 훈련은 이번 모험 동안 유지되고, 다음 전투부터 적용됩니다.</span>`;
 
   // 보상 버튼은 REWARDS 데이터에서 렌더 — 보상 추가는 데이터만 늘리면 된다.
   document.getElementById("growth-choices").innerHTML = REWARDS.map(
@@ -1276,6 +1286,115 @@ export function playStatusApplyFx(targetInstanceId, label, variant = "") {
   el.style.top = `${p.y}px`;
   el.addEventListener("animationend", () => el.remove());
   layer.appendChild(el);
+}
+
+// ── Monster Identity 02 — Actor 역할 읽힘 FX ──────────────────────────────
+//   "로그를 안 읽어도 누가 뭘 하는지 전장만 보고 안다." 기존 pulse/shout/status-pop 문법 안에서,
+//   과하지 않게(단일 링 1개, 0.3~0.5초). readability 우선 — 파티클 폭발 금지.
+//   유닛 중심 확장 링(보호/회복/지휘/위압/포효). variant로 색·크기·리듬 구분.
+function spawnUnitRing(instanceId, variant, fy = 0.46) {
+  if (dyingUnits.has(instanceId) || cleanedDead.has(instanceId)) return;
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  const p = unitPoint(instanceId, { fx: 0.5, fy }, field.getBoundingClientRect());
+  if (!p) return;
+  const el = document.createElement("span");
+  el.className = `fx-ring fx-ring--${variant}`;
+  el.style.left = `${p.x}px`;
+  el.style.top = `${p.y}px`;
+  el.addEventListener("animationend", () => el.remove());
+  layer.appendChild(el);
+}
+
+// 보호 펄스(금빛 방패 느낌) — 기존 fx-pulse--guard 재사용. 대상 위에 짧게.
+function spawnGuardPulse(instanceId) {
+  if (dyingUnits.has(instanceId) || cleanedDead.has(instanceId)) return;
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  const p = unitPoint(instanceId, { fx: 0.5, fy: 0.46 }, field.getBoundingClientRect());
+  if (!p) return;
+  const s = document.createElement("span");
+  s.className = "fx-pulse fx-pulse--guard";
+  s.style.left = `${p.x}px`;
+  s.style.top = `${p.y}px`;
+  s.addEventListener("animationend", () => s.remove());
+  layer.appendChild(s);
+}
+
+// 깃새 투사체 — source→target으로 작은 점이 "날아간다". 선보다 약한 보조 감각(과하지 않게).
+function spawnProjectile(sourceId, targetId) {
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  const fieldRect = field.getBoundingClientRect();
+  const s = unitPoint(sourceId, { fx: 0.5, fy: 0.4 }, fieldRect);
+  const t = unitPoint(targetId, { fx: 0.5, fy: 0.42 }, fieldRect);
+  if (!s || !t) return;
+  const el = document.createElement("span");
+  el.className = "fx-proj";
+  el.style.left = `${s.x}px`;
+  el.style.top = `${s.y}px`;
+  layer.appendChild(el);
+  // 다음 프레임에 목표로 이동(CSS transition) → "날아간다"
+  requestAnimationFrame(() => {
+    el.style.transform = `translate(${t.x - s.x}px, ${t.y - s.y}px)`;
+    el.style.opacity = "0";
+  });
+  setTimeout(() => el.remove(), 360);
+}
+
+// 잎여우 추격 lunge — 공격 직전 짧은 전진감(.fig-react에 잠깐 lunge 클래스).
+function cueLunge(instanceId) {
+  requestAnimationFrame(() => {
+    const unit = document.querySelector(`#unit-layer [data-instance-id="${instanceId}"]`);
+    const fig = unit && unit.querySelector(".fig-react");
+    if (!fig) return;
+    fig.classList.remove("lunge");
+    void fig.offsetWidth; // reflow → 재진입 시 재시작
+    fig.classList.add("lunge");
+    fig.addEventListener("animationend", () => fig.classList.remove("lunge"), { once: true });
+  });
+}
+
+// Actor FX 디스패처 — battle.js trait가 역할별로 호출. opts: { wardId, targetId, allyIds, sourceId }.
+export function playActorFx(kind, casterId, opts = {}) {
+  switch (kind) {
+    case "guard": // 곰방패: 보호 대상 가드 펄스 + 곰 주변 보호 링("앞에서 지켜준다")
+      spawnGuardPulse(opts.wardId || casterId);
+      spawnUnitRing(casterId, "guard");
+      break;
+    case "weaken": // 이슬말랑: 대상 머리 위 약화 표식("힘 빠뜨린다")
+      playStatusApplyFx(opts.targetId, "공↓", "down");
+      break;
+    case "heal": // 풀양: 회복자(양) 주변 초록 반짝("아군을 돌본다"). 대상 펄스는 playSupportFx가 담당
+      spawnUnitRing(casterId, "heal");
+      break;
+    case "command": // 올빼미: 지휘 radial signal("뒤에서 지휘한다"). 대상 펄스는 playSupportFx
+      spawnUnitRing(casterId, "command");
+      break;
+    case "ward": // 사슴: 자신 barrier 링 + 후열 아군에 보호 펄스("길막는 수호자")
+      spawnUnitRing(casterId, "guard");
+      (opts.allyIds || []).forEach((id) => { if (id !== casterId) spawnGuardPulse(id); });
+      break;
+    case "roar": // 사자왕: 예고 gather → radial shock("포효 온다 → 포효!")
+      spawnUnitRing(casterId, "gather");
+      setTimeout(() => spawnUnitRing(casterId, "roar"), 200);
+      break;
+    case "rage": // 사자왕: 위압 증가 subtle rage cue(존재감 상승)
+      spawnUnitRing(casterId, "rage");
+      break;
+    case "lunge": cueLunge(casterId); break;
+    case "projectile": spawnProjectile(opts.sourceId || casterId, opts.targetId); break;
+  }
+}
+
+// Monster Identity 02 — 새 전투 시작 시 FX 레이어 정리. 화면 전환(전투→보상/타이틀) 도중 애니메이션이
+//   끝나지 않은 FX 요소가 hidden 레이어에 남는 기존 동작이 있어, 새 전투 시작에서 한 번 비워 누적을 막는다.
+export function clearFxLayer() {
+  const layer = document.getElementById("fx-layer");
+  if (layer) layer.innerHTML = "";
 }
 
 // Action Emphasis 01: source unit "행동 선언" cue.

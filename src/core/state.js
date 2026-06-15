@@ -94,17 +94,17 @@ function buildEnemies(specs, prefix, opts = {}) {
   });
 }
 
-// Run Structure 01B — 진형 슬롯. 전열(영웅 대면·중앙선 쪽)/후열(뒤·구석)을 CSS .enemy-slot-{slot}로 매핑.
-//   front 역할은 전열 슬롯부터, back 역할은 후열 슬롯부터 채우고 모자라면 반대 라인으로 흘려보낸다(상한 6).
-//   정예 핵심(ecf/ecb)·보스(boss)는 호출부에서 직접 지정한다.
-const FRONT_SLOTS = ["ef0", "ef1", "ef2"];
-const BACK_SLOTS = ["eb0", "eb1", "eb2"];
+// Battlefield Layout Rebuild 01 — 진형 슬롯을 화면 Y축으로 매핑(CSS .enemy-slot-{slot}).
+//   전열(ef, 하단 밴드=영웅에 가까움)/후열(eb, 상단 밴드=깊은 숲). front 역할은 전열 슬롯부터, back 역할은
+//   후열 슬롯부터 채우고 모자라면 반대 라인으로 흘려보낸다(전열6/후열6까지 지그재그). 정예핵심(ecf/ecb)·보스는 호출부 지정.
+const FRONT_SLOTS = ["ef0", "ef1", "ef2", "ef3", "ef4", "ef5"];
+const BACK_SLOTS = ["eb0", "eb1", "eb2", "eb3", "eb4", "eb5"];
 function assignSlotsByFront(isFrontArr) {
   let fi = 0, bi = 0;
   return isFrontArr.map((isFront) =>
     isFront
-      ? (FRONT_SLOTS[fi++] || BACK_SLOTS[bi++] || "ef2")
-      : (BACK_SLOTS[bi++] || FRONT_SLOTS[fi++] || "eb2")
+      ? (FRONT_SLOTS[fi++] || BACK_SLOTS[bi++] || "ef5")
+      : (BACK_SLOTS[bi++] || FRONT_SLOTS[fi++] || "eb5")
   );
 }
 function specIsFront(spec) {
@@ -251,6 +251,7 @@ export const gameState = {
     fusionCount: 0,             // 01B 합체 실행 누적 — 경계도 산정 기준
     routeChoices: null,         // 현재 제시된 여정 선택지(route id 배열) — 화면 갱신에도 고정
     currentRouteType: "normal", // 현재/직전 인카운터 타입(HUD 표시 + 승리 처리 분기)
+    rewardPicks: 0,             // Reward Pressure 01 — 현재 보상 화면에서 남은 성장 선택 횟수(길 프로필 기반)
     formation: null,      // null = 기본 4인 배치
     startFormation: null, // 직업 선택 화면에서 정한 시작 배치
     recruitOffer: null,   // 영입 화면 진입 시 굴린 랜덤 후보(최대 3) — 화면 갱신에도 고정

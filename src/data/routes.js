@@ -13,13 +13,27 @@ import { BEGINNER_THEME } from "./stages.js";
 
 // 선택지 카탈로그(표시 문구). 실제 인카운터는 createRouteEnemies(state.js)가 생성한다.
 //   title/sub = 선택 카드 문구(모바일 390px), hud = 상단 HUD 짧은 라벨, kind = 흐름 분기.
+//   Reward Pressure 01 — reward 프로필: 각 길의 "보상/위험 성격"을 코드에서 읽히게 명시.
+//     picks = 전투 후 성장 선택 횟수(기존 성장 시스템 안에서 차등) / risk·rewardTier = 읽힘 등급 /
+//     cardTag = 여정 카드 한 줄 / resultLabel = 보상·결과 화면에서 "방금 고른 길"의 의미.
+//   "위험 전투"(hud)와 "깊은 수풀"(title)은 동일한 danger 길 — 보상이 좋고(2픽) 합체 기회를 함께 준다.
 export const ROUTE_TYPES = {
-  normal: { id: "normal", title: "새싹 숲길",  sub: "안정적인 전투",          hud: "일반 전투", kind: "battle" },
-  danger: { id: "danger", title: "깊은 수풀",  sub: "더 조직적 / 보상 +",     hud: "위험 전투", kind: "battle" },
-  elite:  { id: "elite",  title: "현자의 가지", sub: "승리 시 보스 열쇠",       hud: "정예 전투", kind: "battle" },
-  rest:   { id: "rest",   title: "이슬 쉼터",  sub: "전투 없이 파티 정비",     hud: "휴식",     kind: "rest"   },
-  boss:   { id: "boss",   title: "새싹 왕의 문", sub: "사자왕에게 도전",        hud: "보스전",   kind: "boss"   },
+  normal: { id: "normal", title: "새싹 숲길",  sub: "안정적인 전투",          hud: "일반 전투", kind: "battle",
+    reward: { picks: 1, riskTier: "stable",   rewardTier: "low",  cardTag: "안정 · 보상 낮음",            resultLabel: "일반 전투 보상" } },
+  danger: { id: "danger", title: "깊은 수풀",  sub: "위험 · 합체 기회",       hud: "위험 전투", kind: "battle",
+    reward: { picks: 2, riskTier: "risky",    rewardTier: "high", cardTag: "위험 · 보상 좋음 / 합체 기회",  resultLabel: "깊은 수풀 보상", fusion: true } },
+  elite:  { id: "elite",  title: "현자의 가지", sub: "승리 시 보스 열쇠",       hud: "정예 전투", kind: "battle",
+    reward: { picks: 2, riskTier: "veryRisky", rewardTier: "high", cardTag: "매우 위험 · 열쇠 + 큰 보상",   resultLabel: "정예 보상", key: true } },
+  rest:   { id: "rest",   title: "이슬 쉼터",  sub: "전투 없이 회복",         hud: "휴식",     kind: "rest",
+    reward: { picks: 0, riskTier: "safe",     rewardTier: "none", cardTag: "회복 · 보상 없음",             resultLabel: "휴식으로 회복", heal: true } },
+  boss:   { id: "boss",   title: "새싹 왕의 문", sub: "사자왕에게 도전",        hud: "보스전",   kind: "boss",
+    reward: { picks: 0, riskTier: "boss",     rewardTier: "clear", cardTag: "",                            resultLabel: "" } },
 };
+
+// Reward Pressure 01 — 길의 보상 프로필(없으면 일반 1픽 기본). 보상 화면/카드/결과 공용.
+export function routeReward(routeType) {
+  return (ROUTE_TYPES[routeType] && ROUTE_TYPES[routeType].reward) || ROUTE_TYPES.normal.reward;
+}
 
 // 정예/보스 본체 — stages.js의 :elite/:boss 구성을 단일 출처로 재활용(데이터 중복 없음).
 const byTier = (tier) =>

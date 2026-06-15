@@ -3,9 +3,9 @@ import { createInitialParty, createPreviewEnemies, createStageEnemies, createRou
 import { FUSION_RECIPES, BASE_JOBS, prefersFront, slotPreference, availableFusions } from "../data/jobs.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
-import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions, depthSpeedFactor } from "../data/routes.js";
+import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions, depthSpeedFactor, routeReward } from "../data/routes.js";
 import { rewardById } from "../data/rewards.js";
-import { renderGame, playActionFx, playStatusTickFx, playSupportFx, playStatusApplyFx } from "../ui/render.js";
+import { renderGame, playActionFx, playStatusTickFx, playSupportFx, playStatusApplyFx, playActorFx, clearFxLayer } from "../ui/render.js";
 import { skillOf } from "../data/skills.js";
 
 let tickTimer = null;
@@ -70,6 +70,7 @@ export function startBattle() {
 
   validateParty("startBattle");
   clearFinish(); // 이전 전투의 지연 전환 잔여 취소
+  clearFxLayer(); // Monster Identity 02 — 이전 전투의 잔여 FX 정리(누적 방지)
   gameState.battle.status = "running";
   gameState.battle.isRunning = true;
   gameState.battle.result = null;
@@ -225,6 +226,7 @@ export function resetBattle() {
   gameState.run.fusionCount = 0;
   gameState.run.routeChoices = null;
   gameState.run.currentRouteType = "normal"; // 첫 전투는 고정 도입(일반)
+  gameState.run.rewardPicks = 0;             // Reward Pressure 01 — 보상 선택 횟수 초기화
 
   gameState.logs = ["새싹 숲 입구 — 모험 시작! 첫 전투가 끝나면 여정을 고른다."];
 
@@ -246,6 +248,14 @@ export function applyReward(id) {
   lv[id] = (lv[id] || 0) + 1;
 
   gameState.logs = [`보상: ${reward.name} Lv.${lv[id]} — 다음 전투부터 적용`];
+
+  // Reward Pressure 01 — 다회 성장 선택(위험/정예=2회). 남은 픽이 있으면 보상 화면 유지(라우팅은 마지막 픽에서만).
+  gameState.run.rewardPicks = (gameState.run.rewardPicks || 1) - 1;
+  if (gameState.run.rewardPicks > 0) {
+    gameState.screen = "reward";
+    renderGame(gameState);
+    return;
+  }
 
   // Run Structure 01C — 보상 후 이벤트 라우팅(우선순위로 정리해 danger 합체와 기존 S3/S8/S5가 충돌 없게).
   //   합체 가능 = 현재 파티에서 실행 가능한 레시피가 하나라도 있는가(availableFusions).
@@ -321,7 +331,8 @@ export function chooseRoute(routeType) {
   if (rt.kind === "rest") {
     restParty();
     gameState.run.threat = Math.max(0, gameState.run.threat - 1);
-    pushLog("이슬 쉼터에서 한 박자 정비했다.");
+    // Reward Pressure 01 — 휴식은 회복만, 성장/합체 보상 없음(안정 선택). 고른 길의 성격을 로그로 남긴다.
+    pushLog("이슬 쉼터에서 한 박자 정비했다 — 휴식으로 회복(보상 없음).");
     showRouteChoice(); // 전투 없이 다시 여정 선택으로
     return;
   }
@@ -704,6 +715,8 @@ function traitGuard(unit, heroes) {
     .filter((e) => !e.isDead && !hasStatus(e, "guard"))
     .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
   if (ward) applyStatus(ward, { type: "guard", duration: 2 });
+  // Monster Identity 02 — "앞에서 지켜준다": 보호 대상 가드 펄스 + 곰 주변 보호 링.
+  playActorFx("guard", unit.instanceId, { wardId: ward ? ward.instanceId : unit.instanceId });
   introTrait(unit, "곰방패가 방패를 세웠다.");
   const t = redirectIfTaunted(unit, selectAttackTarget(heroes)); // 도발당했으면 도발자 우선
   if (t) performAttack(unit, t);
@@ -714,6 +727,8 @@ function traitGuard(unit, heroes) {
 function traitHunter(unit, heroes) {
   const t = redirectIfTaunted(unit, heroes.reduce((a, b) => (a.hp <= b.hp ? a : b)));
   introTrait(unit, "잎여우가 빈틈을 파고들었다.");
+  // Monster Identity 02 — "약한 애 노린다": 공격 직전 짧은 전진감(lunge).
+  playActorFx("lunge", unit.instanceId);
   if (t) performAttack(unit, t, { mult: t.hp / t.maxHp < 0.5 ? 1.3 : 1 });
   return true;
 }
@@ -724,7 +739,8 @@ function traitRangedFocus(unit, heroes) {
   const pool = back.length ? back : heroes;
   const t = redirectIfTaunted(unit, pool.reduce((a, b) => (a.hp <= b.hp ? a : b)));
   introTrait(unit, "깃새가 뒤쪽을 노렸다.");
-  if (t) performAttack(unit, t, { mult: 0.9, lineType: "ranged" });
+  // Monster Identity 02 — "멀리서 쏜다": 선과 함께 작은 투사체가 날아간다(보조 감각).
+  if (t) { playActorFx("projectile", unit.instanceId, { targetId: t.instanceId }); performAttack(unit, t, { mult: 0.9, lineType: "ranged" }); }
   return true;
 }
 
@@ -734,7 +750,11 @@ function traitWeaken(unit, heroes) {
   introTrait(unit, "이슬말랑이 힘을 흐리게 했다.");
   if (t) {
     performAttack(unit, t);
-    if (!t.isDead) applyStatus(t, { type: "atkDown", duration: 2, pct: 0.2 });
+    if (!t.isDead) {
+      applyStatus(t, { type: "atkDown", duration: 2, pct: 0.2 });
+      // Monster Identity 02 — "힘 빠뜨린다": 대상 머리 위 약화(공↓) 표식.
+      playActorFx("weaken", unit.instanceId, { targetId: t.instanceId });
+    }
   }
   return true;
 }
@@ -748,6 +768,8 @@ function traitHealAlly(unit) {
   const amt = healUnit(t, Math.max(1, Math.round(unit.atk * 0.9)));
   pushLog("풀양이 새싹빛으로 회복했다.");
   playSupportFx({ casterInstanceId: unit.instanceId, text: "회복", kind: "heal", heals: amt > 0 ? [{ targetInstanceId: t.instanceId, amount: amt }] : [] });
+  // Monster Identity 02 — "아군을 돌본다": 양 주변 초록 반짝(회복 대상 펄스는 위 playSupportFx).
+  playActorFx("heal", unit.instanceId);
   return true;
 }
 
@@ -760,6 +782,8 @@ function traitCommand(unit) {
   applyStatus(t, { type: "atkUp", duration: 3, pct: 0.25 });
   pushLog("숲올빼미 현자가 친구들에게 지시했다.");
   playSupportFx({ casterInstanceId: unit.instanceId, text: "지휘", kind: "buff", guardInstanceId: t.instanceId });
+  // Monster Identity 02 — "뒤에서 지휘한다": 올빼미 주변 지휘 radial signal.
+  playActorFx("command", unit.instanceId);
   return true;
 }
 
@@ -771,6 +795,8 @@ function traitWard(unit) {
   allies.forEach((a) => { a.shield = Math.max(a.shield || 0, 6); });
   pushLog("사슴수호자가 숲의 결계를 펼쳤다.");
   playSupportFx({ casterInstanceId: unit.instanceId, text: "결계", kind: "guard", guardInstanceId: unit.instanceId });
+  // Monster Identity 02 — "길막는 수호자": 자신 barrier 링 + 후열 아군 보호 펄스.
+  playActorFx("ward", unit.instanceId, { allyIds: allies.map((a) => a.instanceId) });
   return true;
 }
 
@@ -781,6 +807,8 @@ function traitBossRoar(unit, heroes) {
   if (unit.actionCount % 2 !== 0) return false;
   const menaceActive = !!unit.menace;
   const dmg = Math.max(1, Math.round(unit.atk * (menaceActive ? 0.5 : 0.35)));
+  // Monster Identity 02 — "포효 온다 → 포효!": 예고 gather → radial shock(전체 공격 읽힘).
+  playActorFx("roar", unit.instanceId);
   heroes.forEach((h) => {
     applyDamage(h, dmg);
     playStatusTickFx({ targetInstanceId: h.instanceId, amount: dmg, kind: "roar" });
@@ -810,7 +838,11 @@ function performAction(unit) {
     const prev = unit.menaceStacks || 0;
     unit.menaceStacks = Math.min(prev + 1, unit.menace.atkMaxStacks);
     unit.atk = Math.max(1, Math.round((unit.menaceBaseAtk || unit.atk) * (1 + unit.menaceStacks * unit.menace.atkStepPct)));
-    if (prev === 0) pushLog(`${unit.name}${josa(unit.name, "이가")} 위압을 두른다 — 시간이 흐를수록 공격이 거세진다.`);
+    if (prev === 0) {
+      pushLog(`${unit.name}${josa(unit.name, "이가")} 위압을 두른다 — 시간이 흐를수록 공격이 거세진다.`);
+      // Monster Identity 02 — "보스답다": 위압 발현 시 subtle rage cue(존재감 상승, 1회).
+      playActorFx("rage", unit.instanceId);
+    }
   }
 
   // Monster Identity 01 — 적 전투 개성(trait). 처리하면(true) 기본 공격 대신 자기 방식으로 행동.
@@ -1587,6 +1619,8 @@ function applyFinish(outcome) {
       else if (keys === 2) pushLog("두 번째 열쇠가 사자왕의 위압을 걷어냈다. 정예의 시험을 모두 넘었다.");
       else pushLog(`정예를 물리쳤다 — 보스 열쇠 +1 (보유 ${keys}).`);
     }
+    // Reward Pressure 01 — 길 프로필에 따라 성장 선택 횟수 차등(일반1 / 위험·정예2). 보상 화면이 이 값으로 다회 선택.
+    gameState.run.rewardPicks = Math.max(1, routeReward(gameState.run.currentRouteType).picks || 1);
     gameState.run.result = "victory";
     gameState.screen = "reward"; // Game Flow 01: 클리어 → 보상 선택 화면
     pushLog(`심도 ${gameState.run.depth} 클리어! 보상을 선택하세요.`);
