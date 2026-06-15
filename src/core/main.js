@@ -70,6 +70,9 @@ const jobCards = [...document.querySelectorAll("#job-grid .job-card")];
 const slotBoxes = [...document.querySelectorAll("#formation-grid .form-slot-box")];
 const jobNames = { warrior: "전사", guardian: "수호자", archer: "궁수", priest: "사제", cleric: "신관", trickster: "교란꾼" };
 
+// Start Party Experiment 01 — 초기 출발 인원을 4/3인이 아니라 2인으로(루프 체감 실험).
+//   최대 파티(4슬롯)는 유지 — 빈 2자리는 깊은 수풀 동료 영입으로 채운다. 상수만 바꾸면 되돌릴 수 있다.
+const START_PARTY_SIZE = 2;
 const draft = { f0: null, f1: null, b0: null, b1: null };
 let pickedSlot = null; // 슬롯 교환용(첫 클릭 슬롯)
 
@@ -86,7 +89,7 @@ function refreshJobSelectUI() {
     box.classList.toggle("filled", !!job);
     box.classList.toggle("picked", pickedSlot === box.dataset.slot);
   });
-  document.getElementById("job-start").disabled = draftCount() !== 3;
+  document.getElementById("job-start").disabled = draftCount() !== START_PARTY_SIZE;
 }
 
 jobCards.forEach((card) => {
@@ -95,7 +98,7 @@ jobCards.forEach((card) => {
     const inSlot = SLOT_ORDER.find((k) => draft[k] === job);
     if (inSlot) {
       draft[inSlot] = null; // 선택 해제
-    } else if (draftCount() < 3) {
+    } else if (draftCount() < START_PARTY_SIZE) {
       // Party & Formation Integrity 01: 직업 슬롯 선호(전열/후열) 순서로 빈 슬롯 배치.
       //   하나의 슬롯엔 최대 1명 — 점유 슬롯은 건너뛴다. (같은 직업 카드는 1장뿐 — 중복 불가)
       const empty = slotPreference(job).find((k) => !draft[k]);
@@ -121,7 +124,7 @@ slotBoxes.forEach((box) => {
 });
 
 document.getElementById("job-start").addEventListener("click", () => {
-  if (draftCount() !== 3) return;
+  if (draftCount() !== START_PARTY_SIZE) return;
   startRun({ ...draft });
 });
 

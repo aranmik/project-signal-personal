@@ -254,6 +254,8 @@ export function resetBattle() {
   gameState.run.routeChoices = null;
   gameState.run.currentRouteType = "normal"; // 첫 전투는 고정 도입(일반)
   gameState.run.rewardPicks = 0;             // Reward Pressure 01 — 보상 선택 횟수 초기화
+  gameState.run.deepForestCount = 0;         // Deep Forest Reward Rebuild 01 — 깊은 수풀 보상 단계 초기화
+  gameState.run.recruitPower = 0;            // Deep Forest Reward Rebuild 01 — 깊은 수풀 영입(경계도 가산) 초기화
 
   gameState.logs = ["새싹 숲 입구 — 모험 시작! 첫 전투가 끝나면 여정을 고른다."];
 
@@ -338,6 +340,8 @@ function showRouteChoice() {
   gameState.run.routeChoices = rollRouteOffer({
     depth: gameState.run.depth,
     bossKeys: gameState.run.bossKeys,
+    // Deep Forest Reward Rebuild 01 — 줄 보상(영입/합체)이 있을 때만 깊은 수풀 노출.
+    canDeepForest: deepForestRewardType() !== null,
   });
   gameState.screen = "route";
   renderGame(gameState);
@@ -407,7 +411,8 @@ export function applyFusion(resultId) {
   // Run Structure 01B — 합체 실행 = 경계도 상승. 파티가 합체로 강해질수록 몬스터가 더 대비한다
   //   (합체를 막지 않는다 — 대신 다음 인카운터가 더 조직적인 진형으로 응답한다).
   gameState.run.fusionCount = (gameState.run.fusionCount || 0) + 1;
-  gameState.run.alertness = alertnessFromFusions(gameState.run.fusionCount);
+  // Deep Forest Reward Rebuild 01 — 경계도 = 합체 + 깊은수풀 영입(둘 다 "강해진" 사건). 기존 산식 재사용.
+  gameState.run.alertness = alertnessFromFusions(gameState.run.fusionCount + (gameState.run.recruitPower || 0));
   // First Class Trial 01: 합체 로그를 레시피 데이터 기반으로(15종 1차 직업 공통). 이름은 직업 템플릿.
   const jn = (id) => UNIT_TEMPLATES.party[id]?.name || id;
   gameState.logs.push(`합체! ${jn(recipe.materials[0])} + ${jn(recipe.materials[1])} → ${jn(recipe.result)}`);
@@ -440,6 +445,39 @@ function enterRecruit() {
   gameState.run.recruitPreview = null;
   gameState.screen = "recruit";
   renderGame(gameState);
+}
+
+// Deep Forest Reward Rebuild 01 — 다음 깊은 수풀 보상 종류: 처음 2회=동료 영입 → 이후=합체.
+//   줄 수 없으면 null(깊은 수풀 미등장). 영입가능=빈자리+미보유 기본직업 / 합체가능=실행 레시피 존재.
+//   영입 단계인데 영입 불가(빈자리 없음 등)면 합체로 폴백, 합체도 불가하면 null.
+export function deepForestRewardType() {
+  const count = gameState.run.deepForestCount || 0;
+  const canRecruit = recruitCandidates().length > 0;
+  const canFuse = availableFusions(partyJobIds()).length > 0;
+  if (count < 2 && canRecruit) return "recruit";
+  if (canFuse) return "fusion";
+  if (canRecruit) return "recruit";
+  return null;
+}
+
+// Deep Forest Reward Rebuild 01 — 깊은 수풀 클리어 보상(파티 강화 X). 영입/영입/합체 순. 단계 진행 후 화면 전환.
+function giveDeepForestReward() {
+  const type = deepForestRewardType();
+  gameState.run.deepForestCount = (gameState.run.deepForestCount || 0) + 1; // 보상 단계 진행
+  if (type === "recruit") {
+    rollRecruitOffer();
+    gameState.run.recruitContext = "deepforest";
+    pushLog("수풀 속에서 새 동료를 만났습니다.");
+    enterRecruit();
+  } else if (type === "fusion") {
+    pushLog("수풀 깊은 곳에서 합체의 기회가 열렸습니다.");
+    gameState.screen = "fusion";
+    renderGame(gameState);
+  } else {
+    // 안전장치(정상적으론 danger가 안 떴어야 함) — 보상 없이 다음 여정으로.
+    pushLog("깊은 수풀을 헤쳤다.");
+    proceedNextStage();
+  }
 }
 
 export function skipFusion() {
@@ -485,7 +523,15 @@ export function previewRecruit(jobId) {
 export function confirmRecruit() {
   const hasCandidates = (gameState.run.recruitOffer || []).length > 0;
   if (hasCandidates && !gameState.run.recruitPreview) return;
-  if (gameState.run.recruitPreview) gameState.logs.push("새 동료와 함께 — 다음 여정으로.");
+  if (gameState.run.recruitPreview) {
+    gameState.logs.push("새 동료와 함께 — 다음 여정으로.");
+    // Deep Forest Reward Rebuild 01 — 깊은 수풀 동료 영입도 경계도 상승(강해진 만큼 숲이 대비). 기존 수치 재사용.
+    if (gameState.run.recruitContext === "deepforest") {
+      gameState.run.recruitPower = (gameState.run.recruitPower || 0) + 1;
+      gameState.run.alertness = alertnessFromFusions((gameState.run.fusionCount || 0) + gameState.run.recruitPower);
+      gameState.logs.push(`경계도 ${gameState.run.alertness} — 새 동료로 강해진 파티에 숲이 대비한다.`);
+    }
+  }
   gameState.run.recruitOffer = null;
   gameState.run.recruitPreview = null;
   gameState.run.recruitSlot = null;
@@ -1661,7 +1707,14 @@ function applyFinish(outcome) {
       else if (keys === 2) pushLog("두 번째 열쇠가 사자왕의 위압을 걷어냈다. 정예의 시험을 모두 넘었다.");
       else pushLog(`정예를 물리쳤다 — 보스 열쇠 +1 (보유 ${keys}).`);
     }
-    // Reward Pressure 01 — 길 프로필에 따라 성장 선택 횟수 차등(일반1 / 위험·정예2). 보상 화면이 이 값으로 다회 선택.
+    // Deep Forest Reward Rebuild 01 — 깊은 수풀(danger)은 스탯 보상 화면을 건너뛰고 동료영입/합체 보상 루트로.
+    if (gameState.run.currentRouteType === "danger") {
+      gameState.run.result = "victory";
+      pushLog(`심도 ${gameState.run.depth} 클리어! 깊은 수풀의 보상.`);
+      giveDeepForestReward(); // 화면 전환·렌더는 여기서 담당
+      return;
+    }
+    // Reward Pressure 01 — 길 프로필에 따라 성장 선택 횟수 차등(일반1 / 정예2). 보상 화면이 이 값으로 다회 선택.
     gameState.run.rewardPicks = Math.max(1, routeReward(gameState.run.currentRouteType).picks || 1);
     gameState.run.result = "victory";
     gameState.screen = "reward"; // Game Flow 01: 클리어 → 보상 선택 화면

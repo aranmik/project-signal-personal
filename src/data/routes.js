@@ -20,8 +20,8 @@ import { BEGINNER_THEME } from "./stages.js";
 export const ROUTE_TYPES = {
   normal: { id: "normal", title: "새싹 숲길",  sub: "안정적인 전투",          hud: "일반 전투", kind: "battle",
     reward: { picks: 1, riskTier: "stable",   rewardTier: "low",  cardTag: "안정 · 보상 낮음",            resultLabel: "일반 전투 보상" } },
-  danger: { id: "danger", title: "깊은 수풀",  sub: "위험 · 합체 기회",       hud: "위험 전투", kind: "battle",
-    reward: { picks: 2, riskTier: "risky",    rewardTier: "high", cardTag: "위험 · 보상 좋음 / 합체 기회",  resultLabel: "깊은 수풀 보상", fusion: true } },
+  danger: { id: "danger", title: "깊은 수풀",  sub: "위험 · 동료/합체 보상",   hud: "위험 전투", kind: "battle",
+    reward: { picks: 0, riskTier: "risky",    rewardTier: "high", cardTag: "위험 · 동료 영입/합체(파티 강화 없음)",  resultLabel: "깊은 수풀 보상", deepForest: true } },
   elite:  { id: "elite",  title: "현자의 가지", sub: "승리 시 보스 열쇠",       hud: "정예 전투", kind: "battle",
     reward: { picks: 2, riskTier: "veryRisky", rewardTier: "high", cardTag: "매우 위험 · 열쇠 + 큰 보상",   resultLabel: "정예 보상", key: true } },
   rest:   { id: "rest",   title: "이슬 쉼터",  sub: "전투 없이 회복",         hud: "휴식",     kind: "rest",
@@ -44,12 +44,15 @@ export const BOSS_ENCOUNTER = byTier("boss")[0] || ["lion:boss"]; // 사자왕
 // 여정 선택지 오퍼 — "읽히는 반고정" 선택지(복잡한 랜덤 생성 아님).
 //   항상 안정 옵션(일반) + depth 리듬에 따른 둘째 옵션(정예/위험/휴식). 보스 열쇠가 있으면 보스문 추가.
 //   카드 2~3개. 정예가 주기적으로 떠 열쇠를 모을 수 있고, 열쇠를 얻으면 "지금 갈지/더 돌지"를 고른다.
-export function rollRouteOffer({ depth, bossKeys }) {
+// Deep Forest Reward Rebuild 01 — 깊은 수풀(danger)은 "보상을 줄 수 있을 때만" 등장한다.
+//   canDeepForest = 다음 깊은 수풀 보상(영입/합체)이 실제로 가능한가(battle.js deepForestRewardType).
+//   불가하면 깊은 수풀 대신 휴식을 제시해 선택지가 비지 않게 한다(항상 normal + 둘째 옵션).
+export function rollRouteOffer({ depth, bossKeys, canDeepForest = true }) {
   const choices = ["normal"];
   const r = depth % 3;
   if (r === 2) choices.push("elite");
   else if (r === 0) choices.push("rest");
-  else choices.push("danger");
+  else choices.push(canDeepForest ? "danger" : "rest"); // 깊은 수풀이 보상 불가면 휴식으로 대체
   if (bossKeys > 0) choices.push("boss");
   return choices;
 }

@@ -334,9 +334,14 @@ function renderRecruitPanel(state) {
       ).join("")
     : `<p class="flow-note">영입 가능한 동료가 없습니다.</p>`;
 
-  const isFusionFill = state.run.recruitContext === "fusion";
-  const heading = isFusionFill ? "빈자리를 채울 동료를 선택하세요" : "새 동료를 영입하세요";
-  const note = "현재 파티에 없는 동료가 찾아왔습니다. 후보를 눌러 미리 배치해보세요.";
+  // Deep Forest Reward Rebuild 01 — 문맥별 문구(합체 보충 / 깊은 수풀 보상 / 4인 확장).
+  const ctx = state.run.recruitContext;
+  const heading = ctx === "fusion" ? "빈자리를 채울 동료를 선택하세요"
+    : ctx === "deepforest" ? "수풀에서 새 동료를 만났습니다"
+    : "새 동료를 영입하세요";
+  const note = ctx === "deepforest"
+    ? "깊은 수풀의 보상 — 현재 파티에 없는 동료입니다. 후보를 눌러 미리 배치해보세요."
+    : "현재 파티에 없는 동료가 찾아왔습니다. 후보를 눌러 미리 배치해보세요.";
 
   // 후보가 있으면 선택해야 활성, 후보가 없으면(영입 불가) 바로 진행 가능.
   const canProceed = !!preview || candidates.length === 0;

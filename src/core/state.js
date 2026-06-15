@@ -296,7 +296,11 @@ export const gameState = {
     bossKeys: 0,                // 보스 열쇠(정예 전투 승리로 획득)
     threat: 0,                  // 위험도(내부 누적 — 위험/정예에서 상승. UI는 01B부터 경계도로 표시)
     alertness: 0,               // 01B 경계도(합체 진행도 기반) — 적 진형 조직도를 결정
-    fusionCount: 0,             // 01B 합체 실행 누적 — 경계도 산정 기준
+    fusionCount: 0,             // 01B 합체 실행 누적 — 경계도 산정 기준(+보스 준비 압박)
+    // Deep Forest Reward Rebuild 01 — 깊은 수풀 보상 루트(스탯 X). deepForestCount=준 보상 수(영입/합체 단계 판정),
+    //   recruitPower=깊은 수풀 영입 수(경계도 가산). 경계도 = alertnessFromFusions(fusionCount + recruitPower).
+    deepForestCount: 0,
+    recruitPower: 0,
     routeChoices: null,         // 현재 제시된 여정 선택지(route id 배열) — 화면 갱신에도 고정
     currentRouteType: "normal", // 현재/직전 인카운터 타입(HUD 표시 + 승리 처리 분기)
     rewardPicks: 0,             // Reward Pressure 01 — 현재 보상 화면에서 남은 성장 선택 횟수(길 프로필 기반)
