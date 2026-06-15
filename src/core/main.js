@@ -6,7 +6,7 @@ import {
   startRun, goTitle, applyReward, cycleSpeed, startPreview, showJobSelect,
   applyFusion, skipFusion, previewRecruit, confirmRecruit,
   swapFormationSlots, confirmArrange, continueAfterFusion, showCodex,
-  showStageSelect, chooseRoute, startLayoutPreview, showDevPreview,
+  showStageSelect, chooseRoute, continueFromRest, startLayoutPreview, showDevPreview,
 } from "./battle.js";
 
 console.log("Project Signal Personal — init", gameState);
@@ -195,6 +195,11 @@ arrangePanel.addEventListener("click", (e) => {
 document.getElementById("route-panel").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-route]");
   if (b) chooseRoute(b.dataset.route);
+});
+
+// Rest Route Polish 01: 이슬 쉼터 휴식 장면 → "여정을 잇는다"로 복귀
+document.getElementById("rest-panel").addEventListener("click", (e) => {
+  if (e.target.closest("[data-rest-continue]")) continueFromRest();
 });
 
 // 결과 오버레이 → 다시 시작 (시작 배치 유지로 새 런)

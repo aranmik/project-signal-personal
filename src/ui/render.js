@@ -27,6 +27,7 @@ export function renderGame(state) {
   const recruitPanel = document.getElementById("recruit-panel");
   const arrangePanel = document.getElementById("arrange-panel");
   const routePanel = document.getElementById("route-panel");
+  const restPanel = document.getElementById("rest-panel");
   const codexScreen = document.getElementById("codex-screen");
   const stageSelect = document.getElementById("stage-select");
   const battleView = document.getElementById("battle-view");
@@ -41,6 +42,7 @@ export function renderGame(state) {
   recruitPanel.hidden = true;
   arrangePanel.hidden = true;
   if (routePanel) routePanel.hidden = true;
+  if (restPanel) restPanel.hidden = true;
   battleView.hidden = true;
 
   if (state.screen === "title") {
@@ -110,6 +112,15 @@ export function renderGame(state) {
     if (routePanel) {
       routePanel.hidden = false;
       renderRoutePanel(state);
+    }
+    return;
+  }
+
+  // Rest Route Polish 01: 이슬 쉼터 휴식 장면
+  if (state.screen === "rest") {
+    if (restPanel) {
+      restPanel.hidden = false;
+      renderRestPanel(state);
     }
     return;
   }
@@ -392,6 +403,33 @@ function readinessOf(state) {
 // Run Structure 01A — 여정 선택 화면.
 //   "전투는 자동이지만, 여정은 내가 고른다." 2~3개 카드(읽히는 반고정). 각 카드는 짧은 이름/설명.
 //   보스문 카드는 열쇠 보유 시에만 오퍼에 포함되며 도전 타이밍 감각(이른/빠른/적정…)을 함께 보여준다.
+// Rest Route Polish 01 — 이슬 쉼터 휴식 장면(전투가 아닌 회복/정비 선택지).
+//   파티 아바타가 작은 모닥불 주변에서 숨을 고르는 느낌 + 회복 안내. CSS/HTML 기반의 가벼운 연출.
+//   회복은 chooseRoute(rest)에서 이미 적용됨 — 이 화면은 "쉬어간다"를 읽히게 하고 여정으로 잇는다.
+function renderRestPanel(state) {
+  const f = state.run.formation || {};
+  const jobs = SLOT_ORDER.map((k) => f[k]).filter(Boolean);
+  const heroes = jobs
+    .map((id) => `<span class="rest-hero" aria-label="${jobName(id)}">${jobAvatarHTML(id, "av-fit--card")}<span class="rest-hp">＋</span></span>`)
+    .join("");
+  const body = document.getElementById("rest-body");
+  if (!body) return;
+  body.innerHTML = `
+    <h2 class="flow-heading">이슬 쉼터</h2>
+    <div class="rest-scene">
+      <div class="rest-heroes">${heroes}</div>
+      <div class="rest-campfire" aria-hidden="true">
+        <span class="rest-flame"></span>
+        <span class="rest-flame rest-flame--b"></span>
+        <span class="rest-embers"></span>
+        <span class="rest-logs"></span>
+      </div>
+    </div>
+    <p class="flow-note">이슬 쉼터에서 잠시 숨을 고릅니다.<br>파티가 완전히 회복했습니다.</p>
+    <button type="button" class="route-card rest-continue" data-rest-continue>여정을 잇는다</button>
+  `;
+}
+
 function renderRoutePanel(state) {
   const choices = state.run.routeChoices || [];
   const cards = choices.map((id) => {
@@ -849,6 +887,8 @@ function spawnDeathDust(instanceId, isParty) {
 //   ring 크기는 대상 rect에 비례(보스 scale 2.8에서도 안정). 죽는 중/정리됨은 생략.
 //   상한(MAX_FX_TARGETS) + MAX 단축으로 과밀 방지.
 const MAX_FX_TARGETS = 5;
+// Impact Anchor Polish 01 — 히트 이펙트 링 통일 크기(대상 tier 무관). 소형 몬스터 기준 감각 유지.
+const TARGET_CUE_SIZE = 50;
 function spawnTargetCue(targetInstanceId, isHeal) {
   if (dyingUnits.has(targetInstanceId) || cleanedDead.has(targetInstanceId)) return;
   const layer = document.getElementById("fx-layer");
@@ -863,7 +903,11 @@ function spawnTargetCue(targetInstanceId, isHeal) {
   const fieldRect = field.getBoundingClientRect();
   const cx = r.left - fieldRect.left + r.width / 2;
   const cy = r.top - fieldRect.top + r.height * 0.46; // 몸통 중앙 약간 위
-  const size = Math.max(34, Math.min(124, r.width * 0.92));
+  // Impact Anchor Polish 01 — 히트 이펙트 링 크기 통일.
+  //   기존: 대상 rect 비례(보스 scale에서 124px까지 → 보스 전체를 덮어 미적 저하).
+  //   변경: 대상 크기와 무관하게 동일 size. "큰 보스 몸 안에서 작은 타격점이 반짝"는 느낌.
+  //   Boss/Elite/Small 모두 같은 기본 ring size 사용.
+  const size = TARGET_CUE_SIZE;
 
   const c = document.createElement("span");
   c.className = `fx-target${isHeal ? " fx-target--heal" : ""}`;
@@ -1122,12 +1166,17 @@ function borderPointToward(targetInstanceId, from, fieldRect) {
   return { x: cx + dx * r.width * 0.40, y: cy + dy * r.height * 0.40 };
 }
 
-// Combat Grammar Polish 02 — 행동선 도착점(피격점) 분기.
-//   boss 대상: 보스 몸 내부 9분할 중 랜덤(매번 살짝 다르게, 바깥 허공/HUD로 안 나감).
+// Combat Grammar Polish 02 / Impact Anchor Polish 01 — 행동선 도착점(피격점) 분기.
+//   boss 대상: 보스 몸 내부 9분할 중 랜덤(큰 몸 여러 지점 타격). 바깥 허공/HUD로 안 나감.
+//   elite 대상: 보스보다 작으므로 2×2(4분할) 랜덤(중형 몸 4지점 타격).
+//   small 대상(영웅→소형 몬스터): 분산하지 않고 몸통 중심에 정확히 꽂힘(타격감 우선).
 //   몬스터→영웅: 영웅 몸통(가슴) 쪽 — 테두리 허공이 아니라 몸에 닿게.
-//   그 외(영웅→몬스터 기본): 기존 테두리 가까운 지점.
+//   그 외 fallback: 기존 테두리 가까운 지점.
 const BOSS_GRID_X = [0.30, 0.5, 0.70];
 const BOSS_GRID_Y = [0.32, 0.5, 0.66];
+// Impact Anchor Polish 01 — elite 2×2 anchor 후보(중앙 한 점 고정이 아니라 몸의 4지점에 분산).
+const ELITE_GRID_X = [0.38, 0.62];
+const ELITE_GRID_Y = [0.40, 0.60];
 function impactPoint(targetInstanceId, sourceInstanceId, s, fieldRect) {
   const tgtEl = document.querySelector(
     `#unit-layer [data-instance-id="${targetInstanceId}"]`
@@ -1136,10 +1185,16 @@ function impactPoint(targetInstanceId, sourceInstanceId, s, fieldRect) {
   const r = tgtEl.getBoundingClientRect();
   const left = r.left - fieldRect.left;
   const top = r.top - fieldRect.top;
+  const tier = tgtEl.dataset.tier;
 
-  if (tgtEl.dataset.tier === "boss") {
+  if (tier === "boss") {
     const gx = BOSS_GRID_X[(Math.random() * 3) | 0];
     const gy = BOSS_GRID_Y[(Math.random() * 3) | 0];
+    return { x: left + gx * r.width, y: top + gy * r.height };
+  }
+  if (tier === "elite") {
+    const gx = ELITE_GRID_X[(Math.random() * 2) | 0];
+    const gy = ELITE_GRID_Y[(Math.random() * 2) | 0];
     return { x: left + gx * r.width, y: top + gy * r.height };
   }
 
@@ -1148,6 +1203,11 @@ function impactPoint(targetInstanceId, sourceInstanceId, s, fieldRect) {
     : null;
   if (srcEl && srcEl.classList.contains("enemy") && tgtEl.classList.contains("party")) {
     return { x: left + 0.5 * r.width, y: top + 0.46 * r.height }; // 영웅 몸통(가슴)
+  }
+
+  // 소형 몬스터: 분산 없이 몸통 중심에 정확히 꽂힘(미세 어긋남 제거 → 타격감↑)
+  if (tgtEl.classList.contains("enemy")) {
+    return { x: left + 0.5 * r.width, y: top + 0.5 * r.height };
   }
 
   return borderPointToward(targetInstanceId, s, fieldRect);
@@ -1256,9 +1316,20 @@ export function playActionFx(event) {
   // 2) 짧은 선행 뒤 행동선 발사 + 대상 반응. 배속이면 리듬만 살게 더 짧게.
   const speed = Number(field.dataset.speed) || 1;
   const lead = speed === 2 ? 80 : 120;
-  // 숫자는 머리 위(head anchor)에서 시작 — 선/펄스는 타격 지점(t) 그대로.
-  //   보스/정예는 numberAnchor가 위치 보정 + 화면 안 clamp.
-  const tn = numberAnchor(targetInstanceId, fieldRect) || t;
+  // 숫자 시작점.
+  //   Hero/Small: 기존 head anchor(머리 위) 유지.
+  //   Impact Anchor Polish 01 — Boss/Elite: 실제 타격이 터진 End 지점(t) 기준 위쪽에 노출.
+  //     End가 여러 군데에서 터질 때 "이 지점에 맞았고 이 피해가 떴다"는 연결감.
+  //     아바타 내부에 묻히지 않게 End보다 살짝 위(약 28px) + 화면 안 clamp.
+  //     기존 방식 복귀는 numberAnchor만 다시 쓰면 됨(구조 단순 유지).
+  const tgtTierEl = document.querySelector(
+    `#unit-layer [data-instance-id="${targetInstanceId}"]`
+  );
+  const bigTarget = tgtTierEl &&
+    (tgtTierEl.dataset.tier === "boss" || tgtTierEl.dataset.tier === "elite");
+  const tn = bigTarget
+    ? { x: t.x, y: Math.max(56, Math.min(fieldRect.height - 18, t.y - 28)) }
+    : (numberAnchor(targetInstanceId, fieldRect) || t);
   const fire = () => {
     spawnLine(layer, s, t, lineType, kind);
     spawnPulse(layer, t, isHeal);

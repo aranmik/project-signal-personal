@@ -45,6 +45,7 @@ export function createInitialParty(bonuses = { atk: 0, maxHp: 0 }, formation = D
     const jobId = formation[slot];
     if (!jobId) return;
     const u = createUnit(UNIT_TEMPLATES.party[jobId], `hero-${jobId}-1`, bonuses);
+    u.jobId = jobId; // Stage Persistence 01 — 전투 간 HP 지속을 직업 기준으로 매칭(재배치/슬롯 이동에 안전)
     u.slotKey = slot;
     u.role = slot.startsWith("f") ? "front" : "back"; // 배치가 전열/후열을 결정
     party.push(u);
@@ -112,6 +113,27 @@ function specIsFront(spec) {
   return UNIT_TEMPLATES.enemies[key]?.role === "front";
 }
 
+// Elite Escort Overlap Fix 01 — 정예 본체(ecf 전열중앙 / ecb 후열우측)와 호위 소형이 겹치지 않게
+//   본체 박스를 피한 호위 슬롯 순서(390폭 실측 기준). z-index로 숨기지 않고 슬롯 자체를 분산한다.
+//   - owl(후열 우측, ecb): 올빼미가 후열 우측을 통째로 차지하므로 후열 호위는 좌측(eb0,eb3)에 모은다.
+//     390폭에선 올빼미 좌측과 우측 사이에 소형이 둘 들어갈 폭이 없어, 후열 소형을 모두 좌측에 둬서
+//     올빼미 뒤에 묻히지 않게 한다(좌측 eb0/eb3은 기존 진형과 같은 지그재그 스태거).
+//     전열(ef*)은 올빼미(상단)와 라인이 달라 안 겹치므로 기존 순서.
+//   - deer(전열 중앙, ecf): 전열 호위는 양 옆(ef0,ef1)만 — 본체 바로 아래/중앙(ef2,ef5,ef3,ef4)은
+//     서로/본체와 겹쳐 좌석이 부족하므로, 남는 전열 호위는 후열(상단)로 흘려 본체와 시각적 여백을 둔다.
+const ELITE_FRONT_OWL = ["ef0", "ef1", "ef2", "ef3", "ef4"];
+const ELITE_BACK_OWL  = ["eb0", "eb3", "eb2", "eb5", "eb4"]; // 후열 호위는 좌측에 모음(올빼미 우측 비움)
+const ELITE_FRONT_DEER = ["ef0", "ef1"]; // 양 옆 2석만 — 나머지는 후열로 흘림
+const ELITE_BACK_DEER  = ["eb0", "eb1", "eb2", "eb3", "eb4", "eb5"];
+function assignEliteEscortSlots(isFrontArr, coreFront) {
+  const fp = coreFront ? ELITE_FRONT_DEER : ELITE_FRONT_OWL;
+  const bp = coreFront ? ELITE_BACK_DEER : ELITE_BACK_OWL;
+  let fi = 0, bi = 0;
+  return isFrontArr.map((isFront) =>
+    isFront ? (fp[fi++] || bp[bi++] || "ef5") : (bp[bi++] || fp[fi++] || "eb5")
+  );
+}
+
 export function createStageEnemies(stage) {
   const specs = stagePlan(stage).enemies;
   const slots = assignSlotsByFront(specs.map(specIsFront));
@@ -160,8 +182,10 @@ export function createRouteEnemies(routeType, run) {
     const eliteSpec = ELITE_POOL[(run.bossKeys || 0) % ELITE_POOL.length][0];
     const escort = eliteEscort(alertness);
     const specs = [eliteSpec, ...escort.map((r) => ROLE_ACTOR[r])];
-    const escortSlots = assignSlotsByFront(escort.map((r) => FRONT_ROLES.has(r)));
-    const slots = [specIsFront(eliteSpec) ? "ecf" : "ecb", ...escortSlots];
+    // Elite Escort Overlap Fix 01 — 호위 소형이 정예 본체 뒤에 묻히지 않게 본체 박스를 피한 슬롯 배치.
+    const coreFront = specIsFront(eliteSpec);
+    const escortSlots = assignEliteEscortSlots(escort.map((r) => FRONT_ROLES.has(r)), coreFront);
+    const slots = [coreFront ? "ecf" : "ecb", ...escortSlots];
     return buildEnemies(specs, prefix, { scale, slots });
   }
 

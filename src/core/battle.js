@@ -256,6 +256,7 @@ export function resetBattle() {
   gameState.run.rewardPicks = 0;             // Reward Pressure 01 — 보상 선택 횟수 초기화
   gameState.run.deepForestCount = 0;         // Deep Forest Reward Rebuild 01 — 깊은 수풀 보상 단계 초기화
   gameState.run.recruitPower = 0;            // Deep Forest Reward Rebuild 01 — 깊은 수풀 영입(경계도 가산) 초기화
+  gameState.run.partyHp = null;              // Stage Persistence 01 — 전투 간 HP 지속 초기화(첫 전투는 풀피)
 
   gameState.logs = ["새싹 숲 입구 — 모험 시작! 첫 전투가 끝나면 여정을 고른다."];
 
@@ -363,7 +364,9 @@ export function chooseRoute(routeType) {
     gameState.run.threat = Math.max(0, gameState.run.threat - 1);
     // Reward Pressure 01 — 휴식은 회복만, 성장/합체 보상 없음(안정 선택). 고른 길의 성격을 로그로 남긴다.
     pushLog("이슬 쉼터에서 한 박자 정비했다 — 휴식으로 회복(보상 없음).");
-    showRouteChoice(); // 전투 없이 다시 여정 선택으로
+    // Rest Route Polish 01 — 곧장 넘어가지 않고 짧은 휴식 장면을 보여준 뒤 여정으로 잇는다.
+    gameState.screen = "rest";
+    renderGame(gameState);
     return;
   }
 
@@ -375,12 +378,42 @@ export function chooseRoute(routeType) {
   advanceStage(routeType);
 }
 
-// 휴식 정비 — 01A 한정 가벼운 회복. 현재 모델은 매 전투 파티가 풀피로 재생성되므로 실효는 거의 없다.
-//   (전투 간 영구 HP 유지는 후속 레이어 — 그때 이 회복이 실제 의미를 갖는다. WATCH)
-function restParty() {
+// Rest Route Polish 01 — 휴식 장면에서 "여정을 잇는다" → 다음 여정 선택으로 복귀.
+export function continueFromRest() {
+  showRouteChoice();
+}
+
+// Stage Persistence 01 / Rest Route Polish 01 — 전투 간 HP 지속(직업 기준 저장/복원).
+//   매 스테이지 풀피 재생성을 대체한다: 승리 시 생존 HP를 저장하고, 다음 전투에서 복원한다.
+//   기절(HP0) 영웅은 ko로 기록 → 다음 전투에서 HP 1로 복귀("간신히 정신을 차린 상태").
+//   직업(jobId) 키라 재배치/슬롯 이동에 안전하고, 합체/영입으로 생긴 신규 직업은 키가 없어 풀피로 합류한다.
+function capturePartyHp() {
+  const snap = {};
   gameState.party.forEach((u) => {
-    if (!u.isDead) u.hp = Math.min(u.maxHp, u.hp + Math.round(u.maxHp * 0.3));
+    if (!u.jobId) return;
+    snap[u.jobId] = u.isDead ? { ko: true } : { hp: u.hp };
   });
+  gameState.run.partyHp = snap;
+}
+
+function applyPersistedHp() {
+  const snap = gameState.run.partyHp;
+  if (!snap) return; // 첫 전투(또는 런 시작 직후): 풀피 그대로
+  gameState.party.forEach((u) => {
+    const s = u.jobId && snap[u.jobId];
+    if (!s) return; // 신규 합류(영입/합체): createUnit 기본값(풀피) 유지
+    if (s.ko) { u.hp = 1; u.isDead = false; }                 // 기절 → HP 1로 복귀(여전히 매우 위험)
+    else if (typeof s.hp === "number") u.hp = Math.max(1, Math.min(u.maxHp, s.hp)); // 생존 HP 이월(클램프)
+  });
+}
+
+// Rest Route Polish 01 — 이슬 쉼터: 기절 포함 파티 전원 HP를 max로 완전 회복.
+//   저장 HP도 풀로 갱신해 다음 전투까지 회복이 유지된다(쉼터 = 위험을 쉬어가는 선택).
+function restParty() {
+  gameState.party.forEach((u) => { u.hp = u.maxHp; u.isDead = false; });
+  const snap = {};
+  gameState.party.forEach((u) => { if (u.jobId) snap[u.jobId] = { hp: u.maxHp }; });
+  gameState.run.partyHp = snap;
 }
 
 export function partyJobIds() {
@@ -571,6 +604,8 @@ export function advanceStage(routeType = gameState.run.currentRouteType) {
 
   // Fusion Flow 01: 현재 배치(합체/영입 반영) 기준으로 파티 재구성.
   gameState.party = createInitialParty(gameState.run.bonuses, gameState.run.formation || undefined);
+  // Stage Persistence 01 — 풀피 재생성 대신 직전 전투 결과 HP를 복원(기절 영웅은 HP 1). 첫 전투는 무영향.
+  applyPersistedHp();
   gameState.enemies = createRouteEnemies(routeType, gameState.run); // 길 선택이 인카운터를 만든다
 
   gameState.battle.tick = 0;
@@ -1368,12 +1403,21 @@ function dealRaw(target, dmg) {
   if (remaining > 0) target.hp -= remaining;
 }
 
+// Stage Persistence 01 — 전투 무력화 표시 + 로그. 표현만 분기(전투 판정/타겟/패배 조건은 불변).
+//   영웅: HP 0 = "기절"(승리 시 다음 전투에서 HP 1로 복귀). 몬스터: 기존처럼 "쓰러짐/처치".
+function markFallen(unit) {
+  unit.hp = 0;
+  unit.isDead = true;
+  const isHero = gameState.party.includes(unit);
+  pushLog(isHero
+    ? `${unit.name}${josa(unit.name, "이가")} 기절했다.`
+    : `${unit.name}${josa(unit.name, "이가")} 쓰러졌다.`);
+}
+
 // 분배된 피해로 사망한 유닛(결속 파트너 등) 정리 — 호출부가 못 보는 사망을 여기서 마킹.
 function killIfDead(unit) {
   if (unit && !unit.isDead && unit.hp <= 0) {
-    unit.hp = 0;
-    unit.isDead = true;
-    pushLog(`${unit.name}${josa(unit.name, "이가")} 쓰러졌다.`);
+    markFallen(unit);
   }
 }
 
@@ -1426,9 +1470,7 @@ function performDisrupt(trickster, target, meta) {
     shoutTier: "skill",
   });
   if (target.hp <= 0) {
-    target.hp = 0;
-    target.isDead = true;
-    pushLog(`${target.name}${josa(target.name, "이가")} 쓰러졌다.`);
+    markFallen(target);
   }
 }
 
@@ -1593,9 +1635,7 @@ function performAttack(attacker, target, opts = {}) {
   });
 
   if (target.hp <= 0) {
-    target.hp = 0;
-    target.isDead = true;
-    pushLog(`${target.name}${josa(target.name, "이가")} 쓰러졌다.`);
+    markFallen(target);
   }
 
   // First Class Expansion 01A — 파수궁 보복: 적이 후열 아군을 피격하면 살아있는 파수궁이 즉시
@@ -1704,6 +1744,9 @@ function applyFinish(outcome) {
   if (gameState.battle.status !== "ended") return; // 그 사이 새 전투 시작 시 무시(방어)
 
   if (outcome === "victory") {
+    // Stage Persistence 01 — 승리 시점의 파티 HP를 저장(생존=현재 HP, 기절=ko). 다음 전투로 이월된다.
+    //   danger(깊은 수풀)는 아래에서 일찍 return하므로 캡처는 분기 전에 한 번만 수행한다.
+    capturePartyHp();
     // Run Structure 01A: 정예 전투 승리 시 보스 열쇠 획득(보스문이 다음 여정 선택지로 열린다).
     if (gameState.run.currentRouteType === "elite") {
       gameState.run.bossKeys += 1;
