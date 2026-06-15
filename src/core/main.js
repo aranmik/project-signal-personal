@@ -142,12 +142,28 @@ document.getElementById("fusion-result-panel").addEventListener("click", (e) => 
   if (b && "fusionContinue" in b.dataset) continueAfterFusion();
 });
 
-// Recruit UX Rebuild 01 — 단일 화면 영입: 후보 클릭=미리배치/교체, "다음 여정으로"=확정.
-document.getElementById("recruit-panel").addEventListener("click", (e) => {
+// Recruit UX Rebuild 01 → Arrange Hotfix 01 — 단일 화면 영입: 후보 클릭=미리배치/교체,
+//   파티 슬롯 탭=위치 교체(집기→놓기), "다음 여정으로"=확정. picked는 패널 dataset에 둬 재렌더에도 유지.
+const recruitPanel = document.getElementById("recruit-panel");
+recruitPanel.addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b) return;
-  if (b.dataset.recruit) previewRecruit(b.dataset.recruit);
-  else if ("recruitConfirm" in b.dataset) confirmRecruit();
+  if (b.dataset.recruit) { recruitPanel.dataset.picked = ""; previewRecruit(b.dataset.recruit); return; }
+  if ("recruitConfirm" in b.dataset) { recruitPanel.dataset.picked = ""; confirmRecruit(); return; }
+  // 파티 슬롯 위치 교체: 첫 탭=집기, 다른 슬롯 탭=교체, 같은 슬롯 재탭=해제. 빈↔빈은 변화 없음.
+  const slot = b.dataset.pfSlot;
+  if (!slot) return;
+  const picked = recruitPanel.dataset.picked || "";
+  if (!picked) {
+    recruitPanel.dataset.picked = slot;
+    b.classList.add("picked");
+  } else if (picked === slot) {
+    recruitPanel.dataset.picked = "";
+    b.classList.remove("picked");
+  } else {
+    recruitPanel.dataset.picked = "";
+    swapFormationSlots(picked, slot); // formation 교체 + 재렌더
+  }
 });
 
 // Party & Formation Integrity 01 보강: 재배치 화면 — 슬롯 집기 → 교환.

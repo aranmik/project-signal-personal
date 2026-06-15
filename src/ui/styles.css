@@ -2064,22 +2064,27 @@ body {
   max-width: 270px;
   margin: 4px auto 8px;
 }
+/* Recruit Panel Polish/Arrange Hotfix 01 — 슬롯은 "아바타 중심" 프레임(탭하면 위치 교체되는 버튼).
+   전열/후열·직업명 텍스트는 화면에 노출하지 않는다(aria-label로만 보존). 빈자리는 ＋ + "빈자리". */
 .pf-slot {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 2px;
+  min-height: 72px;
   padding: 6px 4px;
   border: 1px solid #2a3a4a;
   border-radius: 10px;
   background: #14233b;
+  cursor: pointer;
 }
-.pf-slot.pf-recruit { border-color: #f0c040; border-style: dashed; background: #1b2942; }
-.pf-role { font-size: 9px; color: #8aa0b4; letter-spacing: .02em; }
-.pf-ava { display: block; width: 46px; height: 46px; }
-.pf-empty-mark { font-size: 24px; color: #45596f; line-height: 46px; height: 46px; }
-.pf-job { font-size: 11px; font-weight: 700; color: #e6edf5; }
-.pf-slot.empty .pf-job { color: #6a7d92; }
+.pf-slot:active { transform: translateY(1px); }
+.pf-slot.empty { border-style: dashed; border-color: #3a4d63; background: #121f33; }
+.pf-slot.picked { border-color: #f0c040; box-shadow: 0 0 9px rgba(240, 192, 64, 0.5); background: #26344f; }
+.pf-ava { display: block; width: 52px; height: 52px; }
+.pf-empty-mark { font-size: 26px; color: #4a5d75; line-height: 1; }
+.pf-empty-label { font-size: 10px; color: #6a7d92; }
 /* 후보 3개를 한 줄(왼쪽/가운데/오른쪽)로 — 아바타 위 / 이름 아래 */
 #recruit-list { flex-direction: row; gap: 8px; }
 .recruit-card {
@@ -2101,25 +2106,27 @@ body {
 .flow-next.is-disabled, .flow-next:disabled { opacity: 0.4; cursor: default; }
 .recruit-next.is-disabled { background: transparent; color: #6a7d92; }
 
-/* === Battlefield Preview & Layout Tune 01 — Dev 레이아웃 프리뷰 케이스 전환 바 === */
+/* === Battlefield Preview & Layout Tune 01 → Dev Preview Access Hotfix 01 — 케이스 전환 바 ===
+   가로 한 줄(스크롤) 대신 여러 줄로 wrap + 세로 스크롤 → 13개 전부 모바일에서 터치 가능(잘림 없음). */
 #dev-bar {
   position: absolute;
   left: 0; right: 0; bottom: 0;
   z-index: 30;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
-  background: rgba(10, 14, 22, 0.95);
+  background: rgba(10, 14, 22, 0.96);
   border-top: 1px solid #2a3a4a;
-  overflow-x: auto;
-  white-space: nowrap;
+  max-height: 45%;
+  overflow-y: auto;
 }
-.dev-bar-label { font-size: 10px; color: #8aa0b4; flex-shrink: 0; }
+.dev-bar-label { font-size: 10px; color: #8aa0b4; flex-shrink: 0; width: 100%; }
 .dev-case {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   font-size: 11px;
-  padding: 5px 9px;
+  padding: 6px 10px;
   border-radius: 6px;
   background: #16213e;
   color: #c7d2dd;

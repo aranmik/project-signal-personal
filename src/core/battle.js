@@ -505,15 +505,21 @@ function rollRecruitOffer() {
   gameState.run.recruitOffer = pool.slice(0, 3);
 }
 
-// Recruit UX Rebuild 01 — 후보 미리배치(확정 전 교체 가능). 고정된 recruitSlot에 후보를 즉시 배치하고,
-//   다른 후보를 누르면 같은 슬롯을 덮어쓴다(미리보기 교체). 확정은 confirmRecruit(다음 여정으로).
+// Recruit UX Rebuild 01 → Arrange Hotfix 01 — 후보 미리배치(확정 전 교체 가능). 직전 미리보기는 jobId로
+//   추적해 제거(슬롯을 교체한 뒤여도 안전) 후 빈 슬롯에 새로 배치한다. 슬롯 위치는 파티 그리드 탭으로 교체.
 export function previewRecruit(jobId) {
   const f = gameState.run.formation;
-  const slot = gameState.run.recruitSlot;
-  if (!f || !slot) return;
+  if (!f) return;
   const offered = gameState.run.recruitOffer || [];
   if (!offered.includes(jobId)) return;
-  f[slot] = jobId;                       // 미리보기 배치(교체 가능)
+  // 직전 미리보기 동료 제거(스왑으로 위치가 바뀌었을 수 있으니 jobId로 찾는다).
+  if (gameState.run.recruitPreview) {
+    const prev = SLOT_ORDER.find((k) => f[k] === gameState.run.recruitPreview);
+    if (prev) f[prev] = null;
+  }
+  const empty = SLOT_ORDER.find((k) => !f[k]);
+  if (!empty) return;                    // 빈자리 없으면 무시(정상적으론 항상 있음)
+  f[empty] = jobId;
   gameState.run.recruitPreview = jobId;
   renderGame(gameState);
 }

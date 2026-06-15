@@ -301,19 +301,16 @@ function spawnFusionCelebration() {
   }
 }
 
-// 영입 화면: 랜덤 후보(진입 시 확정, 최대 3) / 후보별 배치 예정 슬롯(선호 규칙) 안내.
-// Recruit UX Rebuild 01 — 현재 편성된 파티를 2×2 아바타 그리드로(텍스트 아님). recruitSlot 강조 + 미리보기 반영.
-function partyPreviewGridHTML(formation, recruitSlot) {
+// Recruit Panel Polish/Arrange Hotfix 01 — 현재 편성 파티 2×2: "아바타와 빈자리"만(전열/후열/직업명 텍스트 X).
+//   채워진 슬롯=아바타만(직업명은 aria-label로만), 빈 슬롯=＋ + "빈자리". 각 슬롯은 탭하면 위치 교체(swap)되는 버튼.
+//   pickedSlot=교체용으로 선택된 슬롯(테두리 빛남). 내부 슬롯 키(f0/f1/b0/b1=전열/후열)는 그대로 유지.
+function partyPreviewGridHTML(formation, pickedSlot) {
   return SLOT_ORDER.map((k) => {
     const job = formation?.[k];
-    const isRecruit = k === recruitSlot;
-    const ava = job
+    const inner = job
       ? `<span class="pf-ava">${jobAvatarHTML(job, "av-fit--card")}</span>`
-      : `<span class="pf-empty-mark">＋</span>`;
-    return `<div class="pf-slot pf-${k}${job ? " filled" : " empty"}${isRecruit ? " pf-recruit" : ""}">
-      <span class="pf-role">${SLOT_NAMES[k]}</span>${ava}
-      <span class="pf-job">${job ? jobName(job) : "빈자리"}</span>
-    </div>`;
+      : `<span class="pf-empty-mark">＋</span><span class="pf-empty-label">빈자리</span>`;
+    return `<button type="button" class="pf-slot pf-${k}${job ? " filled" : " empty"}${k === pickedSlot ? " picked" : ""}" data-pf-slot="${k}" aria-label="${job ? jobName(job) : "빈자리"}">${inner}</button>`;
   }).join("");
 }
 
@@ -321,7 +318,8 @@ function partyPreviewGridHTML(formation, recruitSlot) {
 //   후보를 누르면 현재 파티 미리보기에 즉시 반영되고, 다른 후보로 교체 가능. 별도 배치 단계 없음.
 function renderRecruitPanel(state) {
   const f = state.run.formation || {};
-  const recruitSlot = state.run.recruitSlot || SLOT_ORDER.find((k) => !f[k]) || null;
+  // Recruit Panel Arrange Hotfix 01 — 위치 교체용으로 선택된 슬롯(재렌더에도 유지되게 패널 dataset에 보관).
+  const pickedSlot = document.getElementById("recruit-panel").dataset.picked || null;
   const candidates = state.run.recruitOffer || [];
   const preview = state.run.recruitPreview;
 
@@ -348,7 +346,7 @@ function renderRecruitPanel(state) {
 
   document.getElementById("recruit-body").innerHTML = `
     <div class="flow-kicker">현재 편성된 파티</div>
-    <div class="party-preview-grid">${partyPreviewGridHTML(f, recruitSlot)}</div>
+    <div class="party-preview-grid">${partyPreviewGridHTML(f, pickedSlot)}</div>
     <h2 class="flow-heading">${heading}</h2>
     <p class="flow-note">${note}</p>
     <div id="recruit-list">${cards}</div>
