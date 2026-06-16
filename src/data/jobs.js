@@ -49,6 +49,58 @@ export const SECOND_CLASS_RECIPES = [
   { materials: ["vanguard", "guardian"],  result: "sunlord",     birthLine: "선봉의 깃발과 수호자의 빛이 성황의 권능으로 떠올랐다." },
 ];
 
+/* =========================================================
+   Role Category Foundation 01 — 직업 "성향" 분류(전투 역할 문법).
+   기존 role(front/back = 배치 성향)과는 다른 축이다 — 절대 섞지 않는다.
+   성향 5종: tank/melee/ranged/support/healer.
+   이 정보는 "도감 상세 표시 + 영웅 확장 기반"으로만 쓴다 —
+   전투 계산/타겟팅/스탯/합체식/영입·배치·전투 화면에는 연결하지 않는다(표시 전용 메타).
+   2차 3종(용창/현자/성황)은 이번 분류 대상이 아님 → combatRoleOf가 null(도감에 성향 줄 미표시).
+   ========================================================= */
+export const JOB_COMBAT_ROLES = {
+  // 기본 6직업
+  warrior: "melee",
+  guardian: "tank",
+  archer: "ranged",
+  priest: "healer",
+  cleric: "support",   // 힐러가 아니라 보호/축복 계열 서포터
+  trickster: "support", // 행동 게이지 방해 서포터
+
+  // 1차 15직업
+  gatekeeper: "tank",
+  rogue: "melee",
+  paladin: "tank",     // 이번 기준에서 탱커로 분류
+  vanguard: "support",
+  warden: "melee",     // 이번 기준에서 근접딜러로 분류
+  watchbow: "ranged",  // 탱커 조합이지만 성향은 원거리딜러
+  forbidden: "tank",   // 이번 기준에서 탱커로 분류
+  wall: "tank",
+  trapper: "support",
+  healbow: "healer",
+  saint: "healer",
+  purifier: "healer",
+  mage: "ranged",
+  tracker: "ranged",
+  bard: "support",
+};
+
+export const JOB_ROLE_LABELS = {
+  tank: "탱커",
+  melee: "근접딜러",
+  ranged: "원거리딜러",
+  support: "서포터",
+  healer: "힐러",
+};
+
+export function combatRoleOf(jobId) {
+  return JOB_COMBAT_ROLES[jobId] || null;
+}
+
+export function combatRoleLabelOf(jobId) {
+  const role = combatRoleOf(jobId);
+  return role ? JOB_ROLE_LABELS[role] : "";
+}
+
 // 현재 파티(jobIds)에서 실행 가능한 레시피만 추린다.
 //   파티 내 동일 직업 중복 금지: 결과 직업을 이미 보유 중이면 그 조합은 제외.
 export function availableFusions(jobIds) {

@@ -35,31 +35,35 @@ export function avatarSpec(avatarKey) {
 //   First Class Trial 01: 6기본 직업의 모든 2조합이 1차 15종으로 합체 가능 → 해당 13종을
 //   "wip"→"fusion"으로 정렬(도감/스킬/합체 데이터 일치). 2차 3종(용창/현자/성황)은 데이터만
 //   준비되고 Trial 01에선 비노출이므로 "wip" 유지. tier 라벨은 render에서 매핑(관람 전용).
+//   Role Category Foundation 01 — job = 직업 id(전투 유닛/스킬/성향 매핑 공용 키).
+//     도감 상세에서 jobs.js combatRoleLabelOf(job)로 "성향"을 조회한다(표시 전용).
+//     sr 클래스에서 직접 키를 빼면 신관(sr-shrine→cleric)·성직자(sr-cleric→saint)가 어긋나므로
+//     명시적 job 필드로 연결한다.
 export const CODEX_ENTRIES = [
-  { code: "SR-01", name: "전사",   sr: "sr-warrior",    status: "base",   parts: ["shadow", "feet", "shield", "body", "head", "sword"] },
-  { code: "SR-02", name: "수호자", sr: "sr-guardian",   status: "base",   parts: ["shadow", "feet", "shield", "body", "head", "lance"] },
-  { code: "SR-03", name: "사제",   sr: "sr-priest",     status: "base",   parts: ["aura", "shadow", "staff", "orb", "feet", "body", "head"] },
-  { code: "SR-04", name: "신관",   sr: "sr-shrine",     status: "base",   parts: ["aura", "shadow", "halo", "staff", "feet", "body", "head"] },
-  { code: "SR-05", name: "궁수",   sr: "sr-archer",     status: "base",   parts: ["shadow", "bow", "arrow", "feet", "body", "head"] },
-  { code: "SR-06", name: "교란꾼", sr: "sr-disruptor",  status: "base",   parts: ["shadow", "ribbon", "spark", "feet", "body", "head", "mask"] },
-  { code: "SR-07", name: "도적",   sr: "sr-thief",      status: "fusion", parts: ["long-shadow", "shadow", "mark", "reverse-dagger", "feet", "body", "head", "mask"] },
-  { code: "SR-08", name: "워든",   sr: "sr-warden",     status: "fusion", parts: ["shadow", "shield", "trident", "feet", "body", "head"] },
-  { code: "SR-09", name: "파수궁", sr: "sr-watchbow",   status: "fusion", parts: ["shadow", "cloak", "beacon", "bow", "arrow", "feet", "body", "head"] },
-  { code: "SR-10", name: "덫꾼",   sr: "sr-trapper",    status: "fusion", parts: ["shadow", "trap", "vial", "bubble", "feet", "body", "head"] },
-  { code: "SR-11", name: "성기사", sr: "sr-paladin",    status: "fusion", parts: ["aura", "shadow", "halo", "shield", "sword", "feet", "body", "head", "headband"] },
-  { code: "SR-12", name: "선봉",   sr: "sr-vanguard sr-sentinel", status: "fusion", parts: ["shadow", "banner", "lance", "feet", "body", "head"] },
-  { code: "SR-13", name: "금제",   sr: "sr-forbidden",  status: "fusion", parts: ["shadow", "seal", "chain left", "chain right", "feet", "body", "head", "mask"] },
-  { code: "SR-14", name: "성벽",   sr: "sr-wall",       status: "fusion", parts: ["shadow", "wall", "feet", "body", "head"] },
-  { code: "SR-15", name: "치유궁", sr: "sr-healbow",    status: "fusion", parts: ["aura", "shadow", "heal-trail", "bow", "arrow", "orb", "feet", "body", "head"] },
-  { code: "SR-16", name: "정화사", sr: "sr-purifier",   status: "fusion", parts: ["aura", "shadow", "staff", "flame", "feet", "body", "head"] },
-  { code: "SR-17", name: "마도",   sr: "sr-mage",       status: "fusion", parts: ["aura", "shadow", "orb", "cloak", "feet", "body", "head"] },
-  { code: "SR-18", name: "바드",   sr: "sr-bard",       status: "fusion", parts: ["shadow", "note", "lute", "feet", "body", "head"] },
-  { code: "SR-19", name: "수문장", sr: "sr-gatekeeper", status: "fusion", parts: ["shadow", "door", "key", "feet", "body", "head"] },
-  { code: "SR-20", name: "성직자", sr: "sr-cleric",     status: "fusion", parts: ["aura", "shadow", "halo", "book", "feet", "body", "head"] },
-  { code: "SR-21", name: "추적자", sr: "sr-tracker",    status: "fusion", parts: ["shadow", "footprint", "mark", "cloak", "rifle", "feet", "body", "head"] },
-  { code: "SR-22", name: "용창",   sr: "sr-dragonspear", status: "wip",   parts: ["shadow", "wing", "tail", "horn left", "horn right", "lance", "feet", "body", "head"] },
-  { code: "SR-23", name: "현자",   sr: "sr-sage",       status: "wip",    parts: ["aura", "shadow", "orb", "scroll", "feet", "body", "head"] },
-  { code: "SR-24", name: "성황",   sr: "sr-sunlord",    status: "wip",    parts: ["sun", "shadow", "crown", "staff", "feet", "body", "head"] },
+  { code: "SR-01", name: "전사",   job: "warrior",     sr: "sr-warrior",    status: "base",   parts: ["shadow", "feet", "shield", "body", "head", "sword"] },
+  { code: "SR-02", name: "수호자", job: "guardian",    sr: "sr-guardian",   status: "base",   parts: ["shadow", "feet", "shield", "body", "head", "lance"] },
+  { code: "SR-03", name: "사제",   job: "priest",      sr: "sr-priest",     status: "base",   parts: ["aura", "shadow", "staff", "orb", "feet", "body", "head"] },
+  { code: "SR-04", name: "신관",   job: "cleric",      sr: "sr-shrine",     status: "base",   parts: ["aura", "shadow", "halo", "staff", "feet", "body", "head"] },
+  { code: "SR-05", name: "궁수",   job: "archer",      sr: "sr-archer",     status: "base",   parts: ["shadow", "bow", "arrow", "feet", "body", "head"] },
+  { code: "SR-06", name: "교란꾼", job: "trickster",   sr: "sr-disruptor",  status: "base",   parts: ["shadow", "ribbon", "spark", "feet", "body", "head", "mask"] },
+  { code: "SR-07", name: "도적",   job: "rogue",       sr: "sr-thief",      status: "fusion", parts: ["long-shadow", "shadow", "mark", "reverse-dagger", "feet", "body", "head", "mask"] },
+  { code: "SR-08", name: "워든",   job: "warden",      sr: "sr-warden",     status: "fusion", parts: ["shadow", "shield", "trident", "feet", "body", "head"] },
+  { code: "SR-09", name: "파수궁", job: "watchbow",    sr: "sr-watchbow",   status: "fusion", parts: ["shadow", "cloak", "beacon", "bow", "arrow", "feet", "body", "head"] },
+  { code: "SR-10", name: "덫꾼",   job: "trapper",     sr: "sr-trapper",    status: "fusion", parts: ["shadow", "trap", "vial", "bubble", "feet", "body", "head"] },
+  { code: "SR-11", name: "성기사", job: "paladin",     sr: "sr-paladin",    status: "fusion", parts: ["aura", "shadow", "halo", "shield", "sword", "feet", "body", "head", "headband"] },
+  { code: "SR-12", name: "선봉",   job: "vanguard",    sr: "sr-vanguard sr-sentinel", status: "fusion", parts: ["shadow", "banner", "lance", "feet", "body", "head"] },
+  { code: "SR-13", name: "금제",   job: "forbidden",   sr: "sr-forbidden",  status: "fusion", parts: ["shadow", "seal", "chain left", "chain right", "feet", "body", "head", "mask"] },
+  { code: "SR-14", name: "성벽",   job: "wall",        sr: "sr-wall",       status: "fusion", parts: ["shadow", "wall", "feet", "body", "head"] },
+  { code: "SR-15", name: "치유궁", job: "healbow",     sr: "sr-healbow",    status: "fusion", parts: ["aura", "shadow", "heal-trail", "bow", "arrow", "orb", "feet", "body", "head"] },
+  { code: "SR-16", name: "정화사", job: "purifier",    sr: "sr-purifier",   status: "fusion", parts: ["aura", "shadow", "staff", "flame", "feet", "body", "head"] },
+  { code: "SR-17", name: "마도",   job: "mage",        sr: "sr-mage",       status: "fusion", parts: ["aura", "shadow", "orb", "cloak", "feet", "body", "head"] },
+  { code: "SR-18", name: "바드",   job: "bard",        sr: "sr-bard",       status: "fusion", parts: ["shadow", "note", "lute", "feet", "body", "head"] },
+  { code: "SR-19", name: "수문장", job: "gatekeeper",  sr: "sr-gatekeeper", status: "fusion", parts: ["shadow", "door", "key", "feet", "body", "head"] },
+  { code: "SR-20", name: "성직자", job: "saint",       sr: "sr-cleric",     status: "fusion", parts: ["aura", "shadow", "halo", "book", "feet", "body", "head"] },
+  { code: "SR-21", name: "추적자", job: "tracker",     sr: "sr-tracker",    status: "fusion", parts: ["shadow", "footprint", "mark", "cloak", "rifle", "feet", "body", "head"] },
+  { code: "SR-22", name: "용창",   job: "dragonspear", sr: "sr-dragonspear", status: "wip",   parts: ["shadow", "wing", "tail", "horn left", "horn right", "lance", "feet", "body", "head"] },
+  { code: "SR-23", name: "현자",   job: "sage",        sr: "sr-sage",       status: "wip",    parts: ["aura", "shadow", "orb", "scroll", "feet", "body", "head"] },
+  { code: "SR-24", name: "성황",   job: "sunlord",     sr: "sr-sunlord",    status: "wip",    parts: ["sun", "shadow", "crown", "staff", "feet", "body", "head"] },
 ];
 
 export const CODEX_STATUS_LABEL = { base: "기본 직업", fusion: "합체 직업", wip: "준비 중" };

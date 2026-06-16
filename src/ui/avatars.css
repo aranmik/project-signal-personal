@@ -326,9 +326,11 @@
   background: #10151d;
   overflow: hidden;
 }
-.codex-meta { display: flex; justify-content: center; align-items: baseline; gap: 6px; }
+.codex-meta { display: flex; justify-content: center; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .codex-code { color: #9aa8b8; font-size: 10px; letter-spacing: 0.04em; }
 .codex-name { color: #eef3f8; font-size: 14px; font-weight: 700; }
+/* Role Category Foundation 01 — 도감 상세 성향 한 줄(코드·이름 아래 줄로). 표시 전용. */
+.codex-role { flex-basis: 100%; color: #b9c6d6; font-size: 11px; font-weight: 600; }
 .codex-tag {
   display: inline-block; margin-top: 5px;
   padding: 2px 8px; border-radius: 999px;

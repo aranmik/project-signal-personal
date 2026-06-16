@@ -1,6 +1,6 @@
 import { BEGINNER_THEME, STAGE_THEMES } from "../data/stages.js";
 import { ROUTE_TYPES, bossTimingLabel, bossFury, bossReadinessPressure, bossMenace, depthAtmosphere, routeReward, PRESSURE_HELP } from "../data/routes.js";
-import { availableFusions, slotPreference } from "../data/jobs.js";
+import { availableFusions, slotPreference, combatRoleLabelOf } from "../data/jobs.js";
 import { REWARDS } from "../data/rewards.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { SLOT_ORDER, SLOT_NAMES, partySizeOf, LAYOUT_PREVIEW_CASES } from "../core/state.js";
@@ -533,11 +533,15 @@ function renderCodex() {
   const cards = CODEX_ENTRIES.map((e) => {
     const fig = avatarFigureHTML(e.sr, e.parts, "av-fit--codex");
     const statusLabel = CODEX_STATUS_LABEL[e.status] || "";
+    // Role Category Foundation 01 — 도감 상세에만 성향 한 줄 추가(표시 전용). 매핑 없으면 미표시.
+    const roleLabel = combatRoleLabelOf(e.job);
+    const roleLine = roleLabel ? `<span class="codex-role">성향: ${roleLabel}</span>` : "";
     return `<article class="codex-card codex-card--${e.status}">
       <div class="codex-stage">${fig}</div>
       <div class="codex-meta">
         <span class="codex-code">${e.code}</span>
         <span class="codex-name">${e.name}</span>
+        ${roleLine}
       </div>
       <span class="codex-tag codex-tag--${e.status}">${statusLabel}</span>
     </article>`;
