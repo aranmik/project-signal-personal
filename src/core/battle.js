@@ -290,7 +290,8 @@ export function applyReward(id) {
   // Run Structure 01C — 보상 후 이벤트 라우팅(우선순위로 정리해 danger 합체와 기존 S3/S8/S5가 충돌 없게).
   //   합체 가능 = 현재 파티에서 실행 가능한 레시피가 하나라도 있는가(availableFusions).
   const ev = STAGE_CLEAR_EVENTS[gameState.run.stage];
-  const canFuse = availableFusions(partyJobIds()).length > 0;
+  // Sage Branch Gate 01 — 합체 진입은 파티 4인 + 레시피 존재일 때만(2/3인 파티엔 합체 노출 금지).
+  const canFuse = canEnterFusion();
 
   // 1) S5 영입(4인 확장)은 그대로 우선 — danger 합체가 확장 기회를 덮지 않게.
   if (ev && ev.type === "recruit") {
@@ -343,6 +344,8 @@ function showRouteChoice() {
     bossKeys: gameState.run.bossKeys,
     // Deep Forest Reward Rebuild 01 — 줄 보상(영입/합체)이 있을 때만 깊은 수풀 노출.
     canDeepForest: deepForestRewardType() !== null,
+    // Sage Branch Gate 01 — 현자의 가지(정예)는 경계도 4 이상에서만 등장(0~3은 일반/쉼터/깊은 수풀).
+    alertness: gameState.run.alertness || 0,
   });
   gameState.screen = "route";
   renderGame(gameState);
@@ -421,6 +424,21 @@ export function partyJobIds() {
   return SLOT_ORDER.map((k) => f[k]).filter(Boolean);
 }
 
+// Sage Branch Gate 01 — 합체는 "현재 편성 파티가 4인으로 가득 찼을 때"만 열린다.
+//   2인 출발 → 깊은 수풀 영입 2회로 4인을 채운 뒤에야 합체 선택지/보상/화면이 등장한다.
+//   판정 기준은 formation 슬롯(jobId 맵) 점유 여부 — 전투 HP/기절(isDead)과 무관하다.
+//   즉 HP 0 기절 영웅도 슬롯에 존재하면 파티원으로 센다(사망/제외로 빼지 않음).
+function partyIsFull() {
+  const f = gameState.run.formation || {};
+  return SLOT_ORDER.every((k) => !!f[k]);
+}
+
+// Sage Branch Gate 01 — 합체 진입 가능 여부의 단일 판정(파티 4인 + 실행 가능한 레시피 존재).
+//   합체가 노출되는 모든 경로(보상 후 라우팅 / 깊은 수풀 보상)가 이 한 곳을 거친다.
+function canEnterFusion() {
+  return partyIsFull() && availableFusions(partyJobIds()).length > 0;
+}
+
 // 합체 실행: 재료 2명 제거 → 결과 1차 직업을 첫 재료 슬롯에 배치.
 //   공통 규칙: 합체는 2명을 소모해 1명을 얻는다 — 인원이 1명 줄어드므로
 //   "실행"한 경우 반드시 동료 영입으로 보충한다(스테이지/테마와 무관한 공통 Flow).
@@ -486,7 +504,8 @@ function enterRecruit() {
 export function deepForestRewardType() {
   const count = gameState.run.deepForestCount || 0;
   const canRecruit = recruitCandidates().length > 0;
-  const canFuse = availableFusions(partyJobIds()).length > 0;
+  // Sage Branch Gate 01 — 합체 보상은 파티 4인 + 레시피 존재일 때만(2/3인이면 합체 후보 미등장).
+  const canFuse = canEnterFusion();
   if (count < 2 && canRecruit) return "recruit";
   if (canFuse) return "fusion";
   if (canRecruit) return "recruit";

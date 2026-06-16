@@ -1213,13 +1213,17 @@ body {
 }
 
 /* === Combat Grammar Foundation 01 — 버프/디버프 상태칩 (HP/속도 게이지 하단) === */
+/* Status Chip Layout Stabilize 01: absolute 계층으로 분리해 아바타·HP바 기준점이 흔들리지 않게.
+   칩 0개·1개·여러 개 모두 .unit 박스 높이 불변 — transform-origin도 영향 없음. */
 #battle-field .unit .status-chips {
+  position: absolute;
+  bottom: -18px;
+  left: 0;
+  right: 0;
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
   gap: 2px;
-  margin: 2px auto 0;
-  width: 92%;
   pointer-events: none;
 }
 #battle-field .unit .status-chip {
@@ -2158,17 +2162,19 @@ body {
   align-items: center;
   justify-content: center;
   gap: 2px;
-  min-height: 72px;
-  padding: 6px 4px;
+  min-height: 96px;
+  padding: 8px 4px;
   border: 1px solid #2a3a4a;
   border-radius: 10px;
   background: #14233b;
   cursor: pointer;
+  overflow: hidden;
 }
 .pf-slot:active { transform: translateY(1px); }
 .pf-slot.empty { border-style: dashed; border-color: #3a4d63; background: #121f33; }
 .pf-slot.picked { border-color: #f0c040; box-shadow: 0 0 9px rgba(240, 192, 64, 0.5); background: #26344f; }
-.pf-ava { display: block; width: 52px; height: 52px; }
+/* Recruit Panel Frame Polish 01: av-fit layout box(76×82)에 맞춰 확장 — 아바타가 프레임 안에 온전히 표시. */
+.pf-ava { display: block; width: 76px; height: 82px; }
 .pf-empty-mark { font-size: 26px; color: #4a5d75; line-height: 1; }
 .pf-empty-label { font-size: 10px; color: #6a7d92; }
 /* 후보 3개를 한 줄(왼쪽/가운데/오른쪽)로 — 아바타 위 / 이름 아래 */

@@ -47,10 +47,18 @@ export const BOSS_ENCOUNTER = byTier("boss")[0] || ["lion:boss"]; // 사자왕
 // Deep Forest Reward Rebuild 01 — 깊은 수풀(danger)은 "보상을 줄 수 있을 때만" 등장한다.
 //   canDeepForest = 다음 깊은 수풀 보상(영입/합체)이 실제로 가능한가(battle.js deepForestRewardType).
 //   불가하면 깊은 수풀 대신 휴식을 제시해 선택지가 비지 않게 한다(항상 normal + 둘째 옵션).
-export function rollRouteOffer({ depth, bossKeys, canDeepForest = true }) {
+// Sage Branch Gate 01 — 현자의 가지(elite)는 경계도(alertness) 4 이상에서 최초 등장한다.
+//   경계도 0~3에서는 정예 대신 깊은 수풀(보상 가능 시)·쉼터를 제시해 초반 운영을
+//   "일반 전투 / 쉼터 / 깊은 수풀" 중심으로 유지한다(쉼터·깊은 수풀 선택의 의미 강화).
+export const SAGE_BRANCH_MIN_ALERTNESS = 4;
+export function rollRouteOffer({ depth, bossKeys, canDeepForest = true, alertness = 0 }) {
   const choices = ["normal"];
   const r = depth % 3;
-  if (r === 2) choices.push("elite");
+  if (r === 2) {
+    // 정예 타이밍이라도 경계도 4 미만이면 현자의 가지를 막고 깊은 수풀/쉼터로 대체.
+    if (alertness >= SAGE_BRANCH_MIN_ALERTNESS) choices.push("elite");
+    else choices.push(canDeepForest ? "danger" : "rest");
+  }
   else if (r === 0) choices.push("rest");
   else choices.push(canDeepForest ? "danger" : "rest"); // 깊은 수풀이 보상 불가면 휴식으로 대체
   if (bossKeys > 0) choices.push("boss");
