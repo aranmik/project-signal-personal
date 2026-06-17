@@ -1,6 +1,6 @@
 import { gameState, SLOT_ORDER } from "./state.js";
 import { slotPreference } from "../data/jobs.js";
-import { renderGame } from "../ui/render.js";
+import { renderGame, renderCodexDetail } from "../ui/render.js";
 import { avatarSpec, avatarFigureHTML } from "../data/avatars.js";
 import {
   startRun, goTitle, applyReward, cycleSpeed, startPreview, showJobSelect,
@@ -58,7 +58,10 @@ document.getElementById("dev-bar").addEventListener("click", (e) => {
   else if (b.dataset.devCase) startLayoutPreview(b.dataset.devCase);
 });
 document.getElementById("codex-screen").addEventListener("click", (e) => {
-  if (e.target.closest("[data-codex-back]")) goTitle();
+  if (e.target.closest("[data-codex-back]")) { goTitle(); return; }
+  // Codex Detail Status 01 — 직업 카드 클릭 시 하단 상태판 표시(내부 확인용). 전투/게임 상태 변경 없음.
+  const card = e.target.closest("[data-codex-job]");
+  if (card) renderCodexDetail(card.dataset.codexJob);
 });
 
 /* =========================================================

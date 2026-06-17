@@ -1,6 +1,7 @@
 import { BEGINNER_THEME, STAGE_THEMES } from "../data/stages.js";
 import { ROUTE_TYPES, bossTimingLabel, bossFury, bossReadinessPressure, bossMenace, depthAtmosphere, routeReward, PRESSURE_HELP } from "../data/routes.js";
-import { availableFusions, slotPreference, combatRoleLabelOf } from "../data/jobs.js";
+import { availableFusions, slotPreference, combatRoleLabelOf, combatRoleOf, BASE_JOBS, ADVANCED_JOBS, SECOND_CLASS_JOBS } from "../data/jobs.js";
+import { jobStatusOf, IMPL_LABEL, VIS_LABEL } from "../data/jobStatus.js";
 import { REWARDS, rewardById } from "../data/rewards.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { SLOT_ORDER, SLOT_NAMES, partySizeOf, LAYOUT_PREVIEW_CASES } from "../core/state.js";
@@ -530,13 +531,13 @@ function renderCodex() {
   const host = document.getElementById("codex-inner");
   if (!host) return;
 
+  // Codex Detail Status 01 — 카드를 클릭 가능한 버튼으로(직업 선택 시 하단 상태판 표시). data-job = 직업 id.
   const cards = CODEX_ENTRIES.map((e) => {
     const fig = avatarFigureHTML(e.sr, e.parts, "av-fit--codex");
     const statusLabel = CODEX_STATUS_LABEL[e.status] || "";
-    // Role Category Foundation 01 — 도감 상세에만 성향 한 줄 추가(표시 전용). 매핑 없으면 미표시.
     const roleLabel = combatRoleLabelOf(e.job);
     const roleLine = roleLabel ? `<span class="codex-role">성향: ${roleLabel}</span>` : "";
-    return `<article class="codex-card codex-card--${e.status}">
+    return `<button type="button" class="codex-card codex-card--${e.status}" data-codex-job="${e.job}" aria-label="${e.name} 상태판 열기">
       <div class="codex-stage">${fig}</div>
       <div class="codex-meta">
         <span class="codex-code">${e.code}</span>
@@ -544,7 +545,7 @@ function renderCodex() {
         ${roleLine}
       </div>
       <span class="codex-tag codex-tag--${e.status}">${statusLabel}</span>
-    </article>`;
+    </button>`;
   }).join("");
 
   host.innerHTML = `
@@ -552,11 +553,97 @@ function renderCodex() {
       <button type="button" id="codex-back" data-codex-back>← 타이틀로</button>
       <div class="codex-title-wrap">
         <h2>직업 도감</h2>
-        <p>시그널R&amp;D SR-01 ~ SR-24. 관람용 창구 — 선택/시작 기능은 없습니다.</p>
+        <p>SR-01 ~ SR-24. 직업을 누르면 <b>현재 구현 상태판</b>이 열립니다(개발/기획 확인용).</p>
       </div>
     </div>
     <div class="codex-grid">${cards}</div>
+    <div id="codex-detail" class="codex-detail"><p class="codex-detail-hint">직업을 선택하면 구현 상태판이 표시됩니다.</p></div>
     <button type="button" class="flow-next" data-codex-back>타이틀로 돌아가기</button>
+  `;
+}
+
+// Codex Detail Status 01 — 직업 단계(기본/1차/2차 씨앗) 파생(배열 소속 단일 출처).
+function jobTierLabel(jobId) {
+  if (BASE_JOBS.includes(jobId)) return "기본";
+  if (ADVANCED_JOBS.includes(jobId)) return "1차";
+  if (SECOND_CLASS_JOBS.includes(jobId)) return "2차 씨앗";
+  return "미정";
+}
+
+// Codex Detail Status 01 — combatRole → 성장(훈련) 방향 한 줄(보상 UI는 미변경, 참고 표시만).
+function trainingHintFor(jobId) {
+  const role = combatRoleOf(jobId);
+  const roleTrain = { tank: "탱커 훈련", melee: "근접 훈련", ranged: "원거리 훈련", support: "서포터 훈련", healer: "힐러 훈련" }[role];
+  const parts = [];
+  if (roleTrain) parts.push(`성향 → ${roleTrain} 대상`);
+  parts.push("전열 배치 시 전열 단련 / 후열 배치 시 후열 집중 대상");
+  return parts.join(" · ");
+}
+
+function chipList(arr, cls) {
+  if (!arr || arr.length === 0) return `<span class="cd-empty">—</span>`;
+  return arr.map((t) => `<span class="cd-chip ${cls || ""}">${t}</span>`).join("");
+}
+
+// Codex Detail Status 01 — 선택 직업의 내부 구현 상태판을 #codex-detail에 렌더(개발/기획 확인용, 직설적).
+export function renderCodexDetail(jobId) {
+  const host = document.getElementById("codex-detail");
+  if (!host) return;
+  const s = jobStatusOf(jobId);
+  const entry = CODEX_ENTRIES.find((e) => e.job === jobId);
+  const name = jobName(jobId) || (entry && entry.name) || jobId;
+  if (!s) {
+    host.innerHTML = `<p class="codex-detail-hint">${name}: 상태 데이터가 없습니다.</p>`;
+    return;
+  }
+  const role = combatRoleLabelOf(jobId) || "미분류";
+  const implL = IMPL_LABEL[s.implementation] || s.implementation;
+  const visL = VIS_LABEL[s.visibility] || s.visibility;
+
+  host.innerHTML = `
+    <div class="cd-head">
+      <span class="cd-name">${name}</span>
+      <span class="cd-badges">
+        <span class="cd-badge cd-tier">${jobTierLabel(jobId)}</span>
+        <span class="cd-badge cd-role">${role}</span>
+        <span class="cd-badge cd-impl cd-impl--${s.implementation}">${implL}</span>
+        <span class="cd-badge cd-vis cd-vis--${s.visibility}">시인성: ${visL}</span>
+      </span>
+    </div>
+
+    <div class="cd-section">
+      <h4>실제 구현</h4>
+      <p>${s.behavior}</p>
+    </div>
+
+    <div class="cd-section">
+      <h4>타겟 / 효과</h4>
+      <p class="cd-sub">타겟: ${s.targetRule}</p>
+      <div class="cd-chips">${chipList(s.effects, "cd-chip--eff")}</div>
+    </div>
+
+    <div class="cd-section">
+      <h4>현재 시인성</h4>
+      <p class="cd-sub">보이는 것</p>
+      <div class="cd-chips">${chipList(s.visibleNow, "cd-chip--on")}</div>
+      <p class="cd-sub">잘 안 보이는 것</p>
+      <div class="cd-chips">${chipList(s.hiddenNow, "cd-chip--off")}</div>
+    </div>
+
+    <div class="cd-section">
+      <h4>작업 필요 / 다음 후보</h4>
+      <div class="cd-chips">${chipList(s.todo, "cd-chip--todo")}</div>
+    </div>
+
+    <div class="cd-section">
+      <h4>성장 방향(참고)</h4>
+      <p class="cd-sub">${trainingHintFor(jobId)}</p>
+    </div>
+
+    <div class="cd-section cd-note">
+      <h4>메모</h4>
+      <p>${s.note || "—"}</p>
+    </div>
   `;
 }
 

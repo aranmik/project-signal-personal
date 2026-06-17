@@ -315,8 +315,49 @@
   border-radius: 8px;
   background: linear-gradient(180deg, rgba(255,255,255,0.035), transparent 42%), #171c24;
   text-align: center;
+  /* Codex Detail Status 01 — 카드는 클릭 가능한 버튼: 버튼 기본 스타일 리셋 + 폭 100% */
+  display: block; width: 100%; font: inherit; color: inherit; cursor: pointer;
 }
+.codex-card:active { transform: translateY(1px); }
 .codex-card--wip { opacity: 0.82; }
+
+/* === Codex Detail Status 01 — 내부 구현 상태판(개발/기획 확인용, 세로 스크롤) === */
+.codex-detail {
+  margin: 4px 0 14px;
+  padding: 12px 13px;
+  border: 1px solid #303947;
+  border-radius: 9px;
+  background: #12161d;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.codex-detail-hint { color: #7e8b9c; font-size: 12px; text-align: center; padding: 8px 0; }
+.cd-head { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid #283041; }
+.cd-name { font-size: 17px; font-weight: 800; color: #eef3f8; }
+.cd-badges { display: flex; flex-wrap: wrap; gap: 5px; }
+.cd-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: #222a36; color: #c4d0de; }
+.cd-tier { background: rgba(120,150,190,0.18); color: #b9c6d6; }
+.cd-role { background: rgba(199,162,255,0.16); color: #c7a2ff; }
+.cd-impl--done { background: rgba(127,214,160,0.18); color: #7fd6a0; }
+.cd-impl--partial { background: rgba(240,195,106,0.18); color: #f0c36a; }
+.cd-impl--seed, .cd-impl--missing { background: rgba(154,168,184,0.16); color: #9aa8b8; }
+.cd-impl--watch { background: rgba(232,154,126,0.18); color: #e89a7e; }
+.cd-vis--visible { background: rgba(127,214,160,0.14); color: #7fd6a0; }
+.cd-vis--partial { background: rgba(240,195,106,0.14); color: #f0c36a; }
+.cd-vis--hidden { background: rgba(232,154,126,0.16); color: #e89a7e; }
+.cd-vis--none { background: rgba(154,168,184,0.14); color: #9aa8b8; }
+.cd-section { margin-top: 11px; }
+.cd-section h4 { margin: 0 0 4px; font-size: 11px; letter-spacing: 0.03em; color: #8aa0b4; text-transform: uppercase; }
+.cd-section p { margin: 0; font-size: 13px; line-height: 1.5; color: #dde5ee; }
+.cd-sub { margin: 5px 0 3px !important; font-size: 11px !important; color: #9aa8b8 !important; }
+.cd-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.cd-chip { font-size: 11px; padding: 2px 7px; border-radius: 6px; background: #1d2530; color: #c4d0de; }
+.cd-chip--eff { background: rgba(120,150,190,0.16); color: #aebfd2; }
+.cd-chip--on { background: rgba(127,214,160,0.14); color: #8fe0b0; }
+.cd-chip--off { background: rgba(232,154,126,0.16); color: #f0b29a; }
+.cd-chip--todo { background: rgba(240,195,106,0.16); color: #f0d090; }
+.cd-empty { color: #6a7787; font-size: 12px; }
+.cd-note p { color: #b9c6d6; font-style: italic; }
 .codex-stage {
   height: 86px;
   display: grid; place-items: center;
