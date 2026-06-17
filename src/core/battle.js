@@ -1305,6 +1305,8 @@ function runDataSkill(unit, meta) {
       const emergency = lowestRatioAlly(0.30);
       if (emergency) {
         const amt = healUnit(emergency, Math.round(unit.atk * L.healFactor));
+        // Hero Readability Polish 01A — 어떤 분기로 행동했는지 읽히게(로그만, 우선순위/수치 불변).
+        pushLog(`${unit.name}${josa(unit.name, "이가")} 위급한 아군을 먼저 치유했다.`);
         playSupportFx({
           casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind,
           heals: amt > 0 ? [{ targetInstanceId: emergency.instanceId, amount: amt }] : [],
@@ -1315,8 +1317,14 @@ function runDataSkill(unit, meta) {
       const NEG = ["poison", "atkDown", "speedDown", "slow"];
       const debuffed = aliveParty().find((a) => (a.statuses || []).some((s) => NEG.includes(s.type)));
       if (debuffed) {
+        // Hero Readability Polish 01A — 제거 전 디버프 종류를 잡아 로그에 이름을 넣는다(표시용).
+        const had = (debuffed.statuses || []).map((s) => s.type).filter((t) => NEG.includes(t));
         const removed = removeNegStatus(debuffed);
         if (removed) grantShieldTo(unit, debuffed, L.shield);
+        const nm = had.includes("poison") ? "중독"
+          : had.includes("atkDown") ? "약화"
+          : (had.includes("speedDown") || had.includes("slow")) ? "둔화" : "해로운 효과";
+        if (removed) pushLog(`${unit.name}${josa(unit.name, "이가")} ${debuffed.name}의 ${nm}${josa(nm, "을를")} 정화했다 — 보호막.`);
         playSupportFx({
           casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind,
           guardInstanceId: removed ? debuffed.instanceId : null,
@@ -1327,6 +1335,7 @@ function runDataSkill(unit, meta) {
       const hurt = lowestRatioAllyHurt(0.95);
       if (!hurt) return false;
       const amt = healUnit(hurt, Math.round(unit.atk * L.healFactor));
+      pushLog(`${unit.name}${josa(unit.name, "이가")} 상처를 조금 돌봤다.`);
       playSupportFx({
         casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind,
         heals: amt > 0 ? [{ targetInstanceId: hurt.instanceId, amount: amt }] : [],
@@ -1730,7 +1739,11 @@ function performAttack(attacker, target, opts = {}) {
   const ro = josa(target.name, "을를");
 
   // 치명 로그/외침은 최소로 — 별도 줄 없이 기존 피해 로그에 "(치명!)"만 덧붙인다(로그 과밀 방지).
-  pushLog(`${attacker.name}${josa(attacker.name, "이가")} ${target.name}${ro} ${verb}. ${damage} 피해${isCrit ? " (치명!)" : ""}.`);
+  // Hero Readability Polish 01A — 독 대상 기본 공격에서 치명이 났으면 "독 표식 치명!"으로 표기(덫꾼 치명판 가시화).
+  //   기본 공격(!opts.skill)에만 적용 — 스킬 공격엔 poison 치명 보정이 없으므로 이 표기도 안 붙는다. 수치/계산 불변.
+  const poisonCrit = isCrit && !opts.skill && hasStatus(target, "poison");
+  const critTag = poisonCrit ? " (독 표식 치명!)" : isCrit ? " (치명!)" : "";
+  pushLog(`${attacker.name}${josa(attacker.name, "이가")} ${target.name}${ro} ${verb}. ${damage} 피해${critTag}.`);
 
   const line = opts.lineType || attackLineType(attacker);
   playActionFx({

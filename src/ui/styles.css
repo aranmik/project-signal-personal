@@ -1240,6 +1240,9 @@ body {
 #battle-field .unit .status-chip--up    { background: #7fd6a0; }  /* 증가 — 초록 */
 #battle-field .unit .status-chip--down  { background: #e89a7e; }  /* 감소 — 주황빨강 */
 #battle-field .unit .status-chip--taunt { background: #f5d250; }  /* 도발 — 노랑 */
+/* Hero Readability Polish 01A — 독(중독 표식) / 보복 준비(파수궁) 칩 색 */
+#battle-field .unit .status-chip--poison { background: #9bd365; }  /* 독 — 독성 연두 */
+#battle-field .unit .status-chip--ready  { background: #7fc4f6; }  /* 보복 준비 — 하늘 */
 #battle-field .unit.dead .status-chips { opacity: 0; }
 #battle-field .unit.is-encounter .status-chips { display: none; } /* 보스 HUD가 따로 — 칩 중복 방지 */
 

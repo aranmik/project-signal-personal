@@ -1046,9 +1046,16 @@ const STATUS_CHIP = {
   critUp: { t: "치↑", c: "up" }, critDown: { t: "치↓", c: "down" },
   speedUp: { t: "속↑", c: "up" }, speedDown: { t: "속↓", c: "down" },
   taunted: { t: "도발", c: "taunt" },
+  // Hero Readability Polish 01A — 덫꾼 독 표식(중독 상태 가시화) / 파수궁 보복 준비(합성 칩).
+  poison: { t: "독", c: "poison" },
+  counterReady: { t: "보복 준비", c: "ready" },
 };
 function statusChips(unit) {
-  return (unit.statuses || []).map((s) => s.type).filter((t) => STATUS_CHIP[t]);
+  const chips = (unit.statuses || []).map((s) => s.type).filter((t) => STATUS_CHIP[t]);
+  // Hero Readability Polish 01A — 파수궁 보복 준비는 상태 배열이 아니라 unit.counterReady 속성 → 합성 칩으로 표시.
+  //   살아 있고 counterReady가 false가 아닐 때(undefined=충전됨 포함)만. 로직/수치는 변경하지 않음(표시 전용).
+  if (unit.id === "watchbow" && !unit.isDead && unit.counterReady !== false) chips.push("counterReady");
+  return chips;
 }
 function statusChipsHTML(unit) {
   const chips = statusChips(unit);
