@@ -28,13 +28,15 @@ export const SKILLS = {
   watchbow:  { id: "riposte", name: "보복", kind: "ranged" },
 
   trapper:   { id: "venom", name: "중독", kind: "disrupt",
-    logic: { type: "poison", target: "frontNoPoison", duration: 2 } },
+    // Batch 01C — 독 표식 서포터: 임의의 적 최대 2명 중독(독 대상 공격 시 치명 보정은 battle.js performAttack).
+    logic: { type: "poison", duration: 2, count: 2 } },
 
   paladin:   { id: "holylight", name: "성휘", kind: "support",
     logic: { type: "strikeHealShield", target: "front", mult: 1.0, selfHeal: 6, allyShield: 8 } },
 
   vanguard:  { id: "advance", name: "진군", kind: "attack",
-    logic: { type: "aoeStrike", scope: "front", mult: 0.9, healFactor: 0.375 } },
+    // Batch 01B — 선봉 정체성 정렬: 회복 제거(healFactor 삭제) → 전열 적 AoE + 전열 아군 방어 증가(battle.js).
+    logic: { type: "aoeStrike", scope: "front", mult: 0.9 } },
 
   forbidden: { id: "evilbond", name: "악의 결속", kind: "disrupt",
     // 피해 전가(redirect)는 위험 → 근사: 타격 + 악의 결속 마커. (WATCH: 실제 40% 전가)
@@ -54,7 +56,8 @@ export const SKILLS = {
     logic: { type: "charge", chargeName: "마력집중", releaseName: "마력폭발", scope: "all", mult: 1.1 } },
 
   bard:      { id: "rhythm", name: "리듬&템포", kind: "disrupt",
-    logic: { type: "rhythmTempo", allyCrit: 1, enemyTempo: 2, drainPct: 0.2, slowPct: 0.4 } },
+    // Batch 01C — 완전 랜덤 음유시인: 아군/적·대상·효과 랜덤(아군 atkUp/critUp, 적 speedDown/게이지↓). battle.js bardRandom.
+    logic: { type: "bardRandom" } },
 
   gatekeeper:{ id: "taunt", name: "도발", kind: "support",
     logic: { type: "taunt", turns: 1, alsoStrike: true } },

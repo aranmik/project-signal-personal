@@ -756,6 +756,10 @@ function hasStatus(unit, type) {
    이 시스템은 같은 statuses 배열·applyStatus·performAttack/applyDamage 경로를 공유한다. */
 const CRIT_BASE = 0.10;        // 기본 치명 확률(상수화 — 추후 조정)
 const CRIT_MULT = 1.5;         // 치명 피해 배율
+// Batch 01C — 덫꾼 독 표식: 중독된 대상을 기본 공격할 때 치명 확률 가산("치명판"). 시전자 무관 횡단 효과.
+const POISON_CRIT_BONUS = 0.25;
+// Batch 01C — 바드 랜덤(적 효과: 행동 게이지 감소량). 교란꾼 -25 감각 재사용.
+const BARD_GAUGE_DROP = 25;
 const STATUS_PCT = 0.30;       // 공통 버프/디버프 1차 효과 크기(공/방/치/속 ±30%)
 const STATUS_MAX_TURNS = 3;    // 최대 지속 — 재적용 시 항상 3턴으로 갱신
 // 공통 버프/디버프 키: atkUp/atkDown(공격력) defUp/defDown(방어) critUp/critDown(치명) speedUp/speedDown(속도).
@@ -980,6 +984,10 @@ function performAction(unit) {
 
   const isParty = gameState.party.includes(unit);
 
+  // Batch 01A — 파수궁 반격 재충전: 파수궁이 자신의 일반 행동을 수행하는 이번 턴에 반격 가능 상태를 회복한다.
+  //   (반격 자체는 performAttack 직접 호출이라 이 경로를 타지 않으므로 스스로 재충전되지 않는다.)
+  if (isParty && unit.id === "watchbow") unit.counterReady = true;
+
   // Boss Readiness Pressure 02 — 위압: 사자왕은 행동할 때마다 공격력이 오른다(상한까지). 시간 압박.
   //   기준 atk(menaceBaseAtk)에 누적 단계를 곱한다 → 장기전이면 미완성 파티가 버티지 못한다.
   if (!isParty && unit.menace && unit.menace.atkStepPct > 0) {
@@ -1086,10 +1094,15 @@ function trySkill(unit) {
       return true;
     }
     case "cleric": {
-      // 축복: 피해 입은 아군이 있으면 소량 회복 + guard(사제보다 회복 낮게, 보호 위주).
-      const t = lowestRatioAlly(0.95);
-      if (!t) return false;
-      performBless(unit, t, meta);
+      // Batch 01B — 신관 정체성 정렬: 사제(치유)와 분리된 "보호/축복" 서포터.
+      //   직접 회복 없이, 보호막이 없거나 낮은 생존 아군 최대 2명에게 소량 보호막(미래 피해 완화).
+      //   모두 이미 충분히 보호되어 있으면 행동 낭비 대신 기본 공격(return false).
+      const cand = aliveParty()
+        .filter((a) => (a.shield || 0) < SHIELD_BLESS)
+        .sort((a, b) => (a.shield || 0) - (b.shield || 0) || a.hp / a.maxHp - b.hp / b.maxHp)
+        .slice(0, 2);
+      if (cand.length === 0) return false;
+      performBless(unit, cand, meta);
       return true;
     }
     case "saint": {
@@ -1147,7 +1160,8 @@ function healUnit(unit, amount) {
   return unit.hp - before;
 }
 function removeNegStatus(unit) {
-  const neg = ["poison", "atkDown", "slow"];
+  // Batch 01A — 정화 대상 디버프(정화사 전용 사용처). speedDown 추가(공식 디버프 목록 정렬).
+  const neg = ["poison", "atkDown", "speedDown", "slow"];
   const before = (unit.statuses || []).length;
   unit.statuses = (unit.statuses || []).filter((s) => !neg.includes(s.type));
   return before !== unit.statuses.length;
@@ -1176,16 +1190,24 @@ function runDataSkill(unit, meta) {
       performAttack(unit, t, { mult: L.mult, lineType: "ranged", skill: meta });
       return true;
     }
-    case "poison": { // 덫꾼 중독
-      const t = frontEnemyNoPoison();
-      if (!t) return false;
-      applyStatus(t, { type: "poison", duration: L.duration });
-      playActionFx({
-        sourceInstanceId: unit.instanceId, sourceUnitId: unit.id, targetInstanceId: t.instanceId,
-        lineType: "disrupt", kind: "disrupt", isHeal: false, amount: 0,
-        shoutText: meta.name + "!", shoutKind: meta.kind, shoutTier: "skill",
+    case "poison": { // 덫꾼 중독 — Batch 01C: 임의의 적 최대 2명에 독 살포(독 표식 서포터).
+      const pool = aliveEnemies();
+      if (pool.length === 0) return false;
+      // 비중독 적 우선으로 퍼뜨리고(독 판을 넓힘), 부족하면 이미 중독된 적으로 채움. 중복 대상 없음.
+      const count = L.count || 2;
+      const targets = shuffle(pool.filter((e) => !hasStatus(e, "poison")))
+        .concat(shuffle(pool.filter((e) => hasStatus(e, "poison"))))
+        .slice(0, count);
+      if (targets.length === 0) return false;
+      targets.forEach((t, i) => {
+        applyStatus(t, { type: "poison", duration: L.duration }); // 기존 poison 구조/틱 재사용(수치 불변)
+        playActionFx({
+          sourceInstanceId: unit.instanceId, sourceUnitId: unit.id, targetInstanceId: t.instanceId,
+          lineType: "disrupt", kind: "disrupt", isHeal: false, amount: 0,
+          shoutText: i === 0 ? meta.name + "!" : null, shoutKind: meta.kind, shoutTier: "skill",
+        });
       });
-      pushLog(`${unit.name}${josa(unit.name, "이가")} ${t.name}${josa(t.name, "을를")} 중독시켰다.`);
+      pushLog(`${unit.name}${josa(unit.name, "이가")} ${targets.map((t) => t.name).join(", ")}${josa(targets[targets.length - 1].name, "을를")} 중독시켰다.`);
       return true;
     }
     case "strikeHealShield": { // 성기사 성휘
@@ -1202,20 +1224,20 @@ function runDataSkill(unit, meta) {
       });
       return true;
     }
-    case "aoeStrike": { // 선봉 진군 (전열 전체 + 미량 회복)
+    case "aoeStrike": { // 선봉 진군 — Batch 01B: 전열 적 전체 낮은 피해 + 전열 아군 방어 증가(회복 제거).
       const targets = L.scope === "front" ? frontEnemies() : aliveEnemies();
       if (targets.length === 0) return false;
+      // 전열 적 전체에 낮은 피해(mult는 데이터 유지 — 수치 조정 아님).
       targets.forEach((t, i) =>
         performAttack(unit, t, { mult: L.mult, skill: i === 0 ? meta : undefined, noShout: i !== 0 })
       );
-      if (L.healFactor) {
-        const amt = Math.round((unit.atk || 0) * 1.5 * L.healFactor);
-        const heals = [];
-        aliveParty().forEach((a) => {
-          const h = healUnit(a, amt);
-          if (h > 0) heals.push({ targetInstanceId: a.instanceId, amount: h });
-        });
-        if (heals.length) playSupportFx({ casterInstanceId: unit.instanceId, text: null, kind: "heal", heals });
+      // Batch 01B Hotfix — 방어 증가 대상은 "선봉의 위치와 무관하게" 항상 아군 전열(슬롯 f0/f1) 생존자.
+      //   선봉이 후열에 있어도 전열 아군에게 적용 / 전열 아군이 없으면 생략(후열 fallback 없음).
+      //   기존 defUp 문법 재사용(신규 시스템 없음). frontlineAllies()가 f0/f1 생존자만 반환(최대 2명).
+      const frontAllies = frontlineAllies();
+      frontAllies.forEach((a) => applyCombatStatus(a, "defUp"));
+      if (frontAllies.length) {
+        playSupportFx({ casterInstanceId: unit.instanceId, text: null, kind: "support", guardInstanceId: frontAllies[0].instanceId });
       }
       return true;
     }
@@ -1249,16 +1271,37 @@ function runDataSkill(unit, meta) {
       }
       return true;
     }
-    case "cleanse": { // 정화사 정화
-      const ally = lowestRatioAllyHurt(1) || aliveParty().find((a) => (a.statuses || []).some((s) => ["poison", "atkDown", "slow"].includes(s.type)));
-      if (!ally) return false;
-      const removed = removeNegStatus(ally);
-      const amt = healUnit(ally, Math.round(unit.atk * L.healFactor));
-      if (removed) grantShieldTo(unit, ally, L.shield);
+    case "cleanse": { // 정화사 정화 — Batch 01A 공식 정렬: 위급 치유 우선 → 디버프 정화 → 정화 성공 시 보호막.
+      //   "정화+회복+보호막 동시 적용"을 피한다(정화/보호 담당으로 읽히게). 우선순위로 분기.
+      // (1) HP 30% 미만 위급 아군이 있으면 치유만(정화/보호막 없음).
+      const emergency = lowestRatioAlly(0.30);
+      if (emergency) {
+        const amt = healUnit(emergency, Math.round(unit.atk * L.healFactor));
+        playSupportFx({
+          casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind,
+          heals: amt > 0 ? [{ targetInstanceId: emergency.instanceId, amount: amt }] : [],
+        });
+        return true;
+      }
+      // (2) 위급 대상이 없을 때만 디버프/지속 피해 아군을 찾아 정화. (3) 정화 성공 시에만 소량 보호막.
+      const NEG = ["poison", "atkDown", "speedDown", "slow"];
+      const debuffed = aliveParty().find((a) => (a.statuses || []).some((s) => NEG.includes(s.type)));
+      if (debuffed) {
+        const removed = removeNegStatus(debuffed);
+        if (removed) grantShieldTo(unit, debuffed, L.shield);
+        playSupportFx({
+          casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind,
+          guardInstanceId: removed ? debuffed.instanceId : null,
+        });
+        return true;
+      }
+      // (4) 위급 대상도 디버프도 없으면 약한 회복 fallback(다친 아군 있을 때만). 없으면 기본 공격.
+      const hurt = lowestRatioAllyHurt(0.95);
+      if (!hurt) return false;
+      const amt = healUnit(hurt, Math.round(unit.atk * L.healFactor));
       playSupportFx({
         casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind,
-        heals: amt > 0 ? [{ targetInstanceId: ally.instanceId, amount: amt }] : [],
-        guardInstanceId: removed ? ally.instanceId : null,
+        heals: amt > 0 ? [{ targetInstanceId: hurt.instanceId, amount: amt }] : [],
       });
       return true;
     }
@@ -1281,23 +1324,40 @@ function runDataSkill(unit, meta) {
       pushLog(`${unit.name}${josa(unit.name, "이가")} ${L.releaseName}!`);
       return true;
     }
-    case "rhythmTempo": { // 바드 리듬&템포 — Combat Grammar Foundation 01: 공통 버프/디버프 1차 사용처.
-      if (aliveEnemies().length === 0) return false;
-      const allies = aliveParty().filter((a) => a !== unit);
-      const ally = (allies.length ? allies : [unit])[Math.floor(Math.random() * (allies.length || 1))];
-      // 아군 1명: 공격력 증가(공통 상태) — 리듬(치명 예약)도 함께 둬 바드 정체성 유지.
-      applyCombatStatus(ally, "atkUp");
-      applyStatus(ally, { type: "rhythm", duration: 1 });
-      // 적 다수: 속도 감소(공통 상태) + 템포 드레인(게이지 깎기).
-      aliveEnemies()
-        .slice()
-        .sort((a, b) => (b.actionGauge || 0) - (a.actionGauge || 0))
-        .slice(0, L.enemyTempo)
-        .forEach((e) => {
-          e.actionGauge = Math.max(0, (e.actionGauge || 0) - 100 * L.drainPct);
-          applyCombatStatus(e, "speedDown");
+    case "bardRandom": { // 바드 — Batch 01C: 완전 랜덤 음유시인(아군/적·대상·효과 랜덤).
+      const otherAllies = aliveParty().filter((a) => a !== unit);
+      const enemies = aliveEnemies();
+      // 사이드 선택: 양쪽 유효하면 50/50, 한쪽만 유효하면 그쪽으로 fallback, 둘 다 없으면 기본 공격.
+      let side;
+      if (otherAllies.length && enemies.length) side = Math.random() < 0.5 ? "ally" : "enemy";
+      else if (otherAllies.length) side = "ally";
+      else if (enemies.length) side = "enemy";
+      else return false;
+
+      if (side === "ally") {
+        // 아군 랜덤 1명 → 공격력 증가 또는 치명 확률 증가(공통 버프 재사용).
+        const t = otherAllies[Math.floor(Math.random() * otherAllies.length)];
+        const eff = Math.random() < 0.5 ? "atkUp" : "critUp";
+        applyCombatStatus(t, eff);
+        pushLog(`${unit.name}${josa(unit.name, "이가")} ${t.name}에게 ${eff === "atkUp" ? "공격력" : "치명"}의 가락을 실었다.`);
+        playSupportFx({ casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind, guardInstanceId: t.instanceId });
+      } else {
+        // 적 랜덤 1명 → 속도 감소 또는 행동 게이지 감소(공통 디버프/게이지 조작 재사용).
+        const t = enemies[Math.floor(Math.random() * enemies.length)];
+        const eff = Math.random() < 0.5 ? "speedDown" : "gauge";
+        if (eff === "speedDown") {
+          applyCombatStatus(t, "speedDown");
+          pushLog(`${unit.name}${josa(unit.name, "이가")} ${t.name}의 박자를 늦췄다.`);
+        } else {
+          t.actionGauge = Math.max(0, (t.actionGauge || 0) - BARD_GAUGE_DROP);
+          pushLog(`${unit.name}${josa(unit.name, "이가")} ${t.name}의 행동을 흐트러뜨렸다.`);
+        }
+        playActionFx({
+          sourceInstanceId: unit.instanceId, sourceUnitId: unit.id, targetInstanceId: t.instanceId,
+          lineType: "disrupt", kind: "disrupt", isHeal: false, amount: 0,
+          shoutText: meta.name + "!", shoutKind: meta.kind, shoutTier: "skill",
         });
-      playSupportFx({ casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind, guardInstanceId: ally.instanceId });
+      }
       return true;
     }
     case "taunt": { // 수문장 도발
@@ -1379,6 +1439,12 @@ function shuffle(arr) {
 // 스킬 보조 셀렉터 ---------------------------------------------------------
 function aliveParty() {
   return gameState.party.filter((u) => !u.isDead);
+}
+// Batch 01B Hotfix — 아군 전열(슬롯 f0/f1) 생존자만 반환(최대 2명). 시전자 위치와 무관.
+//   선봉 진군의 방어 증가 대상 등 "전열 대상" 스킬 공용. 전열 슬롯은 SLOT_ORDER의 f* 키로 판정.
+function frontlineAllies() {
+  const frontSlots = SLOT_ORDER.filter((k) => k.startsWith("f"));
+  return aliveParty().filter((u) => frontSlots.includes(u.slotKey));
 }
 function lowestRatioAlly(maxRatio) {
   const c = aliveParty().filter((u) => u.hp / u.maxHp < maxRatio);
@@ -1493,20 +1559,16 @@ function performDisrupt(trickster, target, meta) {
   }
 }
 
-// 축복(신관): 소량 회복 + guard. 사제 단일 치유보다 회복 낮게.
-function performBless(cleric, target, meta) {
-  const healAmount = Math.max(1, Math.round(cleric.atk * 1.0));
-  const before = target.hp;
-  target.hp = Math.min(target.maxHp, target.hp + healAmount);
-  const actual = target.hp - before;
-  grantShieldTo(cleric, target, SHIELD_BLESS);
-  pushLog(`${cleric.name}${josa(cleric.name, "이가")} ${target.name}${josa(target.name, "을를")} 축복했다. (+${actual})`);
+// 축복(신관) — Batch 01B: 사제와 분리된 서포터. 직접 회복 없이 보호막 중심(미래 피해 완화).
+//   대상 아군(최대 2명)에게 소량 보호막(SHIELD_BLESS)을 refresh로 부여한다. HP는 채우지 않는다.
+function performBless(cleric, allies, meta) {
+  allies.forEach((a) => grantShieldTo(cleric, a, SHIELD_BLESS));
+  pushLog(`${cleric.name}${josa(cleric.name, "이가")} 아군을 축복했다 — 보호막(+${SHIELD_BLESS}).`);
   playSupportFx({
     casterInstanceId: cleric.instanceId,
     text: meta.name + "!",
     kind: meta.kind,
-    heals: actual > 0 ? [{ targetInstanceId: target.instanceId, amount: actual }] : [],
-    guardInstanceId: target.instanceId,
+    guardInstanceId: allies[0] ? allies[0].instanceId : null,
   });
 }
 
@@ -1616,7 +1678,9 @@ function performAttack(attacker, target, opts = {}) {
   } else if (opts.crit) {
     isCrit = true;
   } else if (!opts.skill) {
-    const chance = Math.max(0, Math.min(1, CRIT_BASE + statusPct(attacker, "critUp") - statusPct(attacker, "critDown")));
+    // Batch 01C — 중독 대상이면 치명 확률 가산(덫꾼 독 표식 — 파티의 다음 공격 기대값↑).
+    const poisonBonus = hasStatus(target, "poison") ? POISON_CRIT_BONUS : 0;
+    const chance = Math.max(0, Math.min(1, CRIT_BASE + statusPct(attacker, "critUp") - statusPct(attacker, "critDown") + poisonBonus));
     if (Math.random() < chance) isCrit = true;
   }
   if (isCrit) mult *= CRIT_MULT;
@@ -1628,7 +1692,11 @@ function performAttack(attacker, target, opts = {}) {
   if (defUp) damage = Math.max(1, Math.round(damage * (1 - defUp)));
   if (defDown) damage = Math.max(1, Math.round(damage * (1 + defDown)));
   // Combat Grammar Polish 02: 보호막 우선 흡수 → 초과분만 HP.
+  // Batch 01A — 파수궁 반격은 "실제 피해를 입었을 때만" 발동(0/무효화 제외). 적용 전후 내구도(HP+보호막)
+  //   풀을 비교해 피해무효(damageImmune)나 분담 경로로 대상 풀이 줄지 않은 경우엔 반격하지 않는다.
+  const poolBefore = target.hp + (target.shield || 0);
   applyDamage(target, damage);
+  const tookRealDamage = (target.hp + (target.shield || 0)) < poolBefore;
 
   const verb = attackVerb(attacker);
   const ro = josa(target.name, "을를");
@@ -1657,20 +1725,26 @@ function performAttack(attacker, target, opts = {}) {
     markFallen(target);
   }
 
-  // First Class Expansion 01A — 파수궁 보복: 적이 후열 아군을 피격하면 살아있는 파수궁이 즉시
-  //   1회 원거리 보복. opts.isCounter면 발동 안 함(반격의 반격 금지) → 무한 연쇄 차단.
-  if (!opts.isCounter && attacker.team === "enemy" && gameState.party.includes(target) && target.role === "back") {
+  // First Class Expansion 01A → Batch 01A — 파수궁 보복: 적이 후열 아군에게 "실제 피해"를 입히면
+  //   살아있는 파수궁이 즉시 1회 원거리 보복. opts.isCounter면 발동 안 함(반격의 반격 금지 → 무한 연쇄 차단).
+  if (!opts.isCounter && tookRealDamage && attacker.team === "enemy" && gameState.party.includes(target) && target.role === "back") {
     triggerWatchbowCounter(attacker);
   }
 }
 
-// 후열 아군 피격 → 파수궁 보복(1회). 보복 자체는 적 대상이라 다시 보복을 트리거하지 않는다.
+// 후열 아군 피격 → 파수궁 보복. Batch 01A 공식 정렬:
+//   - 피해량은 파수궁 ATK의 50%(mult 0.5, 최소 1 보장은 performAttack의 Math.max(1,…)).
+//   - 게이지/일반 행동을 소모하지 않는다(여기서 직접 performAttack 호출 — performAction을 거치지 않음).
+//   - 일반 행동 1회 사이 최대 1번: counterReady가 false면 발동하지 않는다(초기 undefined=충전됨으로 간주).
+//   - 발동하면 counterReady=false로 소진. 재충전은 파수궁이 일반 행동(performAction)을 수행할 때.
 function triggerWatchbowCounter(enemyAttacker) {
   if (!enemyAttacker || enemyAttacker.isDead) return;
   const watchbow = gameState.party.find((u) => !u.isDead && u.id === "watchbow");
   if (!watchbow) return;
+  if (watchbow.counterReady === false) return; // 이번 일반 행동 주기엔 이미 1회 보복함
+  watchbow.counterReady = false;
   performAttack(watchbow, enemyAttacker, {
-    mult: 1.0, lineType: "ranged", skill: skillOf("watchbow"), isCounter: true,
+    mult: 0.5, lineType: "ranged", skill: skillOf("watchbow"), isCounter: true,
   });
 }
 
