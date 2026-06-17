@@ -556,10 +556,39 @@ function renderCodex() {
         <p>SR-01 ~ SR-24. 직업을 누르면 <b>현재 구현 상태판</b>이 열립니다(개발/기획 확인용).</p>
       </div>
     </div>
-    <div class="codex-grid">${cards}</div>
-    <div id="codex-detail" class="codex-detail"><p class="codex-detail-hint">직업을 선택하면 구현 상태판이 표시됩니다.</p></div>
+    <div class="codex-grid">
+      ${cards}
+      <!-- Hero UX Polish 01C — 상세 패널을 그리드 안에 두고(전폭) 클릭한 카드 행 아래로 이동시키는 아코디언. 기본 닫힘. -->
+      <div id="codex-detail" class="codex-detail" data-open-job="" hidden></div>
+    </div>
     <button type="button" class="flow-next" data-codex-back>타이틀로 돌아가기</button>
   `;
+}
+
+// Hero UX Polish 01C — 도감 상세 아코디언 토글: 클릭한 카드의 "행 끝" 뒤로 상세 패널을 옮겨 카드 바로 아래(전폭)에 펼친다.
+//   같은 직업이 열려 있으면 닫는다(토글). 항상 하나만 열림(단일 패널을 이동). jobStatus 데이터/전투 로직 변경 없음.
+export function toggleCodexDetail(jobId) {
+  const grid = document.querySelector(".codex-grid");
+  const el = document.getElementById("codex-detail");
+  if (!grid || !el) return;
+  if (!el.hidden && el.dataset.openJob === jobId) { closeCodexDetail(); return; }
+  const cards = [...grid.querySelectorAll(".codex-card")];
+  const idx = cards.findIndex((c) => c.dataset.codexJob === jobId);
+  if (idx < 0) return;
+  // 2열 그리드: 왼쪽 카드(짝수 인덱스)면 같은 행 오른쪽 카드 뒤에, 오른쪽 카드면 자기 뒤에 삽입 → 행 아래 전폭.
+  const rowEndIdx = idx % 2 === 0 ? Math.min(idx + 1, cards.length - 1) : idx;
+  cards[rowEndIdx].insertAdjacentElement("afterend", el);
+  renderCodexDetail(jobId);
+  el.dataset.openJob = jobId;
+  el.hidden = false;
+  el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+export function closeCodexDetail() {
+  const el = document.getElementById("codex-detail");
+  if (!el) return;
+  el.hidden = true;
+  el.dataset.openJob = "";
 }
 
 // Codex Detail Status 01 — 직업 단계(기본/1차/2차 씨앗) 파생(배열 소속 단일 출처).
@@ -603,6 +632,7 @@ export function renderCodexDetail(jobId) {
   host.innerHTML = `
     <div class="cd-head">
       <span class="cd-name">${name}</span>
+      <button type="button" class="cd-close" data-codex-detail-close aria-label="상세 닫기">✕</button>
       <span class="cd-badges">
         <span class="cd-badge cd-tier">${jobTierLabel(jobId)}</span>
         <span class="cd-badge cd-role">${role}</span>

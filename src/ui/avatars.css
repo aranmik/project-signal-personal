@@ -323,16 +323,26 @@
 
 /* === Codex Detail Status 01 — 내부 구현 상태판(개발/기획 확인용, 세로 스크롤) === */
 .codex-detail {
-  margin: 4px 0 14px;
+  /* Hero UX Polish 01C — 그리드 안 전폭 아코디언(클릭한 카드 행 바로 아래). 강조 테두리로 카드와의 연결감. */
+  grid-column: 1 / -1;
+  margin: 2px 0 8px;
   padding: 12px 13px;
-  border: 1px solid #303947;
+  border: 1px solid #3a6ea8;
   border-radius: 9px;
   background: #12161d;
-  max-height: 60vh;
+  max-height: 56vh;
   overflow-y: auto;
 }
 .codex-detail-hint { color: #7e8b9c; font-size: 12px; text-align: center; padding: 8px 0; }
-.cd-head { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid #283041; }
+/* Hero UX Polish 01C — 상세 헤더: 이름/배지 + 우상단 닫기(×) */
+.cd-head { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid #283041; position: relative; }
+.cd-close {
+  position: absolute; top: -2px; right: -2px;
+  width: 28px; height: 28px; line-height: 1;
+  border: 1px solid #34404f; border-radius: 7px;
+  background: #1b2230; color: #c4d0de; font-size: 14px; cursor: pointer;
+}
+.cd-close:active { transform: translateY(1px); }
 .cd-name { font-size: 17px; font-weight: 800; color: #eef3f8; }
 .cd-badges { display: flex; flex-wrap: wrap; gap: 5px; }
 .cd-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: #222a36; color: #c4d0de; }

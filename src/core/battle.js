@@ -1524,6 +1524,11 @@ function dealRaw(target, dmg) {
     remaining -= absorbed;
   }
   if (remaining > 0) target.hp -= remaining;
+  // Dev Cheat Mode 01 — Immortal: 아군 영웅은 dev immortal일 때 최소 HP 1 유지(모든 피해 경로의 공통 싱크).
+  //   적/몬스터엔 미적용(정상 사망). 일반 모드(dev OFF)에선 분기 자체가 false라 동작 완전 동일.
+  if (gameState.dev && gameState.dev.immortal && target.hp < 1 && gameState.party.includes(target)) {
+    target.hp = 1;
+  }
 }
 
 // Stage Persistence 01 — 전투 무력화 표시 + 로그. 표현만 분기(전투 판정/타겟/패배 조건은 불변).

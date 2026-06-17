@@ -1,6 +1,6 @@
 import { gameState, SLOT_ORDER } from "./state.js";
 import { slotPreference } from "../data/jobs.js";
-import { renderGame, renderCodexDetail } from "../ui/render.js";
+import { renderGame, toggleCodexDetail, closeCodexDetail } from "../ui/render.js";
 import { avatarSpec, avatarFigureHTML } from "../data/avatars.js";
 import {
   startRun, goTitle, applyReward, cycleSpeed, startPreview, showJobSelect,
@@ -10,6 +10,16 @@ import {
 } from "./battle.js";
 
 console.log("Project Signal Personal — init", gameState);
+
+// Dev Cheat Mode 01 — 불사 테스트가 켜져 있으면(=URL ?dev=1&immortal=1) 화면에 배지 + 콘솔 안내.
+//   기본 OFF. 일반 Pages 접속에선 이 블록이 아무것도 하지 않는다.
+if (gameState.dev && gameState.dev.immortal) {
+  const badge = document.createElement("div");
+  badge.id = "dev-immortal-badge";
+  badge.textContent = "불사 테스트";
+  (document.getElementById("game-frame") || document.body).appendChild(badge);
+  console.log("[DEV] Immortal Mode ON — 아군 최소 HP 1 유지. 끄려면 URL에서 ?dev=1&immortal=1 제거.");
+}
 
 renderGame(gameState);
 
@@ -59,9 +69,11 @@ document.getElementById("dev-bar").addEventListener("click", (e) => {
 });
 document.getElementById("codex-screen").addEventListener("click", (e) => {
   if (e.target.closest("[data-codex-back]")) { goTitle(); return; }
-  // Codex Detail Status 01 — 직업 카드 클릭 시 하단 상태판 표시(내부 확인용). 전투/게임 상태 변경 없음.
+  // Hero UX Polish 01C — 상세 닫기(×) 우선 처리.
+  if (e.target.closest("[data-codex-detail-close]")) { closeCodexDetail(); return; }
+  // Codex Detail Status 01 → 01C — 직업 카드 클릭 시 카드 바로 아래 상세 패널 토글(아코디언). 게임 상태 변경 없음.
   const card = e.target.closest("[data-codex-job]");
-  if (card) renderCodexDetail(card.dataset.codexJob);
+  if (card) toggleCodexDetail(card.dataset.codexJob);
 });
 
 /* =========================================================
