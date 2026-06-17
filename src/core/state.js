@@ -21,6 +21,8 @@ function createUnit(template, instanceId, bonuses = { atk: 0, maxHp: 0 }) {
     atk: template.atk + bonuses.atk,
     maxHp,
     hp: maxHp,
+    // Run Reward Diversification 02 — "받는 치유량" 보너스(회복/균형 훈련, 전역 healRecv). 치유 시 healUnit이 가산.
+    healReceivedBonus: bonuses.healRecv || 0,
     actionGauge: 0,
     isDead: false,
     // Status & Effect Foundation 01: 실제 상태 데이터({ type, duration } 배열).
@@ -345,7 +347,7 @@ export const gameState = {
     stage: 1,
     maxStage: 10,
     result: null,
-    bonuses: { atk: 0, maxHp: 0, heal: 0 }, // 누적 성장값(전역 all/heal 훈련) — 파티 재생성 시 아군 전체 적용
+    bonuses: { atk: 0, maxHp: 0, heal: 0, healRecv: 0 }, // 누적 성장값(전역 atk/maxHp + 받는 치유량 healRecv) — 파티 재생성 시 반영
     rewardLevels: {}, // Reward & Growth 01: 보상별 선택 횟수(Lv 표시용 — 효과는 bonuses/training이 담당)
     training: {},     // Run Reward Training 01: 대상 필터 성장 버킷 { front/back/tank/melee/ranged/support: {atk,maxHp} }
     rewardOffer: null, // Run Reward Training 01: 현재 보상 화면 3택(reward id 배열) — 재렌더에도 고정

@@ -2,7 +2,7 @@ import { BEGINNER_THEME, STAGE_THEMES } from "../data/stages.js";
 import { ROUTE_TYPES, bossTimingLabel, bossFury, bossReadinessPressure, bossMenace, depthAtmosphere, routeReward, PRESSURE_HELP } from "../data/routes.js";
 import { availableFusions, slotPreference, combatRoleLabelOf, combatRoleOf, BASE_JOBS, ADVANCED_JOBS, SECOND_CLASS_JOBS } from "../data/jobs.js";
 import { jobStatusOf, IMPL_LABEL, VIS_LABEL } from "../data/jobStatus.js";
-import { REWARDS, rewardById } from "../data/rewards.js";
+import { REWARDS, rewardById, REWARD_MAX_LEVEL } from "../data/rewards.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { SLOT_ORDER, SLOT_NAMES, partySizeOf, LAYOUT_PREVIEW_CASES } from "../core/state.js";
 import { avatarSpec, avatarFigureHTML, CODEX_ENTRIES, CODEX_STATUS_LABEL } from "../data/avatars.js";
@@ -602,7 +602,8 @@ function jobTierLabel(jobId) {
 // Codex Detail Status 01 — combatRole → 성장(훈련) 방향 한 줄(보상 UI는 미변경, 참고 표시만).
 function trainingHintFor(jobId) {
   const role = combatRoleOf(jobId);
-  const roleTrain = { tank: "탱커 훈련", melee: "근접 훈련", ranged: "원거리 훈련", support: "서포터 훈련", healer: "힐러 훈련" }[role];
+  // Diversification 02 — 회복은 역할(healer) 훈련이 아니라 "회복 훈련(파티 공통, 받는 치유량)"으로 분리됨.
+  const roleTrain = { tank: "탱커 훈련", melee: "근접 훈련", ranged: "원거리 훈련", support: "서포터 훈련" }[role];
   const parts = [];
   if (roleTrain) parts.push(`성향 → ${roleTrain} 대상`);
   parts.push("전열 배치 시 전열 단련 / 후열 배치 시 후열 집중 대상");
@@ -696,13 +697,14 @@ function renderRewardPanel(state) {
   document.getElementById("growth-subtitle").innerHTML =
     `${pickWord}.${pickHint}<br><span class='growth-hint'>선택한 훈련은 이번 모험 동안 유지되고, 다음 전투부터 적용됩니다.</span>`;
 
-  // Run Reward Training 01 — 보상 버튼은 현재 굴려둔 3택(run.rewardOffer)만 렌더(없으면 안전 폴백: 전체).
+  // Run Reward Training 01 → Diversification 02 — 3택만 렌더 + 이번 선택 후 Lv 표시(현재 카운트+1, MAX 3).
   const offer = (state.run.rewardOffer || []).map((id) => rewardById(id)).filter(Boolean);
   const choices = offer.length ? offer : REWARDS;
+  const lvOf = (id) => Math.min(REWARD_MAX_LEVEL, ((state.run.rewardLevels || {})[id] || 0) + 1);
   document.getElementById("growth-choices").innerHTML = choices.map(
     (r) =>
       `<button type="button" data-reward="${r.id}">
-        <span class="reward-name">${r.name}</span>
+        <span class="reward-name">${r.name} <b class="reward-lv">Lv.${lvOf(r.id)}/${REWARD_MAX_LEVEL}</b></span>
         <span class="reward-desc">${r.description}</span>
       </button>`
   ).join("");

@@ -4,7 +4,7 @@ import { FUSION_RECIPES, BASE_JOBS, prefersFront, slotPreference, availableFusio
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
 import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions, depthSpeedFactor, routeReward } from "../data/routes.js";
-import { REWARDS, rewardById } from "../data/rewards.js";
+import { REWARDS, rewardById, REWARD_MAX_LEVEL } from "../data/rewards.js";
 import { renderGame, playActionFx, playStatusTickFx, playSupportFx, playStatusApplyFx, playActorFx, clearFxLayer } from "../ui/render.js";
 import { skillOf } from "../data/skills.js";
 
@@ -223,8 +223,8 @@ export function resetBattle() {
 
   gameState.run.stage = 1;
   gameState.run.result = null;
-  gameState.run.bonuses = { atk: 0, maxHp: 0, heal: 0 };
-  gameState.run.rewardLevels = {}; // 런 성장은 런과 함께 초기화 (시작 배치 유지와 별개)
+  gameState.run.bonuses = { atk: 0, maxHp: 0, heal: 0, healRecv: 0 };
+  gameState.run.rewardLevels = {}; // 런 성장 + 훈련 선택 횟수(MAX 3 캡) 초기화 (시작 배치 유지와 별개)
   gameState.run.training = {};      // Run Reward Training 01 — 대상 필터 성장 초기화
   gameState.run.rewardOffer = null; // Run Reward Training 01 — 보상 3택 초기화
   gameState.screen = "battle";
@@ -272,33 +272,47 @@ export function resetBattle() {
 // Run Reward Training 01 — 훈련 효과 적용(대상별 라우팅).
 //   전역(all)·회복(heal)은 기존 run.bonuses 경로 재사용 → createUnit/회복 계산이 그대로 반영.
 //   배치/역할 대상은 run.training[target] 버킷에 누적 → createInitialParty가 대상 유닛에만 가산.
-function applyTrainingReward(reward) {
+// Diversification 02 — 단일 효과 적용 헬퍼(균형 훈련의 extra까지 공용).
+function applyGrant(target, stat, value) {
   const b = gameState.run.bonuses;
-  if (reward.stat === "heal") {
-    b.heal = (b.heal || 0) + reward.value;             // 힐러 훈련(전역 회복 가산 — 회복 주체가 힐러)
-  } else if (reward.target === "all") {
-    b[reward.stat] = (b[reward.stat] || 0) + reward.value; // 공세/생존/균형(전역 atk/maxHp)
+  if (stat === "healRecv") {
+    b.healRecv = (b.healRecv || 0) + value;             // 받는 치유량(전역) — createUnit이 healReceivedBonus로 반영
+  } else if (stat === "heal") {
+    b.heal = (b.heal || 0) + value;                     // 레거시(현재 미사용 — 안전 유지)
+  } else if (target === "all") {
+    b[stat] = (b[stat] || 0) + value;                   // 공세/생존/균형(전역 atk/maxHp)
   } else {
-    const t = gameState.run.training[reward.target] || (gameState.run.training[reward.target] = { atk: 0, maxHp: 0 });
-    t[reward.stat] = (t[reward.stat] || 0) + reward.value;  // 전열/후열/역할 대상 필터 성장
+    const t = gameState.run.training[target] || (gameState.run.training[target] = { atk: 0, maxHp: 0 });
+    t[stat] = (t[stat] || 0) + value;                   // 전열/후열/역할 대상 필터 성장
   }
 }
+function applyTrainingReward(reward) {
+  applyGrant(reward.target, reward.stat, reward.value);
+  if (reward.extra) applyGrant(reward.target, reward.extra.stat, reward.extra.value); // 균형 훈련: 받는 치유량 +1
+}
 
-// Run Reward Training 01 — 훈련 후보 적격성: 현재 파티에 대상자가 있을 때만 제시(없는 훈련 배제).
-//   범용(all)은 항상 적격. heal은 힐러 보유 시. 배치(front/back)는 해당 열 점유 시. 역할은 그 combatRole 보유 시.
-function rewardEligible(reward) {
+// Run Reward Training 01 → Diversification 02 — 훈련 후보 적격성.
+//   ① 대상자가 있을 때만(없는 훈련 배제: all=항상, front/back=해당 열 점유, 역할=combatRole 보유).
+//   ② MAX(Lv.3) 도달 훈련은 후보에서 제외(rewardLevels 카운트 기준).
+function rewardTargetPresent(reward) {
   if (reward.target === "all") return true;
   const f = gameState.run.formation || {};
   if (reward.target === "front" || reward.target === "back") {
     const pre = reward.target === "front" ? "f" : "b";
     return SLOT_ORDER.some((k) => f[k] && k.startsWith(pre));
   }
-  // 역할 대상(tank/melee/ranged/support/healer) — combatRole 보유 파티원 존재 여부.
+  // 역할 대상(tank/melee/ranged/support) — combatRole 보유 파티원 존재 여부.
   return partyJobIds().some((id) => combatRoleOf(id) === reward.target);
 }
+function rewardEligible(reward) {
+  const lv = (gameState.run.rewardLevels && gameState.run.rewardLevels[reward.id]) || 0;
+  if (lv >= REWARD_MAX_LEVEL) return false; // MAX 도달 → 후보 제외
+  return rewardTargetPresent(reward);
+}
 
-// Run Reward Training 01 — 일반 전투 보상 3택을 굴려 고정(재렌더에도 유지). 적격 훈련에서 중복 없이 추출.
-//   범용 3종(공세/생존/균형)이 항상 적격이라 후보가 3개 미만이 되지 않는다.
+// Diversification 02 — 일반 전투 보상 3택을 굴려 고정(재렌더에도 유지). MAX 제외 + 중복 없이 추출.
+//   범용(공세/생존/균형/회복)이 항상 대상 적격이라, 이들이 모두 MAX되기 전엔 3개가 안정적으로 유지된다.
+//   MAX 다수로 적격이 3 미만인 극단 상황에선 가능한 만큼만 제시(보고). MAX 보상을 다시 넣는 fallback은 하지 않음.
 function rollRewardOffer() {
   const eligible = REWARDS.filter(rewardEligible);
   gameState.run.rewardOffer = shuffle(eligible).slice(0, 3).map((r) => r.id);
@@ -1184,7 +1198,10 @@ function applyStatus(unit, status) {
 }
 function healUnit(unit, amount) {
   const before = unit.hp;
-  unit.hp = Math.min(unit.maxHp, unit.hp + Math.max(0, amount));
+  // Run Reward Diversification 02 — 실제 회복(amount>0)일 때 대상의 "받는 치유량" 보너스를 가산(공통 싱크).
+  //   회복 0/연출용 호출엔 가산하지 않음. 최대 HP 초과는 기존대로 제한. 쉼터/HP 보정은 healUnit을 안 거쳐 무영향.
+  const recv = amount > 0 ? (unit.healReceivedBonus || 0) : 0;
+  unit.hp = Math.min(unit.maxHp, unit.hp + Math.max(0, amount) + recv);
   return unit.hp - before;
 }
 function removeNegStatus(unit) {
@@ -1361,39 +1378,35 @@ function runDataSkill(unit, meta) {
       pushLog(`${unit.name}${josa(unit.name, "이가")} ${L.releaseName}!`);
       return true;
     }
-    case "bardRandom": { // 바드 — Batch 01C: 완전 랜덤 음유시인(아군/적·대상·효과 랜덤).
+    case "bardRandom": { // 바드 — Bard Identity Polish 01: 리듬(아군 지원) / 템포(적 방해) 이중 연주, 각 최대 2명.
       const otherAllies = aliveParty().filter((a) => a !== unit);
       const enemies = aliveEnemies();
-      // 사이드 선택: 양쪽 유효하면 50/50, 한쪽만 유효하면 그쪽으로 fallback, 둘 다 없으면 기본 공격.
-      let side;
-      if (otherAllies.length && enemies.length) side = Math.random() < 0.5 ? "ally" : "enemy";
-      else if (otherAllies.length) side = "ally";
-      else if (enemies.length) side = "enemy";
+      // 연주 선택: 양쪽 유효하면 50/50(리듬/템포), 한쪽만 유효하면 그쪽, 둘 다 없으면 기본 공격.
+      let play;
+      if (otherAllies.length && enemies.length) play = Math.random() < 0.5 ? "rhythm" : "tempo";
+      else if (otherAllies.length) play = "rhythm";
+      else if (enemies.length) play = "tempo";
       else return false;
 
-      if (side === "ally") {
-        // 아군 랜덤 1명 → 공격력 증가 또는 치명 확률 증가(공통 버프 재사용).
-        const t = otherAllies[Math.floor(Math.random() * otherAllies.length)];
-        const eff = Math.random() < 0.5 ? "atkUp" : "critUp";
-        applyCombatStatus(t, eff);
-        pushLog(`${unit.name}${josa(unit.name, "이가")} ${t.name}에게 ${eff === "atkUp" ? "공격력" : "치명"}의 가락을 실었다.`);
-        playSupportFx({ casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind, guardInstanceId: t.instanceId });
+      if (play === "rhythm") {
+        // 리듬 — 생존 아군 최대 2명에 이로운 효과(atkUp/critUp, 대상별 랜덤). 기존 효과/수치/지속 그대로(대상 수만 1→2).
+        const targets = shuffle(otherAllies).slice(0, 2);
+        targets.forEach((t) => applyCombatStatus(t, Math.random() < 0.5 ? "atkUp" : "critUp"));
+        pushLog(`${unit.name}${josa(unit.name, "이가")} 리듬을 연주했다 — 아군 ${targets.length}명에게 가락을 실었다.`);
+        playSupportFx({ casterInstanceId: unit.instanceId, text: "리듬!", kind: meta.kind, guardInstanceId: targets[0] ? targets[0].instanceId : null });
       } else {
-        // 적 랜덤 1명 → 속도 감소 또는 행동 게이지 감소(공통 디버프/게이지 조작 재사용).
-        const t = enemies[Math.floor(Math.random() * enemies.length)];
-        const eff = Math.random() < 0.5 ? "speedDown" : "gauge";
-        if (eff === "speedDown") {
-          applyCombatStatus(t, "speedDown");
-          pushLog(`${unit.name}${josa(unit.name, "이가")} ${t.name}의 박자를 늦췄다.`);
-        } else {
-          t.actionGauge = Math.max(0, (t.actionGauge || 0) - BARD_GAUGE_DROP);
-          pushLog(`${unit.name}${josa(unit.name, "이가")} ${t.name}의 행동을 흐트러뜨렸다.`);
-        }
-        playActionFx({
-          sourceInstanceId: unit.instanceId, sourceUnitId: unit.id, targetInstanceId: t.instanceId,
-          lineType: "disrupt", kind: "disrupt", isHeal: false, amount: 0,
-          shoutText: meta.name + "!", shoutKind: meta.kind, shoutTier: "skill",
+        // 템포 — 생존 적 최대 2명에 해로운 효과(speedDown 또는 게이지 -25, 대상별 랜덤). 기존 효과/수치 그대로(대상 수만 1→2).
+        const targets = shuffle(enemies).slice(0, 2);
+        targets.forEach((t, i) => {
+          if (Math.random() < 0.5) applyCombatStatus(t, "speedDown");
+          else t.actionGauge = Math.max(0, (t.actionGauge || 0) - BARD_GAUGE_DROP);
+          playActionFx({
+            sourceInstanceId: unit.instanceId, sourceUnitId: unit.id, targetInstanceId: t.instanceId,
+            lineType: "disrupt", kind: "disrupt", isHeal: false, amount: 0,
+            shoutText: i === 0 ? "템포!" : null, shoutKind: meta.kind, shoutTier: "skill",
+          });
         });
+        pushLog(`${unit.name}${josa(unit.name, "이가")} 템포를 흔들었다 — 적 ${targets.length}명의 박자를 무너뜨렸다.`);
       }
       return true;
     }
@@ -1803,7 +1816,8 @@ function performDualHeal(saint, meta) {
     .slice()
     .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)
     .slice(0, 2);
-  const amount = Math.round(saint.atk * 1.5) + (gameState.run.bonuses.heal || 0);
+  // Run Reward Diversification 02 — 받는 치유량은 healUnit이 대상별로 가산(힐러 측 bonuses.heal 제거).
+  const amount = Math.round(saint.atk * 1.5);
   const heals = [];
   targets.forEach((a) => {
     const h = healUnit(a, amount);
@@ -1814,11 +1828,9 @@ function performDualHeal(saint, meta) {
 }
 
 function performHeal(healer, target, opts = {}) {
-  // Game Flow 01: 회복 훈련 보상(run.bonuses.heal) — 작은 고정 가산만.
-  const healAmount = Math.round(healer.atk * 1.5) + (gameState.run.bonuses.heal || 0);
-  const hpBefore = target.hp;
-  target.hp = Math.min(target.maxHp, target.hp + healAmount);
-  const actualHeal = target.hp - hpBefore;
+  // Run Reward Diversification 02 — 받는 치유량 보너스는 healUnit이 대상 기준으로 가산(힐러 측 bonuses.heal 제거).
+  const healAmount = Math.round(healer.atk * 1.5);
+  const actualHeal = healUnit(target, healAmount);
 
   pushLog(`${healer.name}${josa(healer.name, "이가")} ${target.name}${josa(target.name, "을를")} 회복했다. (+${actualHeal})`);
 

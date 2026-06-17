@@ -2589,6 +2589,8 @@ body {
 
 #growth-choices .reward-name { font-size: 15px; font-weight: bold; }
 #growth-choices .reward-desc { font-size: 12px; font-weight: normal; color: #9ab4cc; }
+/* Run Reward Diversification 02 — 훈련 Lv/MAX 표시(제목 옆, 작게) */
+#growth-choices .reward-lv { font-size: 11px; font-weight: 700; color: #f0c36a; }
 
 #growth-subtitle .growth-hint { font-size: 12px; color: #8aa0b4; }
 

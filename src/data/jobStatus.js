@@ -211,13 +211,13 @@ export const JOB_STATUS = {
   },
   bard: {
     implementation: "done", visibility: "partial",
-    behavior: "아군/적 랜덤 → 대상 랜덤 → 효과 랜덤. 아군: atkUp 또는 critUp. 적: speedDown 또는 행동 게이지 -25. 한쪽 대상 없으면 다른 쪽 fallback.",
-    targetRule: "랜덤 아군 또는 적 1명.",
-    effects: ["atkUp", "critUp", "speedDown", "actionGauge 감소"],
-    visibleNow: ["아군 '공↑/치↑' 칩 또는 적 '속↓' 칩", "'리듬&템포!' 외침", "분기 로그"],
-    hiddenNow: ["actionGauge 감소 체감 약함", "랜덤이 의도인지 불명확"],
-    todo: ["효과 이름/로그 강화 후보", "랜덤 연출(음표/주사위) 후보"],
-    note: "완전 랜덤 음유시인. 이름 '리듬&템포' ↔ 랜덤 콘셉트 명명 검토 후보.",
+    behavior: "이중 연주(랜덤 선택): 리듬 = 생존 아군 최대 2명에 이로운 효과(atkUp/critUp, 대상별 랜덤) / 템포 = 생존 적 최대 2명에 해로운 효과(speedDown 또는 행동 게이지 -25, 대상별 랜덤). 한쪽 대상 없으면 다른 쪽으로.",
+    targetRule: "리듬=아군 최대 2명 / 템포=적 최대 2명.",
+    effects: ["리듬: atkUp/critUp(아군 2명)", "템포: speedDown/actionGauge 감소(적 2명)"],
+    visibleNow: ["아군 '공↑/치↑' 칩 또는 적 '속↓' 칩", "'리듬!'/'템포!' 외침(구분)", "리듬/템포 분기 로그"],
+    hiddenNow: ["actionGauge 감소 체감 약함"],
+    todo: ["바드 전용 음표 FX 후보", "리듬/템포 전장 연출 후보"],
+    note: "전장의 음유시인 — 한 번 연주로 2명씩 영향. 수치/지속/빈도는 기존과 동일(대상 수만 1→2).",
   },
 
   // ── 2차 직업 씨앗(현재 게임 내 미등장 — FUSION_RECIPES 미합류) ──
