@@ -1243,6 +1243,10 @@ body {
 /* Hero Readability Polish 01A — 독(중독 표식) / 보복 준비(파수궁) 칩 색 */
 #battle-field .unit .status-chip--poison { background: #9bd365; }  /* 독 — 독성 연두 */
 #battle-field .unit .status-chip--ready  { background: #7fc4f6; }  /* 보복 준비 — 하늘 */
+/* Hero Readability Polish 01B — 표식(추적자) / 충전(마도) / 결속(금제·성벽) 칩 색 */
+#battle-field .unit .status-chip--mark   { background: #e6b455; }  /* 표식 — 호박 */
+#battle-field .unit .status-chip--charge { background: #c7a2ff; }  /* 충전 — 보라 */
+#battle-field .unit .status-chip--bond   { background: #6fa8e0; }  /* 결속 — 청람 */
 #battle-field .unit.dead .status-chips { opacity: 0; }
 #battle-field .unit.is-encounter .status-chips { display: none; } /* 보스 HUD가 따로 — 칩 중복 방지 */
 

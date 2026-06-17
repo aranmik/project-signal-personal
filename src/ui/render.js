@@ -1049,12 +1049,21 @@ const STATUS_CHIP = {
   // Hero Readability Polish 01A — 덫꾼 독 표식(중독 상태 가시화) / 파수궁 보복 준비(합성 칩).
   poison: { t: "독", c: "poison" },
   counterReady: { t: "보복 준비", c: "ready" },
+  // Hero Readability Polish 01B — 추적자 표식(실제 mark 상태) / 마도 충전(합성) / 금제·성벽 결속(합성).
+  mark: { t: "표식", c: "mark" },
+  charging: { t: "충전", c: "charge" },
+  bond: { t: "결속", c: "bond" },
 };
 function statusChips(unit) {
   const chips = (unit.statuses || []).map((s) => s.type).filter((t) => STATUS_CHIP[t]);
   // Hero Readability Polish 01A — 파수궁 보복 준비는 상태 배열이 아니라 unit.counterReady 속성 → 합성 칩으로 표시.
   //   살아 있고 counterReady가 false가 아닐 때(undefined=충전됨 포함)만. 로직/수치는 변경하지 않음(표시 전용).
   if (unit.id === "watchbow" && !unit.isDead && unit.counterReady !== false) chips.push("counterReady");
+  // Hero Readability Polish 01B — 마도 충전 상태(불리언 필드 unit.charging) → 마도에만 합성 칩. 표시 전용.
+  if (unit.id === "mage" && !unit.isDead && unit.charging) chips.push("charging");
+  // Hero Readability Polish 01B — 결속: 금제(bondOffenseTarget) 또는 성벽 보호 아군(protectedBy) 링크가 살아 있으면 합성 칩.
+  //   (mark는 위 상태 배열에서 이미 '표식' 칩으로 표시 — 추적자 조준 대상/결속 대상 공통.)
+  if (!unit.isDead && (unit.bondOffenseTarget || unit.protectedBy)) chips.push("bond");
   return chips;
 }
 function statusChipsHTML(unit) {

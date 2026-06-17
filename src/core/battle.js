@@ -1422,7 +1422,8 @@ function runDataSkill(unit, meta) {
       unit.aimTarget = null;
       if (!t) return false; // 이미 처치됨 → 기본 공격
       const mult = L.mult + (unit.aimFullHp ? L.fullHpBonus : 0);
-      performAttack(unit, t, { mult, lineType: "ranged", skill: { name: L.releaseName, kind: meta.kind } });
+      // Hero Readability Polish 01B — 표식 대상 추격임을 로그에 짧게 드러낸다(chase 플래그, 표시 전용). 피해/수치 불변.
+      performAttack(unit, t, { mult, lineType: "ranged", skill: { name: L.releaseName, kind: meta.kind }, chase: true });
       return true;
     }
     case "pierce": { // 용창 관통 (전열 + 후열, 처치 시 1회 추가 — 무한 방지)
@@ -1743,7 +1744,9 @@ function performAttack(attacker, target, opts = {}) {
   //   기본 공격(!opts.skill)에만 적용 — 스킬 공격엔 poison 치명 보정이 없으므로 이 표기도 안 붙는다. 수치/계산 불변.
   const poisonCrit = isCrit && !opts.skill && hasStatus(target, "poison");
   const critTag = poisonCrit ? " (독 표식 치명!)" : isCrit ? " (치명!)" : "";
-  pushLog(`${attacker.name}${josa(attacker.name, "이가")} ${target.name}${ro} ${verb}. ${damage} 피해${critTag}.`);
+  // Hero Readability Polish 01B — 추적자 추격(표식 대상)이면 짧은 태그(표시 전용).
+  const chaseTag = opts.chase ? " (표식 추적)" : "";
+  pushLog(`${attacker.name}${josa(attacker.name, "이가")} ${target.name}${ro} ${verb}. ${damage} 피해${critTag}${chaseTag}.`);
 
   const line = opts.lineType || attackLineType(attacker);
   playActionFx({
