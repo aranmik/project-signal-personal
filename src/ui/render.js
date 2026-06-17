@@ -1,7 +1,7 @@
 import { BEGINNER_THEME, STAGE_THEMES } from "../data/stages.js";
 import { ROUTE_TYPES, bossTimingLabel, bossFury, bossReadinessPressure, bossMenace, depthAtmosphere, routeReward, PRESSURE_HELP } from "../data/routes.js";
 import { availableFusions, slotPreference, combatRoleLabelOf } from "../data/jobs.js";
-import { REWARDS } from "../data/rewards.js";
+import { REWARDS, rewardById } from "../data/rewards.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { SLOT_ORDER, SLOT_NAMES, partySizeOf, LAYOUT_PREVIEW_CASES } from "../core/state.js";
 import { avatarSpec, avatarFigureHTML, CODEX_ENTRIES, CODEX_STATUS_LABEL } from "../data/avatars.js";
@@ -579,8 +579,10 @@ function renderRewardPanel(state) {
   document.getElementById("growth-subtitle").innerHTML =
     `${pickWord}.${pickHint}<br><span class='growth-hint'>선택한 훈련은 이번 모험 동안 유지되고, 다음 전투부터 적용됩니다.</span>`;
 
-  // 보상 버튼은 REWARDS 데이터에서 렌더 — 보상 추가는 데이터만 늘리면 된다.
-  document.getElementById("growth-choices").innerHTML = REWARDS.map(
+  // Run Reward Training 01 — 보상 버튼은 현재 굴려둔 3택(run.rewardOffer)만 렌더(없으면 안전 폴백: 전체).
+  const offer = (state.run.rewardOffer || []).map((id) => rewardById(id)).filter(Boolean);
+  const choices = offer.length ? offer : REWARDS;
+  document.getElementById("growth-choices").innerHTML = choices.map(
     (r) =>
       `<button type="button" data-reward="${r.id}">
         <span class="reward-name">${r.name}</span>

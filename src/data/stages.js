@@ -42,12 +42,13 @@ export const STAGE_THEMES = [
   { id: "assassin",  name: "암살자 집단",   desc: "그림자 속의 칼날들.",             locked: true },
 ];
 
-// Fusion Flow Foundation 01 — 스테이지 클리어 이벤트(보상 선택 후 진입).
+// Fusion Flow Foundation 01 → Run Reward Training 01 — 스테이지 클리어 이벤트(보상 선택 후 진입).
 //   S3/S8: 합체 기회. 공통 규칙(battle.js applyFusion): 합체를 "실행"하면 인원이 1명
 //   줄어드므로 반드시 동료 영입으로 보충한다. 합체 없음/스킵이면 영입도 없다.
-//   S5: 동료 영입 — 합체 보충이 아니라 4인 파티 확장(정예 클리어 보상 성격) 별도 이벤트.
+//   ※ S5 스테이지 기반 자동 "영입"은 제거됨(Run Reward Training 01) — 2인 출발 + 깊은 수풀 영입 흐름과
+//     충돌해 "일반 전투 5스테이지 클리어만으로 영입이 뜨는" 버그의 원인이었다. 신규 영입은 깊은 수풀
+//     보상 / 합체 후 보충에서만 발생한다.
 export const STAGE_CLEAR_EVENTS = {
   3: { type: "fusion" },
-  5: { type: "recruit" },
   8: { type: "fusion" },
 };

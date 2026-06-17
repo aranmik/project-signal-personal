@@ -1,10 +1,10 @@
 import { gameState } from "./state.js";
 import { createInitialParty, createPreviewEnemies, createStageEnemies, createRouteEnemies, createLayoutPreviewEnemies, SLOT_ORDER, DEFAULT_FORMATION } from "./state.js";
-import { FUSION_RECIPES, BASE_JOBS, prefersFront, slotPreference, availableFusions } from "../data/jobs.js";
+import { FUSION_RECIPES, BASE_JOBS, prefersFront, slotPreference, availableFusions, combatRoleOf } from "../data/jobs.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
 import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions, depthSpeedFactor, routeReward } from "../data/routes.js";
-import { rewardById } from "../data/rewards.js";
+import { REWARDS, rewardById } from "../data/rewards.js";
 import { renderGame, playActionFx, playStatusTickFx, playSupportFx, playStatusApplyFx, playActorFx, clearFxLayer } from "../ui/render.js";
 import { skillOf } from "../data/skills.js";
 
@@ -225,13 +225,15 @@ export function resetBattle() {
   gameState.run.result = null;
   gameState.run.bonuses = { atk: 0, maxHp: 0, heal: 0 };
   gameState.run.rewardLevels = {}; // 런 성장은 런과 함께 초기화 (시작 배치 유지와 별개)
+  gameState.run.training = {};      // Run Reward Training 01 — 대상 필터 성장 초기화
+  gameState.run.rewardOffer = null; // Run Reward Training 01 — 보상 3택 초기화
   gameState.screen = "battle";
 
   // Fusion Flow 01: 런 시작 배치 복원(합체/영입으로 바뀐 formation을 초기화).
   gameState.run.formation = gameState.run.startFormation
     ? { ...gameState.run.startFormation }
     : { ...DEFAULT_FORMATION };
-  gameState.party = createInitialParty(gameState.run.bonuses, gameState.run.formation);
+  gameState.party = createInitialParty(gameState.run.bonuses, gameState.run.formation, gameState.run.training);
   gameState.enemies = createStageEnemies(1); // Game Flow 01: 초보자 테마 스테이지 플랜
 
   gameState.battle.tick = 0;
@@ -267,56 +269,82 @@ export function resetBattle() {
 //   효과는 REWARDS 데이터(stat/value) 기반 — run.bonuses에 누적되고 다음 전투 파티
 //   재생성 시 아군 전체(합체/영입 멤버 포함)에 반영된다. 적에게는 적용되지 않는다.
 //   rewardLevels는 표시용 선택 횟수(Lv). 런 재시작 시 둘 다 초기화(resetBattle).
+// Run Reward Training 01 — 훈련 효과 적용(대상별 라우팅).
+//   전역(all)·회복(heal)은 기존 run.bonuses 경로 재사용 → createUnit/회복 계산이 그대로 반영.
+//   배치/역할 대상은 run.training[target] 버킷에 누적 → createInitialParty가 대상 유닛에만 가산.
+function applyTrainingReward(reward) {
+  const b = gameState.run.bonuses;
+  if (reward.stat === "heal") {
+    b.heal = (b.heal || 0) + reward.value;             // 힐러 훈련(전역 회복 가산 — 회복 주체가 힐러)
+  } else if (reward.target === "all") {
+    b[reward.stat] = (b[reward.stat] || 0) + reward.value; // 공세/생존/균형(전역 atk/maxHp)
+  } else {
+    const t = gameState.run.training[reward.target] || (gameState.run.training[reward.target] = { atk: 0, maxHp: 0 });
+    t[reward.stat] = (t[reward.stat] || 0) + reward.value;  // 전열/후열/역할 대상 필터 성장
+  }
+}
+
+// Run Reward Training 01 — 훈련 후보 적격성: 현재 파티에 대상자가 있을 때만 제시(없는 훈련 배제).
+//   범용(all)은 항상 적격. heal은 힐러 보유 시. 배치(front/back)는 해당 열 점유 시. 역할은 그 combatRole 보유 시.
+function rewardEligible(reward) {
+  if (reward.target === "all") return true;
+  const f = gameState.run.formation || {};
+  if (reward.target === "front" || reward.target === "back") {
+    const pre = reward.target === "front" ? "f" : "b";
+    return SLOT_ORDER.some((k) => f[k] && k.startsWith(pre));
+  }
+  // 역할 대상(tank/melee/ranged/support/healer) — combatRole 보유 파티원 존재 여부.
+  return partyJobIds().some((id) => combatRoleOf(id) === reward.target);
+}
+
+// Run Reward Training 01 — 일반 전투 보상 3택을 굴려 고정(재렌더에도 유지). 적격 훈련에서 중복 없이 추출.
+//   범용 3종(공세/생존/균형)이 항상 적격이라 후보가 3개 미만이 되지 않는다.
+function rollRewardOffer() {
+  const eligible = REWARDS.filter(rewardEligible);
+  gameState.run.rewardOffer = shuffle(eligible).slice(0, 3).map((r) => r.id);
+}
+
 export function applyReward(id) {
   const reward = rewardById(id);
   if (!reward) return;
+  // 현재 제시된 3택에 없는 id는 무시(재렌더/중복 클릭 방어).
+  if (!(gameState.run.rewardOffer || []).includes(id)) return;
 
-  const b = gameState.run.bonuses;
-  b[reward.stat] = (b[reward.stat] || 0) + reward.value;
+  applyTrainingReward(reward);
 
   const lv = gameState.run.rewardLevels;
   lv[id] = (lv[id] || 0) + 1;
-
   gameState.logs = [`보상: ${reward.name} Lv.${lv[id]} — 다음 전투부터 적용`];
 
-  // Reward Pressure 01 — 다회 성장 선택(위험/정예=2회). 남은 픽이 있으면 보상 화면 유지(라우팅은 마지막 픽에서만).
+  // Reward Pressure 01 — 다회 성장 선택(정예=2회). 남은 픽이 있으면 새 3택을 굴려 보상 화면 유지.
   gameState.run.rewardPicks = (gameState.run.rewardPicks || 1) - 1;
   if (gameState.run.rewardPicks > 0) {
+    rollRewardOffer();
     gameState.screen = "reward";
     renderGame(gameState);
     return;
   }
+  gameState.run.rewardOffer = null;
 
-  // Run Structure 01C — 보상 후 이벤트 라우팅(우선순위로 정리해 danger 합체와 기존 S3/S8/S5가 충돌 없게).
-  //   합체 가능 = 현재 파티에서 실행 가능한 레시피가 하나라도 있는가(availableFusions).
+  // Run Reward Training 01 — 일반 전투 보상 후 라우팅은 합체만(스테이지 기반 자동 "영입"은 제거).
+  //   신규 영웅 영입은 깊은 수풀 보상(giveDeepForestReward)과 합체 후 보충(continueAfterFusion)에서만 발생한다.
+  //   Sage Branch Gate 01 — 합체 진입은 파티 4인 + 레시피 존재일 때만.
   const ev = STAGE_CLEAR_EVENTS[gameState.run.stage];
-  // Sage Branch Gate 01 — 합체 진입은 파티 4인 + 레시피 존재일 때만(2/3인 파티엔 합체 노출 금지).
   const canFuse = canEnterFusion();
 
-  // 1) S5 영입(4인 확장)은 그대로 우선 — danger 합체가 확장 기회를 덮지 않게.
-  if (ev && ev.type === "recruit") {
-    rollRecruitOffer(); // 영입 후보는 진입 시 1회 확정
-    gameState.run.recruitContext = "expand"; // 4인 확장 영입 — 문구 분기용
-    enterRecruit(); // Recruit UX Rebuild 01 — 단일 화면 영입(빈 슬롯 고정 + 미리보기)
-    return;
-  }
-
-  // 2) 깊은 수풀(danger) 클리어 = 합체 기회 보장. 합체 후보가 있으면 무조건 합체 화면으로
-  //    (억지 진입 아님 — 후보가 있을 때만). 하드 제한/강제 합체 아님: 스킵은 그대로 가능.
+  // 깊은 수풀(danger) 클리어 = 합체 기회 보장(후보 있을 때만 — 억지 진입/강제 합체 아님, 스킵 가능).
   if (gameState.run.currentRouteType === "danger" && canFuse) {
     gameState.screen = "fusion";
     renderGame(gameState);
     return;
   }
-
-  // 3) 기존 스테이지 합체 이벤트(S3/S8) — 빈 합체 화면 방지를 위해 후보 있을 때만.
+  // 기존 스테이지 합체 이벤트(S3/S8) — 빈 합체 화면 방지를 위해 후보 있을 때만.
   if (ev && ev.type === "fusion" && canFuse) {
     gameState.screen = "fusion";
     renderGame(gameState);
     return;
   }
-
-  // 4) 깊은 수풀이었지만 합체 후보가 없으면 짧은 안내 후 다음 여정으로(억지 합체 화면 X).
+  // 깊은 수풀이었지만 합체 후보가 없으면 짧은 안내 후 다음 여정으로(억지 합체 화면 X).
   if (gameState.run.currentRouteType === "danger" && !canFuse) {
     pushLog("깊은 수풀을 헤쳤지만 아직 합체할 조합이 없습니다.");
   }
@@ -621,8 +649,8 @@ export function confirmArrange() {
 export function advanceStage(routeType = gameState.run.currentRouteType) {
   gameState.run.stage += 1;
 
-  // Fusion Flow 01: 현재 배치(합체/영입 반영) 기준으로 파티 재구성.
-  gameState.party = createInitialParty(gameState.run.bonuses, gameState.run.formation || undefined);
+  // Fusion Flow 01: 현재 배치(합체/영입 반영) 기준으로 파티 재구성. Run Reward Training 01 — 대상 필터 성장 반영.
+  gameState.party = createInitialParty(gameState.run.bonuses, gameState.run.formation || undefined, gameState.run.training);
   // Stage Persistence 01 — 풀피 재생성 대신 직전 전투 결과 HP를 복원(기절 영웅은 HP 1). 첫 전투는 무영향.
   applyPersistedHp();
   gameState.enemies = createRouteEnemies(routeType, gameState.run); // 길 선택이 인카운터를 만든다
@@ -1859,6 +1887,7 @@ function applyFinish(outcome) {
     // Reward Pressure 01 — 길 프로필에 따라 성장 선택 횟수 차등(일반1 / 정예2). 보상 화면이 이 값으로 다회 선택.
     gameState.run.rewardPicks = Math.max(1, routeReward(gameState.run.currentRouteType).picks || 1);
     gameState.run.result = "victory";
+    rollRewardOffer(); // Run Reward Training 01 — 보상 진입 시 3택을 한 번 굴려 고정
     gameState.screen = "reward"; // Game Flow 01: 클리어 → 보상 선택 화면
     pushLog(`심도 ${gameState.run.depth} 클리어! 보상을 선택하세요.`);
   } else if (outcome === "clear") {

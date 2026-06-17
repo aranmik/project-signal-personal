@@ -1,5 +1,6 @@
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { stagePlan } from "../data/stages.js";
+import { combatRoleOf } from "../data/jobs.js"; // Run Reward Training 01 — 역할 기반 훈련 대상 필터
 import {
   ELITE_POOL, BOSS_ENCOUNTER,
   depthScale, bossFury, bossReadinessPressure, bossMenace, normalFormation, eliteEscort, ROLE_ACTOR, FRONT_ROLES,
@@ -39,7 +40,22 @@ export const SLOT_ORDER = ["f0", "f1", "b0", "b1"];
 export const SLOT_NAMES = { f0: "전열 1", f1: "전열 2", b0: "후열 1", b1: "후열 2" };
 export const DEFAULT_FORMATION = { f0: "warrior", f1: "guardian", b0: "archer", b1: "priest" };
 
-export function createInitialParty(bonuses = { atk: 0, maxHp: 0 }, formation = DEFAULT_FORMATION) {
+// Run Reward Training 01 — 대상 필터 성장(전열/후열/역할) 적용. 전역(all/heal)은 bonuses가 담당하고,
+//   여기서는 유닛의 배치(front/back)·combatRole(tank/melee/ranged/support/healer)에 맞는
+//   training 버킷의 atk/maxHp만 추가 가산한다. training 버킷이 없거나 combatRole이 없으면 안전히 건너뛴다.
+function applyTargetedGrowth(u, jobId, row, training) {
+  if (!training) return;
+  const role = combatRoleOf(jobId); // 2차 씨앗 등 매핑 없으면 null → 역할 훈련 대상에서 제외
+  let addAtk = 0, addHp = 0;
+  [row, role].forEach((bucket) => {
+    const t = bucket && training[bucket];
+    if (t) { addAtk += t.atk || 0; addHp += t.maxHp || 0; }
+  });
+  if (addHp) { u.maxHp += addHp; u.hp = u.maxHp; }
+  if (addAtk) u.atk += addAtk;
+}
+
+export function createInitialParty(bonuses = { atk: 0, maxHp: 0 }, formation = DEFAULT_FORMATION, training = null) {
   const party = [];
   SLOT_ORDER.forEach((slot) => {
     const jobId = formation[slot];
@@ -48,6 +64,7 @@ export function createInitialParty(bonuses = { atk: 0, maxHp: 0 }, formation = D
     u.jobId = jobId; // Stage Persistence 01 — 전투 간 HP 지속을 직업 기준으로 매칭(재배치/슬롯 이동에 안전)
     u.slotKey = slot;
     u.role = slot.startsWith("f") ? "front" : "back"; // 배치가 전열/후열을 결정
+    applyTargetedGrowth(u, jobId, u.role, training); // Run Reward Training 01 — 배치/역할 훈련 가산
     party.push(u);
   });
   return party;
@@ -313,8 +330,10 @@ export const gameState = {
     stage: 1,
     maxStage: 10,
     result: null,
-    bonuses: { atk: 0, maxHp: 0, heal: 0 }, // 누적 성장값 — 파티 재생성 시 아군 전체 적용
-    rewardLevels: {}, // Reward & Growth 01: 보상별 선택 횟수(Lv 표시용 — 효과는 bonuses가 담당)
+    bonuses: { atk: 0, maxHp: 0, heal: 0 }, // 누적 성장값(전역 all/heal 훈련) — 파티 재생성 시 아군 전체 적용
+    rewardLevels: {}, // Reward & Growth 01: 보상별 선택 횟수(Lv 표시용 — 효과는 bonuses/training이 담당)
+    training: {},     // Run Reward Training 01: 대상 필터 성장 버킷 { front/back/tank/melee/ranged/support: {atk,maxHp} }
+    rewardOffer: null, // Run Reward Training 01: 현재 보상 화면 3택(reward id 배열) — 재렌더에도 고정
     // Run Structure 01A — 선택형 여정 레이어 상태(stage=이긴 전투 수와 분리).
     depth: 1,                   // 여정 깊이(전투 + 휴식 노드 수) — 보스 도전 타이밍 감각의 기준
     bossKeys: 0,                // 보스 열쇠(정예 전투 승리로 획득)
