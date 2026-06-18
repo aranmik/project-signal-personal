@@ -48,6 +48,42 @@
   left: 14px; bottom: 2px; width: 48px; height: 8px;
   border-radius: 50%; background: rgba(0, 0, 0, 0.35);
 }
+
+/* =====================================================================
+   Avatar Main Game Port 01 — 공통 티어 발밑 링 문법
+   기본 직업: 기존 그림자만 / 1차: 은색 발밑 링 / 2차: 금색 발밑 링.
+   직업 sr-class 그룹으로 티어를 판정(개별 SR 번호 하드코딩 아님). 발밑 링은
+   직업 개별 이펙트가 아니라 티어 구분용 공통 문법 — 본체/무기/하단 실루엣을 가리지 않음.
+   ===================================================================== */
+:is(#battle-field, .av-stage) .sig-av:is(.sr-thief, .sr-warden, .sr-watchbow, .sr-trapper, .sr-paladin, .sr-vanguard, .sr-sentinel, .sr-forbidden, .sr-wall, .sr-healbow, .sr-purifier, .sr-mage, .sr-bard, .sr-gatekeeper, .sr-cleric, .sr-tracker) {
+  --tier-ring: rgba(244, 248, 255, 0.9);
+  --tier-soft: rgba(232, 240, 252, 0.2);
+  --tier-glow: rgba(232, 240, 252, 0.28);
+  --tier-mark: rgba(255, 255, 255, 0.9);
+}
+:is(#battle-field, .av-stage) .sig-av:is(.sr-dragonspear, .sr-sage, .sr-sunlord, .sr-swordsaint, .sr-redeemer, .sr-skyarcher, .sr-plaguebringer, .sr-dancer, .sr-wardkeeper) {
+  --tier-ring: rgba(240, 195, 106, 0.72);
+  --tier-soft: rgba(240, 195, 106, 0.16);
+  --tier-glow: rgba(240, 195, 106, 0.22);
+  --tier-mark: rgba(255, 240, 187, 0.78);
+}
+/* 티어 var가 정의된 직업(1차/2차)만 발밑 링으로 교체. 기본 직업은 var가 없어 기존 그림자 유지. */
+:is(#battle-field, .av-stage) .sig-av:is(.sr-thief, .sr-warden, .sr-watchbow, .sr-trapper, .sr-paladin, .sr-vanguard, .sr-sentinel, .sr-forbidden, .sr-wall, .sr-healbow, .sr-purifier, .sr-mage, .sr-bard, .sr-gatekeeper, .sr-cleric, .sr-tracker, .sr-dragonspear, .sr-sage, .sr-sunlord, .sr-swordsaint, .sr-redeemer, .sr-skyarcher, .sr-plaguebringer, .sr-dancer, .sr-wardkeeper) .shadow {
+  left: 8px; bottom: 1px; width: 60px; height: 13px;
+  border-radius: 50%;
+  border: 1px solid var(--tier-ring);
+  background:
+    radial-gradient(ellipse at center, var(--tier-soft) 0 38%, transparent 68%),
+    rgba(0, 0, 0, 0.3);
+  box-shadow: inset 0 0 0 2px var(--tier-soft), 0 0 8px var(--tier-glow);
+}
+/* 링 위 작은 티어 마크(은/금) — 소형에서도 티어가 살짝 읽히게(과하지 않게). */
+:is(#battle-field, .av-stage) .sig-av:is(.sr-thief, .sr-warden, .sr-watchbow, .sr-trapper, .sr-paladin, .sr-vanguard, .sr-sentinel, .sr-forbidden, .sr-wall, .sr-healbow, .sr-purifier, .sr-mage, .sr-bard, .sr-gatekeeper, .sr-cleric, .sr-tracker, .sr-dragonspear, .sr-sage, .sr-sunlord, .sr-swordsaint, .sr-redeemer, .sr-skyarcher, .sr-plaguebringer, .sr-dancer, .sr-wardkeeper) .shadow::before {
+  content: ""; position: absolute; left: 10px; top: 3px;
+  width: 40px; height: 7px; border-radius: 50%;
+  border-top: 1px solid var(--tier-mark);
+  pointer-events: none;
+}
 :is(#battle-field, .av-stage) .sig-av .feet {
   left: 23px; bottom: 9px; width: 30px; height: 9px;
   border-left: 9px solid transparent; border-right: 9px solid transparent;
