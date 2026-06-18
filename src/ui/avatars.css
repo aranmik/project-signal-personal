@@ -165,9 +165,10 @@
 :is(#battle-field, .av-stage) .sig-av .tail { left: 7px; bottom: 13px; width: 41px; height: 22px; border-bottom: 5px solid #9ad4f0; border-radius: 50%; transform: rotate(-18deg); z-index: 3; }
 
 /* ---- 직업별 모디파이어 (SR-01~24) ---- */
-:is(#battle-field, .av-stage) .sig-av.sr-warrior .body { left: 20px; width: 36px; border-color: var(--gold, #f0c36a); background: #68717e; }
-:is(#battle-field, .av-stage) .sig-av.sr-warrior .shield { left: 3px; top: 29px; width: 34px; height: 42px; border-width: 4px; border-color: #f0c36a; background: #4b5564; z-index: 6; }
-:is(#battle-field, .av-stage) .sig-av.sr-warrior .sword { right: 3px; top: 16px; height: 50px; }
+:is(#battle-field, .av-stage) .sig-av.sr-warrior .body { left: 22px; width: 33px; border-color: var(--gold, #f0c36a); background: #68717e; }
+/* Avatar Main Game Port 02 — SR-01 전사 정본: 방패 제거, 검 단독 공격형. (수호자와 방패 유무로 분리) */
+:is(#battle-field, .av-stage) .sig-av.sr-warrior .shield { display: none; }
+:is(#battle-field, .av-stage) .sig-av.sr-warrior .sword { right: 8px; top: 8px; width: 9px; height: 58px; transform: rotate(11deg); }
 :is(#battle-field, .av-stage) .sig-av.sr-guardian .body,
 :is(#battle-field, .av-stage) .sig-av.sr-wall .body { border-color: #d8dfe8; background: #4c5662; }
 :is(#battle-field, .av-stage) .sig-av.sr-priest .body,
@@ -254,8 +255,9 @@
 :is(#battle-field, .av-stage) .sig-av.sr-forbidden .chain::after { content: ""; position: absolute; left: -6px; bottom: -7px; width: 12px; height: 8px; border-radius: 50%; background: #9ba8bb; }
 :is(#battle-field, .av-stage) .sig-av.sr-tracker .bow { display: none; }
 :is(#battle-field, .av-stage) .sig-av.sr-tracker .rifle { left: 2px; top: 38px; }
-:is(#battle-field, .av-stage) .sig-av.sr-dragonspear .wing { left: 3px; top: 25px; width: 28px; height: 36px; border-color: #79d88a; background: rgba(150,47,43,.42); }
-:is(#battle-field, .av-stage) .sig-av.sr-dragonspear .tail { left: 7px; bottom: 12px; border-bottom-color: #79d88a; }
+/* Avatar Main Game Port 02 — SR-22 용창 정본: 꼬리가 핵심 → 날개를 작게/뒤로, 꼬리를 앞으로(가림 방지). */
+:is(#battle-field, .av-stage) .sig-av.sr-dragonspear .wing { left: 3px; top: 22px; width: 24px; height: 30px; border-color: #79d88a; background: rgba(150,47,43,.42); z-index: 2; }
+:is(#battle-field, .av-stage) .sig-av.sr-dragonspear .tail { left: 7px; bottom: 12px; border-bottom-color: #c84b43; box-shadow: 0 4px 0 rgba(121,216,138,.32); z-index: 4; }
 :is(#battle-field, .av-stage) .sig-av.sr-dragonspear .lance { right: 4px; top: 8px; z-index: 7; background: #79d88a; box-shadow: 0 0 8px rgba(121,216,138,.22); }
 :is(#battle-field, .av-stage) .sig-av.sr-dragonspear .horn { background: #c9564b; filter: drop-shadow(0 0 2px rgba(121,216,138,.42)); }
 :is(#battle-field, .av-stage) .sig-av.sr-dragonspear .horn.left { left: 17px; }
@@ -275,6 +277,53 @@
 :is(#battle-field, .av-stage) .sig-av .reverse-dagger { right: 7px; top: 31px; width: 6px; height: 34px; border-radius: 4px; background: #dce8f5; transform: rotate(-36deg); z-index: 6; }
 :is(#battle-field, .av-stage) .sig-av .long-shadow { left: 5px; bottom: 6px; width: 62px; height: 18px; border-radius: 50%; background: rgba(0,0,0,.38); transform: rotate(-16deg); z-index: 1; }
 :is(#battle-field, .av-stage) .sig-av .flame { right: 8px; top: 7px; width: 16px; height: 24px; border-radius: 50% 50% 50% 0; background: #f0c36a; transform: rotate(-35deg); box-shadow: 0 0 12px rgba(240,195,106,.35); z-index: 6; }
+
+/* =====================================================================
+   Avatar Main Game Port 02 — SR-25~30 2차 신규 확정 아바타 파츠/직업 클래스
+   갤러리 ad59271 LOCK 확정안(검성C/구원자A/천궁C/역병술사A/무희C/결계장D) 이식.
+   파츠 색은 --av-accent(직업별)로. 모바일 WATCH: 결계 엣지 3px / 십자가 3개 간격 확대 / 무희 발끝빛 분리.
+   ===================================================================== */
+:is(#battle-field, .av-stage) .sig-av .iaido-arc { left: 6px; top: 18px; width: 64px; height: 42px; border-top: 4px solid var(--av-accent, #f6d58c); border-radius: 50%; transform: rotate(-24deg); z-index: 5; }
+:is(#battle-field, .av-stage) .sig-av .sight-slit { left: 24px; top: 23px; width: 28px; height: 5px; border-radius: 5px; background: #10151d; box-shadow: 0 0 0 2px rgba(255,255,255,.14); z-index: 8; }
+:is(#battle-field, .av-stage) .sig-av .life-line { left: 9px; top: 22px; width: 54px; height: 34px; border-top: 4px solid var(--av-accent, #b7ffe4); border-radius: 50%; transform: rotate(-24deg); z-index: 5; }
+:is(#battle-field, .av-stage) .sig-av .triple-cross { right: 9px; top: 8px; width: 10px; height: 10px; background: var(--av-accent, #b7ffe4); clip-path: polygon(38% 0, 62% 0, 62% 36%, 100% 36%, 100% 62%, 62% 62%, 62% 100%, 38% 100%, 38% 62%, 0 62%, 0 36%, 38% 36%); box-shadow: 0 0 8px rgba(183,255,228,.34); z-index: 8; }
+:is(#battle-field, .av-stage) .sig-av .triple-cross::before { content: ""; position: absolute; left: -21px; top: 11px; width: 8px; height: 8px; background: var(--av-accent, #b7ffe4); clip-path: inherit; opacity: .86; }
+:is(#battle-field, .av-stage) .sig-av .triple-cross::after { content: ""; position: absolute; left: -8px; top: 27px; width: 8px; height: 8px; background: var(--av-accent, #b7ffe4); clip-path: inherit; opacity: .72; }
+:is(#battle-field, .av-stage) .sig-av .constellation { left: 8px; top: 6px; width: 60px; height: 32px; border-top: 3px dotted var(--av-accent, #b8dcff); border-radius: 50%; transform: rotate(-18deg); z-index: 6; }
+:is(#battle-field, .av-stage) .sig-av .constellation::before { content: ""; position: absolute; left: 7px; top: 8px; width: 5px; height: 5px; border-radius: 50%; background: var(--av-accent, #b8dcff); box-shadow: 19px -7px 0 var(--av-accent, #b8dcff), 38px 2px 0 var(--av-accent, #b8dcff); }
+:is(#battle-field, .av-stage) .sig-av .sky-mark { right: 6px; top: 6px; width: 17px; height: 17px; background: var(--av-accent, #b8dcff); clip-path: polygon(50% 0, 61% 36%, 98% 35%, 68% 57%, 79% 93%, 50% 70%, 21% 93%, 32% 57%, 2% 35%, 39% 36%); box-shadow: 0 0 11px rgba(154,212,240,.32); z-index: 8; }
+:is(#battle-field, .av-stage) .sig-av .command-arrow { left: 10px; top: 24px; width: 56px; height: 3px; border-radius: 4px; background: var(--av-accent, #b8dcff); transform: rotate(-48deg); z-index: 7; }
+:is(#battle-field, .av-stage) .sig-av .plague-cloud { left: 2px; top: 7px; width: 22px; height: 22px; border-radius: 50%; background: rgba(182,222,131,.46); box-shadow: 16px 10px 0 rgba(182,222,131,.32), 34px 2px 0 rgba(182,222,131,.22); z-index: 5; }
+:is(#battle-field, .av-stage) .sig-av .infection-dot { right: 8px; top: 11px; width: 8px; height: 8px; border-radius: 50%; background: var(--av-accent, #b6de83); box-shadow: -14px 10px 0 rgba(182,222,131,.7), 5px 16px 0 rgba(182,222,131,.56); z-index: 8; }
+:is(#battle-field, .av-stage) .sig-av .rhythm-orbit { left: 6px; top: 16px; width: 64px; height: 46px; border-top: 5px solid var(--av-accent, #ff9fc8); border-right: 4px solid rgba(239,154,154,.3); border-radius: 50%; transform: rotate(22deg); z-index: 5; }
+:is(#battle-field, .av-stage) .sig-av .double-ribbon { left: 5px; top: 14px; width: 66px; height: 48px; border-top: 5px solid var(--av-accent, #ff9fc8); border-left: 4px solid rgba(255,255,255,.16); border-radius: 50%; transform: rotate(-31deg); z-index: 5; }
+:is(#battle-field, .av-stage) .sig-av .step-spark { right: 8px; bottom: 14px; width: 13px; height: 13px; background: var(--av-accent, #ff9fc8); clip-path: polygon(50% 0, 66% 35%, 100% 50%, 66% 65%, 50% 100%, 34% 65%, 0 50%, 34% 35%); box-shadow: 0 0 9px rgba(255,255,255,.2); z-index: 8; }
+:is(#battle-field, .av-stage) .sig-av .hex-field { left: 6px; top: 11px; width: 64px; height: 56px; border: 3px solid var(--av-accent, #cbd9ff); clip-path: polygon(24% 0, 76% 0, 100% 50%, 76% 100%, 24% 100%, 0 50%); background: rgba(255,255,255,.04); z-index: 4; }
+:is(#battle-field, .av-stage) .sig-av .anchor-sigil { left: 30px; top: 30px; width: 20px; height: 20px; border: 3px solid var(--av-accent, #cbd9ff); border-radius: 50%; z-index: 8; }
+:is(#battle-field, .av-stage) .sig-av .formation { left: 11px; top: 39px; width: 54px; height: 22px; border: 2px solid var(--av-accent, #cbd9ff); border-radius: 8px; background: linear-gradient(90deg, transparent 31%, rgba(216,223,232,.22) 32% 36%, transparent 37% 64%, rgba(216,223,232,.22) 65% 69%, transparent 70%); z-index: 4; }
+
+/* SR-25 검성(C) */
+:is(#battle-field, .av-stage) .sig-av.sr-swordsaint { --av-accent: #f6d58c; }
+:is(#battle-field, .av-stage) .sig-av.sr-swordsaint .body { border-color: #f6d58c; background: #3f4652; transform: skewX(-14deg); }
+:is(#battle-field, .av-stage) .sig-av.sr-swordsaint .sword { right: 13px; top: 12px; height: 55px; transform: rotate(72deg); }
+/* SR-26 구원자(A) */
+:is(#battle-field, .av-stage) .sig-av.sr-redeemer { --av-accent: #b7ffe4; }
+:is(#battle-field, .av-stage) .sig-av.sr-redeemer .body { border-color: #b7ffe4; background: #3a5c55; }
+:is(#battle-field, .av-stage) .sig-av.sr-redeemer .aura { border-color: rgba(183,255,228,.3); box-shadow: 0 0 14px rgba(183,255,228,.12); }
+/* SR-27 천궁(C) */
+:is(#battle-field, .av-stage) .sig-av.sr-skyarcher { --av-accent: #b8dcff; }
+:is(#battle-field, .av-stage) .sig-av.sr-skyarcher .body { border-color: #b8dcff; background: #354966; }
+:is(#battle-field, .av-stage) .sig-av.sr-skyarcher .bow { right: 5px; opacity: .92; border-right-color: #b8dcff; }
+:is(#battle-field, .av-stage) .sig-av.sr-skyarcher .bow::before { background: rgba(184,220,255,.85); }
+/* SR-28 역병술사(A) */
+:is(#battle-field, .av-stage) .sig-av.sr-plaguebringer { --av-accent: #b6de83; }
+:is(#battle-field, .av-stage) .sig-av.sr-plaguebringer .body { border-color: #b6de83; background: #304635; }
+/* SR-29 무희(C) */
+:is(#battle-field, .av-stage) .sig-av.sr-dancer { --av-accent: #ff9fc8; }
+:is(#battle-field, .av-stage) .sig-av.sr-dancer .body { border-color: #ff9fc8; background: #57405b; }
+/* SR-30 결계장(D) */
+:is(#battle-field, .av-stage) .sig-av.sr-wardkeeper { --av-accent: #cbd9ff; }
+:is(#battle-field, .av-stage) .sig-av.sr-wardkeeper .body { border-color: #cbd9ff; background: #414d5c; }
 
 /* =====================================================================
    Avatar 호스트(카드/합체/도감) + Job Codex Entry Foundation 화면 레이아웃

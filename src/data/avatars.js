@@ -64,6 +64,14 @@ export const CODEX_ENTRIES = [
   { code: "SR-22", name: "용창",   job: "dragonspear", sr: "sr-dragonspear", status: "wip",   parts: ["shadow", "wing", "tail", "horn left", "horn right", "lance", "feet", "body", "head"] },
   { code: "SR-23", name: "현자",   job: "sage",        sr: "sr-sage",       status: "wip",    parts: ["aura", "shadow", "orb", "scroll", "feet", "body", "head"] },
   { code: "SR-24", name: "성황",   job: "sunlord",     sr: "sr-sunlord",    status: "wip",    parts: ["sun", "shadow", "crown", "staff", "feet", "body", "head"] },
+  // Avatar Main Game Port 02 — SR-25~30 2차 신규 확정 아바타 씨앗(정식 해금 아님 — 도감/Dev 확인용).
+  //   AVATAR_SPEC은 아래 자동 보강 루프가 sr-class에서 생성한다. status "wip"(도감 "준비 중").
+  { code: "SR-25", name: "검성",     job: "swordsaint",    sr: "sr-swordsaint",    status: "wip", parts: ["shadow", "feet", "body", "head", "iaido-arc", "sword", "sight-slit"] },
+  { code: "SR-26", name: "구원자",   job: "redeemer",      sr: "sr-redeemer",      status: "wip", parts: ["aura", "shadow", "feet", "body", "head", "life-line", "triple-cross"] },
+  { code: "SR-27", name: "천궁",     job: "skyarcher",     sr: "sr-skyarcher",     status: "wip", parts: ["shadow", "feet", "body", "head", "constellation", "bow", "command-arrow", "sky-mark"] },
+  { code: "SR-28", name: "역병술사", job: "plaguebringer", sr: "sr-plaguebringer", status: "wip", parts: ["shadow", "feet", "body", "head", "plague-cloud", "vial", "mask", "infection-dot"] },
+  { code: "SR-29", name: "무희",     job: "dancer",        sr: "sr-dancer",        status: "wip", parts: ["shadow", "feet", "body", "head", "rhythm-orbit", "double-ribbon", "step-spark"] },
+  { code: "SR-30", name: "결계장",   job: "wardkeeper",    sr: "sr-wardkeeper",    status: "wip", parts: ["aura", "shadow", "feet", "body", "head", "hex-field", "formation", "anchor-sigil"] },
 ];
 
 export const CODEX_STATUS_LABEL = { base: "기본 직업", fusion: "합체 직업", wip: "준비 중" };
