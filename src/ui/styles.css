@@ -6,6 +6,25 @@
 
 [hidden] { display: none !important; }
 
+/* Second Class Test Access 01 — Dev(?dev=1) 전용 2차 직업 테스트 패널(타이틀). URL 플래그로만 생성됨. */
+#dev-2nd-panel {
+  margin-top: 14px;
+  padding: 10px;
+  border: 1px dashed rgba(232, 90, 90, 0.7);
+  border-radius: 10px;
+  background: rgba(232, 90, 90, 0.08);
+}
+#dev-2nd-panel .dev-2nd-title {
+  font-size: 11px; font-weight: 800; color: #f0a0a0; letter-spacing: 0.03em; margin-bottom: 8px; text-align: center;
+}
+#dev-2nd-panel .dev-2nd-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+#dev-2nd-panel button {
+  padding: 8px 6px; font-size: 12px; font-weight: 700;
+  border: 1px solid #5a3a3a; border-radius: 8px;
+  background: #2a1e22; color: #f3dada; cursor: pointer;
+}
+#dev-2nd-panel button:active { transform: translateY(1px); }
+
 /* Dev Cheat Mode 01 — 불사 테스트 배지(개발자 모드 표시). URL 플래그로만 생성됨. 작고 비차단(상단 우측 고정). */
 #dev-immortal-badge {
   position: fixed;

@@ -317,15 +317,17 @@ export function createLayoutPreviewEnemies(caseId) {
   }
 }
 
-// Dev Cheat Mode 01 — URL 플래그로만 켜지는 개발자 테스트 옵션(기본 OFF). 일반 Pages 접속엔 영향 없음.
-//   immortal: ?dev=1&immortal=1 일 때만 true. 아군이 죽지 않아 합체/1차/시인성/보상 흐름 테스트 접근성 확보.
-//   밸런스/수치/몬스터/보상/심도 스케일은 일절 변경하지 않음 — 아군 HP 최소 1 클램프(dealRaw)만 추가된다.
+// Dev Cheat Mode 01 → Second Class Test Access 01 — URL 플래그로만 켜지는 개발자 테스트 옵션(기본 OFF).
+//   on:       ?dev=1 — 개발자 모드(2차 직업 테스트 패널 등 Dev 도구 노출 게이트).
+//   immortal: ?dev=1&immortal=1 — 아군 최소 HP 1 유지(전멸 없이 기능 테스트). dealRaw 클램프.
+//   일반 Pages 접속(파라미터 없음)엔 아무 영향 없음. 밸런스/수치/일반 흐름은 변경하지 않는다.
 function readDevFlags() {
   try {
     const p = new URLSearchParams((typeof location !== "undefined" && location.search) || "");
-    return { immortal: p.get("dev") === "1" && p.get("immortal") === "1" };
+    const on = p.get("dev") === "1";
+    return { on, immortal: on && p.get("immortal") === "1" };
   } catch (e) {
-    return { immortal: false };
+    return { on: false, immortal: false };
   }
 }
 

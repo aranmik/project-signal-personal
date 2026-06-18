@@ -21,6 +21,32 @@ if (gameState.dev && gameState.dev.immortal) {
   console.log("[DEV] Immortal Mode ON — 아군 최소 HP 1 유지. 끄려면 URL에서 ?dev=1&immortal=1 제거.");
 }
 
+// Second Class Test Access 01 — Dev(?dev=1)일 때만 타이틀에 "2차 직업 테스트" 패널을 노출.
+//   정식 해금이 아님 — 2차 씨앗(용창/현자/성황)의 전투 기능을 즉석 확인하기 위한 Dev 전용 접근.
+//   안전성: 각 버튼은 startRun(formation)으로 "새 런"을 시작(직업 선택 시작과 동일 경로) → 파티 4인·중복 없음·
+//   슬롯/스탯/아바타/상태칩이 정상 구성된다. 일반 합체/영입/레시피/흐름은 일절 건드리지 않음.
+if (gameState.dev && gameState.dev.on) {
+  const TESTS = [
+    { label: "용창 테스트", formation: { f0: "dragonspear", f1: "warrior", b0: "archer", b1: "priest" } },
+    { label: "현자 테스트", formation: { f0: "warrior", f1: "guardian", b0: "sage", b1: "priest" } },
+    { label: "성황 테스트", formation: { f0: "warrior", f1: "guardian", b0: "sunlord", b1: "priest" } },
+    { label: "2차 3종 함께", formation: { f0: "dragonspear", f1: "sunlord", b0: "sage", b1: "priest" } },
+  ];
+  const panel = document.createElement("div");
+  panel.id = "dev-2nd-panel";
+  panel.innerHTML =
+    `<div class="dev-2nd-title">DEV 2차 직업 테스트 · 정식 해금 아님</div>` +
+    `<div class="dev-2nd-btns">${TESTS.map((t, i) => `<button type="button" data-dev2nd="${i}">${t.label}</button>`).join("")}</div>`;
+  panel.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-dev2nd]");
+    if (!b) return;
+    const t = TESTS[Number(b.dataset.dev2nd)];
+    if (t) startRun({ ...t.formation });
+  });
+  (document.getElementById("title-inner") || document.body).appendChild(panel);
+  console.log("[DEV] 2차 직업 테스트 패널 ON (?dev=1). 정식 해금 아님 — 버튼으로 2차 씨앗 파티 전투 시작.");
+}
+
 renderGame(gameState);
 
 // First Class Expansion 01 — dev 테스트 훅(일반 UI 무관). 콘솔에서 임의 4직업 파티로 전투 시작:
