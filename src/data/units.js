@@ -146,6 +146,11 @@ export const UNIT_TEMPLATES = {
     swordsaint: { id: "swordsaint", name: "검성",   team: "party", job: "swordsaint", role: "front", grammar: "strike", visual: "warrior", avatarKey: "swordsaint", maxHp: 110, atk: 16, speed: 8 },
     skyarcher:  { id: "skyarcher",  name: "천궁",   team: "party", job: "skyarcher",  role: "back",  grammar: "snipe",  visual: "archer",  avatarKey: "skyarcher",  maxHp: 82,  atk: 15, speed: 8 },
     wardkeeper: { id: "wardkeeper", name: "결계장", team: "party", job: "wardkeeper", role: "front", grammar: "protect",visual: "guardian",avatarKey: "wardkeeper", maxHp: 130, atk: 10, speed: 6 },
+    // Second Class Mechanics Batch 2 — SR-26/28/29 2차 전투 씨앗(정식 미해금, Dev 전투 테스트용).
+    //   구원자=위기구조 힐러 / 역병술사=감염 디버퍼 / 무희=예측가능 박자 버퍼. 보수적 임시 수치(밸런스 아님).
+    redeemer:     { id: "redeemer",     name: "구원자",   team: "party", job: "redeemer",     role: "back", grammar: "heal",   visual: "priest", avatarKey: "redeemer",     maxHp: 90, atk: 9,  speed: 7 },
+    plaguebringer:{ id: "plaguebringer",name: "역병술사", team: "party", job: "plaguebringer",role: "back", grammar: "snipe",  visual: "archer", avatarKey: "plaguebringer",maxHp: 80, atk: 12, speed: 8 },
+    dancer:       { id: "dancer",       name: "무희",     team: "party", job: "dancer",       role: "back", grammar: "harass", visual: "archer", avatarKey: "dancer",       maxHp: 84, atk: 10, speed: 8 },
   },
 
   enemies: {

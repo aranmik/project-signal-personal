@@ -870,6 +870,15 @@ function processStatusesBeforeAction(unit) {
     killIfDead(unit);
   }
 
+  // Second Class Batch 2 — 역병술사 감염: 소량 고정 지속 피해. 로그 과밀/보스 과피해 방지(per-tick 로그 없이 숫자 FX만, 고정 2).
+  const infection = !unit.isDead && unit.statuses.find((s) => s.type === "infection");
+  if (infection) {
+    const iDmg = infection.tick || 2;
+    applyDamage(unit, iDmg);
+    playStatusTickFx({ targetInstanceId: unit.instanceId, amount: iDmg, kind: "poison" });
+    killIfDead(unit);
+  }
+
   unit.statuses.forEach((s) => { s.duration -= 1; });
   unit.statuses = unit.statuses.filter((s) => s.duration > 0);
   // Combat Grammar Foundation 01 — 도발이 만료(타임아웃)되면 강제 타겟(tauntedBy)도 함께 해제(영구 도발 방지).
@@ -1523,6 +1532,89 @@ function runDataSkill(unit, meta) {
       playSupportFx({ casterInstanceId: unit.instanceId, text: "결계 보강!", kind: meta.kind, guardInstanceId: t.instanceId });
       return true;
     }
+    case "rescue": { // 구원자(SR-26) — 구원선 부여(전투당 1회) + 보조(정화 우선→소량 회복). 발동은 dealRaw triggerSalvation.
+      const hasSalv = aliveParty().some((a) => hasStatus(a, "salvation"));
+      if (!hasSalv && !unit.salvationGiven) {
+        const t = selectSalvationTarget(); // HP비율 최저 > maxHp 낮음 > 후열
+        if (t) {
+          applyStatus(t, { type: "salvation", duration: 999 }); // 전투 내내 유지(소모 전까지). 999=사실상 영구
+          unit.salvationGiven = true; // 전투당 1회 — 소모 후 재부여하지 않음
+          pushLog(`${unit.name}${josa(unit.name, "이가")} ${t.name}에게 구원선을 잇는다.`);
+          playSupportFx({ casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind, guardInstanceId: t.instanceId });
+          playStatusApplyFx(t.instanceId, "구원", "up");
+          return true;
+        }
+      }
+      // 보조: 디버프 있으면 정화 1개 우선 → 아니면 소량 회복(유지력 과다 방지). 둘 다 불가면 기본 공격.
+      const NEG = ["poison", "infection", "atkDown", "speedDown", "slow", "defDown"];
+      const debuffed = aliveParty().find((a) => (a.statuses || []).some((s) => NEG.includes(s.type)));
+      if (debuffed) {
+        removeOneNegStatus(debuffed);
+        pushLog(`${unit.name}${josa(unit.name, "이가")} ${debuffed.name}의 해로운 효과를 씻어냈다.`);
+        playSupportFx({ casterInstanceId: unit.instanceId, text: "정화!", kind: meta.kind, guardInstanceId: debuffed.instanceId });
+        return true;
+      }
+      const hurt = lowestRatioAllyHurt(0.95);
+      if (!hurt) return false;
+      const amt = healUnit(hurt, L.rescueHeal ?? 5);
+      if (amt > 0) playSupportFx({ casterInstanceId: unit.instanceId, text: null, kind: "heal", heals: [{ targetInstanceId: hurt.instanceId, amount: amt }] });
+      return true;
+    }
+    case "infect": { // 역병술사(SR-28) — 감염 부여 + 제한 확산(행동 2회마다·최대 3) + 감염 대상 우선 공격.
+      const enemies = aliveEnemies();
+      if (!enemies.length) return false;
+      const infected = enemies.filter((e) => hasStatus(e, "infection"));
+      if (infected.length === 0) { // 감염 0 → 새 감염 부여
+        const t = selectInfectTarget(enemies);
+        if (!t) return false;
+        applyInfection(t, L);
+        pushLog(`${unit.name}${josa(unit.name, "이가")} 감염을 뿌린다.`);
+        skillShout(unit, meta.name + "!", meta.kind);
+        return true;
+      }
+      // 제한 확산: 행동 2~3회마다 1회, 미감염 대상, 최대 maxInfected까지(무한 확산/매틱 확산 금지)
+      if (unit.actionCount % (L.spreadEvery ?? 2) === 0 && infected.length < (L.maxInfected ?? 3)) {
+        const uninfected = enemies.filter((e) => !hasStatus(e, "infection"));
+        const t = selectInfectTarget(uninfected);
+        if (t) {
+          applyInfection(t, L);
+          pushLog("감염이 번졌다.");
+          return true;
+        }
+      }
+      // 평소: 가장 약한 감염 대상 우선 공격(추가 피해는 표식 정체성으로 충분 — 단순 유지).
+      const target = infected.slice().sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+      performAttack(unit, target, { mult: L.mult ?? 1.0, lineType: "ranged", skill: meta });
+      return true;
+    }
+    case "dance": { // 무희(SR-29) — 예측 가능한 1박/2박/3박 순환 버프(게이지/속도 무조작, 행동 카운트 기반).
+      const others = aliveParty().filter((a) => a !== unit);
+      unit.beat = ((unit.beat || 0) % 3) + 1; // 1→2→3→1
+      if (unit.beat === 1) { // 고양 — 최고 ATK 아군 공격 강화
+        const t = (others.length ? others : [unit]).slice().sort((a, b) => b.atk - a.atk)[0];
+        applyCombatStatus(t, "atkUp", L.exaltPct ?? 0.10);
+        pushLog(`${unit.name} 1박, 고양!`);
+        skillShout(unit, "1박!", meta.kind);
+      } else if (unit.beat === 2) { // 회전 — HP 낮은 아군 회복(없으면 최저 아군 보호막)
+        const hurt = lowestRatioAllyHurt(0.95);
+        if (hurt) {
+          const amt = healUnit(hurt, L.healAmt ?? 5);
+          pushLog(`${unit.name} 2박, 회전!`);
+          playSupportFx({ casterInstanceId: unit.instanceId, text: "2박!", kind: "heal", heals: amt > 0 ? [{ targetInstanceId: hurt.instanceId, amount: amt }] : [] });
+        } else {
+          const t = lowestRatioAllyAny() || unit;
+          grantShieldTo(unit, t, L.beat2Shield ?? 4);
+          pushLog(`${unit.name} 2박, 회전!`);
+          playSupportFx({ casterInstanceId: unit.instanceId, text: "2박!", kind: "guard", guardInstanceId: t.instanceId });
+        }
+      } else { // 피날레 — 아군 전체 작은 보호막
+        const party = aliveParty();
+        party.forEach((a) => grantShieldTo(unit, a, L.finaleShield ?? 3));
+        pushLog(`${unit.name} 3박, 피날레!`);
+        playSupportFx({ casterInstanceId: unit.instanceId, text: "피날레!", kind: "guard", guardInstanceId: unit.instanceId, heals: party.map((a) => ({ targetInstanceId: a.instanceId, amount: 0 })) });
+      }
+      return true;
+    }
     default:
       return false;
   }
@@ -1592,6 +1684,58 @@ function damagedUnshieldedAlly() {
   if (c.length === 0) return null;
   return c.reduce((a, b) => (a.hp / a.maxHp <= b.hp / b.maxHp ? a : b));
 }
+// ── Second Class Batch 2 — 구원자/역병술사 공용 헬퍼 ───────────────────────
+// 구원선 대상: HP 비율 최저 > 최대 HP 낮음 > 후열 아군.
+function selectSalvationTarget() {
+  const a = aliveParty();
+  if (!a.length) return null;
+  return a.slice().sort((x, y) =>
+    x.hp / x.maxHp - y.hp / y.maxHp
+    || x.maxHp - y.maxHp
+    || (y.role === "back" ? 1 : 0) - (x.role === "back" ? 1 : 0)
+  )[0];
+}
+// 감염 대상: 보스 제외 일반/정예 중 HP 비율 높은 적 우선(없으면=적 적으면 보스 허용), 공격력 높은 적.
+function selectInfectTarget(pool) {
+  if (!pool || !pool.length) return null;
+  const nonBoss = pool.filter((e) => e.tier !== "boss");
+  const cand = nonBoss.length ? nonBoss : pool;
+  return cand.slice().sort((x, y) =>
+    y.hp / y.maxHp - x.hp / x.maxHp
+    || (y.atk || 0) - (x.atk || 0)
+  )[0];
+}
+// 감염 부여: 감염 상태(지속 피해 tick) + 기존 defDown(방어 소폭↓) 재사용. '감염' 머리 위 표식 1회.
+function applyInfection(target, L) {
+  applyStatus(target, { type: "infection", duration: L.infectTurns ?? 3, tick: L.infectTick ?? 2 });
+  applyStatus(target, { type: "defDown", duration: L.infectTurns ?? 3, pct: L.infectDefDown ?? 0.12 });
+  playStatusApplyFx(target.instanceId, "감염", "down");
+}
+// 디버프 1개만 제거(정화사 removeNegStatus는 전부 제거 — 구원자/구원선은 1개 정책). 제거 성공 시 true.
+function removeOneNegStatus(unit) {
+  const NEG = ["poison", "infection", "atkDown", "speedDown", "slow", "defDown"];
+  const i = (unit.statuses || []).findIndex((s) => NEG.includes(s.type));
+  if (i >= 0) { unit.statuses.splice(i, 1); return true; }
+  return false;
+}
+// 구원선 발동: 치명 피해 직전 1회(dealRaw에서 호출). 부활/사망 lifecycle 무변경 — HP가 0 이하가 될 피해를 가로챈다.
+//   구원 소모 + maxHp healPct 회복 + 보호막 + 디버프 1개 제거. immortal과 독립(클램프보다 먼저 판정).
+function triggerSalvation(target) {
+  const L = skillOf("redeemer")?.logic || {};
+  target.statuses = (target.statuses || []).filter((s) => s.type !== "salvation");
+  target.hp = Math.max(1, Math.round(target.maxHp * (L.healPct ?? 0.20)));
+  target.shield = Math.max(target.shield || 0, L.shield ?? 7);
+  removeOneNegStatus(target);
+  const redeemer = gameState.party.find((u) => !u.isDead && u.id === "redeemer");
+  pushLog(`${redeemer ? redeemer.name : "구원자"}, 죽음을 붙잡았다! ${target.name} 구원 발동.`);
+  playSupportFx({
+    casterInstanceId: (redeemer || target).instanceId,
+    text: "구원 발동!", kind: "heal",
+    heals: [{ targetInstanceId: target.instanceId, amount: 0 }],
+    guardInstanceId: target.instanceId,
+  });
+  playStatusApplyFx(target.instanceId, "구원", "up");
+}
 function lowestRatioEnemy(enemies, maxRatio) {
   const c = enemies.filter((u) => u.hp / u.maxHp <= maxRatio);
   if (c.length === 0) return null;
@@ -1621,7 +1765,15 @@ function dealRaw(target, dmg) {
     target.shield = sh - absorbed;
     remaining -= absorbed;
   }
-  if (remaining > 0) target.hp -= remaining;
+  if (remaining > 0) {
+    // Second Class Batch 2 — 구원자 구원선: shield 흡수 후에도 이 피해로 HP가 0 이하가 될 치명이면 1회 개입.
+    //   사망/부활 lifecycle을 건드리지 않고 "치명 피해를 받기 직전"에 가로챈다. immortal 클램프보다 먼저 판정.
+    if (remaining >= target.hp && hasStatus(target, "salvation") && gameState.party.includes(target)) {
+      triggerSalvation(target);
+      return;
+    }
+    target.hp -= remaining;
+  }
   // Dev Cheat Mode 01 — Immortal: 아군 영웅은 dev immortal일 때 최소 HP 1 유지(모든 피해 경로의 공통 싱크).
   //   적/몬스터엔 미적용(정상 사망). 일반 모드(dev OFF)에선 분기 자체가 false라 동작 완전 동일.
   if (gameState.dev && gameState.dev.immortal && target.hp < 1 && gameState.party.includes(target)) {

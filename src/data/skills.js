@@ -84,6 +84,17 @@ export const SKILLS = {
   //   결계장 진형 결계: 첫 행동 파티 보호막(전열 추가/후열 완충) + 주기적 앵커 보강. 성황 피해무효와 분리(감소/완충).
   wardkeeper:{ id: "wardfield", name: "진형 결계", kind: "guard",
     logic: { type: "wardfield", partyShield: 6, frontShield: 10, backGuardPct: 0.15, backGuardTurns: 2 } },
+
+  // Second Class Mechanics Batch 2 — SR-26/28/29 2차 전투 씨앗(정식 미해금, Dev 전투 테스트용).
+  //   구원자 구원선: 첫 행동에 아군 1명 '구원' 부여 → 치명 피해 직전 1회 개입(dealRaw/triggerSalvation). 보조=정화 우선+소량 회복.
+  redeemer:     { id: "rescue", name: "구원선", kind: "support",
+    logic: { type: "rescue", healPct: 0.20, shield: 7, rescueHeal: 5 } },
+  //   역병술사 감염: 적 1명 '감염'(지속 피해+defDown) → 행동 2회마다 1명 제한 확산(최대 3). 감염 대상 우선 공격.
+  plaguebringer:{ id: "plague", name: "감염", kind: "support",
+    logic: { type: "infect", mult: 1.0, infectTurns: 3, infectTick: 2, infectDefDown: 0.12, maxInfected: 3, spreadEvery: 2 } },
+  //   무희 박자: 행동마다 1박씩 진행(예측 가능). 1박 고양(atkUp) / 2박 회전(회복·보호막) / 3박 피날레(전체 보호막).
+  dancer:       { id: "dance", name: "박자", kind: "support",
+    logic: { type: "dance", exaltPct: 0.10, healAmt: 5, beat2Shield: 4, finaleShield: 3 } },
 };
 
 export function skillOf(jobId) {

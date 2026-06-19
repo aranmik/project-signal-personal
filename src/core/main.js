@@ -36,6 +36,11 @@ if (gameState.dev && gameState.dev.on) {
     { label: "천궁 테스트", formation: { f0: "warrior", f1: "guardian", b0: "skyarcher", b1: "priest" } },
     { label: "결계장 테스트", formation: { f0: "wardkeeper", f1: "warrior", b0: "archer", b1: "priest" } },
     { label: "2차 Batch1 함께", formation: { f0: "swordsaint", f1: "wardkeeper", b0: "skyarcher", b1: "priest" } },
+    // Second Class Mechanics Batch 2 — SR-26 구원자 / SR-28 역병술사 / SR-29 무희 Dev 전투 씨앗.
+    { label: "구원자 테스트", formation: { f0: "warrior", f1: "guardian", b0: "redeemer", b1: "archer" } },
+    { label: "역병술사 테스트", formation: { f0: "warrior", f1: "guardian", b0: "plaguebringer", b1: "priest" } },
+    { label: "무희 테스트", formation: { f0: "warrior", f1: "guardian", b0: "dancer", b1: "archer" } },
+    { label: "2차 Batch2 함께", formation: { f0: "guardian", f1: "dancer", b0: "redeemer", b1: "plaguebringer" } },
   ];
   const panel = document.createElement("div");
   panel.id = "dev-2nd-panel";

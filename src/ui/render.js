@@ -1085,6 +1085,10 @@ const STATUS_CHIP = {
   mark: { t: "표식", c: "mark" },
   // Second Class Batch 1A — 검성 결투 표식(전용 칩, mark 색 공유). 천궁은 mark("표식")+defDown("방↓") 재사용.
   duel: { t: "결투", c: "mark" },
+  // Second Class Batch 2 — 구원자 구원선(실제 salvation 상태) / 역병술사 감염(실제 infection 상태) / 무희 리듬(합성).
+  salvation: { t: "구원", c: "up" },
+  infection: { t: "감염", c: "poison" },
+  rhythm: { t: "리듬", c: "up" },
   charging: { t: "충전", c: "charge" },
   bond: { t: "결속", c: "bond" },
 };
@@ -1098,6 +1102,8 @@ function statusChips(unit) {
   // Hero Readability Polish 01B — 결속: 금제(bondOffenseTarget) 또는 성벽 보호 아군(protectedBy) 링크가 살아 있으면 합성 칩.
   //   (mark는 위 상태 배열에서 이미 '표식' 칩으로 표시 — 추적자 조준 대상/결속 대상 공통.)
   if (!unit.isDead && (unit.bondOffenseTarget || unit.protectedBy)) chips.push("bond");
+  // Second Class Batch 2 — 무희 박자(불리언/숫자 필드 unit.beat) → 무희에만 '리듬' 합성 칩(예측 가능한 박자 진행 표시).
+  if (unit.id === "dancer" && !unit.isDead && unit.beat) chips.push("rhythm");
   return chips;
 }
 function statusChipsHTML(unit) {
