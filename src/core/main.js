@@ -31,6 +31,11 @@ if (gameState.dev && gameState.dev.on) {
     { label: "현자 테스트", formation: { f0: "warrior", f1: "guardian", b0: "sage", b1: "priest" } },
     { label: "성황 테스트", formation: { f0: "warrior", f1: "guardian", b0: "sunlord", b1: "priest" } },
     { label: "2차 3종 함께", formation: { f0: "dragonspear", f1: "sunlord", b0: "sage", b1: "priest" } },
+    // Second Class Mechanics Batch 1A — SR-25 검성 / SR-27 천궁 / SR-30 결계장 Dev 전투 씨앗.
+    { label: "검성 테스트", formation: { f0: "swordsaint", f1: "warrior", b0: "archer", b1: "priest" } },
+    { label: "천궁 테스트", formation: { f0: "warrior", f1: "guardian", b0: "skyarcher", b1: "priest" } },
+    { label: "결계장 테스트", formation: { f0: "wardkeeper", f1: "warrior", b0: "archer", b1: "priest" } },
+    { label: "2차 Batch1 함께", formation: { f0: "swordsaint", f1: "wardkeeper", b0: "skyarcher", b1: "priest" } },
   ];
   const panel = document.createElement("div");
   panel.id = "dev-2nd-panel";

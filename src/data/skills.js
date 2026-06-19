@@ -73,6 +73,17 @@ export const SKILLS = {
 
   sunlord:   { id: "aegis", name: "성역", kind: "support",
     logic: { type: "sanctuary", allyHpThreshold: 0.5 } },
+
+  // Second Class Mechanics Batch 1A — SR-25/27/30 2차 전투 씨앗(정식 미해금, Dev 전투 테스트용).
+  //   검성 결투: 결투 표식 우선타격 + 간파 반격(triggerSwordsaintCounter) + HP35%↓ 마무리 일섬.
+  swordsaint:{ id: "duel", name: "결투", kind: "attack",
+    logic: { type: "duel", mult: 1.1, executeThreshold: 0.35, executeMult: 1.4, counterMult: 0.7 } },
+  //   천궁 천표식: 표식 대상 받는 피해↑(defDown 재사용) + 표식 우선 하늘사격.
+  skyarcher: { id: "skymark", name: "하늘 표식", kind: "ranged",
+    logic: { type: "skymark", mult: 1.3, dmgUpPct: 0.12 } },
+  //   결계장 진형 결계: 첫 행동 파티 보호막(전열 추가/후열 완충) + 주기적 앵커 보강. 성황 피해무효와 분리(감소/완충).
+  wardkeeper:{ id: "wardfield", name: "진형 결계", kind: "guard",
+    logic: { type: "wardfield", partyShield: 6, frontShield: 10, backGuardPct: 0.15, backGuardTurns: 2 } },
 };
 
 export function skillOf(jobId) {

@@ -117,6 +117,8 @@ export const FRONT_PREF_JOBS = [
   "warrior", "guardian",
   "rogue", "warden", "paladin", "vanguard", "forbidden", "wall", "gatekeeper",
   "dragonspear",
+  // Second Class Batch 1A — 검성/결계장은 전열형(처형딜러/보호탱커). 천궁(skyarcher)은 후열 → 미포함.
+  "swordsaint", "wardkeeper",
 ];
 
 export function prefersFront(jobId) {

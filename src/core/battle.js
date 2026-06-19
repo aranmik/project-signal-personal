@@ -1029,6 +1029,8 @@ function performAction(unit) {
   // Batch 01A — 파수궁 반격 재충전: 파수궁이 자신의 일반 행동을 수행하는 이번 턴에 반격 가능 상태를 회복한다.
   //   (반격 자체는 performAttack 직접 호출이라 이 경로를 타지 않으므로 스스로 재충전되지 않는다.)
   if (isParty && unit.id === "watchbow") unit.counterReady = true;
+  // Second Class Batch 1A — 검성 간파 반격도 같은 패턴: 일반 행동 1회 사이 1번만(이번 행동에 재충전).
+  if (isParty && unit.id === "swordsaint") unit.duelCounterReady = true;
 
   // Boss Readiness Pressure 02 — 위압: 사자왕은 행동할 때마다 공격력이 오른다(상한까지). 시간 압박.
   //   기준 atk(menaceBaseAtk)에 누적 단계를 곱한다 → 장기전이면 미완성 파티가 버티지 못한다.
@@ -1469,6 +1471,58 @@ function runDataSkill(unit, meta) {
       }
       return false; // 성역 미발동 — 도발만 갱신하고 기본 공격
     }
+    case "duel": { // 검성(SR-25) — 결투 표식 우선타격 + (HP35%↓) 마무리 일섬. 반격은 triggerSwordsaintCounter.
+      let dt = aliveEnemies().find((e) => e.instanceId === unit.duelTarget);
+      const fresh = !dt;
+      if (fresh) {
+        dt = selectDuelTarget(); // 보스>정예>고ATK>저HP
+        if (!dt) return false;
+        unit.duelTarget = dt.instanceId;
+        pushLog(`${unit.name}${josa(unit.name, "이가")} ${dt.name}에게 결투를 건다.`);
+      }
+      applyStatus(dt, { type: "duel", duration: 3 }); // 결투 표식 — 검성 행동마다 갱신(읽힘 칩)
+      const low = dt.hp / dt.maxHp <= (L.executeThreshold ?? 0.35);
+      const sk = low ? { name: "일섬", kind: meta.kind } : meta; // meta.name="결투"
+      performAttack(unit, dt, { mult: (L.mult ?? 1.1) * (low ? (L.executeMult ?? 1.4) : 1), skill: sk });
+      if (low) pushLog(`${unit.name}${josa(unit.name, "이가")} 결투 상대를 베어낸다 — 일섬!`);
+      return true;
+    }
+    case "skymark": { // 천궁(SR-27) — 천표식(받는 피해↑) + 표식 대상 강화 하늘사격. 사망 시 재지정.
+      let mt = aliveEnemies().find((e) => e.instanceId === unit.skyTarget);
+      const fresh = !mt;
+      if (fresh) {
+        mt = selectSkyTarget(); // 보스>후열>저HP>고ATK
+        if (!mt) return false;
+        unit.skyTarget = mt.instanceId;
+        applyCombatStatus(mt, "defDown", L.dmgUpPct ?? 0.12); // 받는 피해 소폭↑(방↓ 칩 + FX 1회)
+        pushLog(`${unit.name}${josa(unit.name, "이가")} ${mt.name}에게 하늘 표식을 새겼다.`);
+      } else {
+        applyStatus(mt, { type: "defDown", duration: 3, pct: L.dmgUpPct ?? 0.12 }); // 갱신(FX 없이)
+      }
+      applyStatus(mt, { type: "mark", duration: 3 }); // 표식 칩 유지(기존 mark 문법 재사용)
+      performAttack(unit, mt, { mult: L.mult ?? 1.3, lineType: "ranged", skill: { name: fresh ? "하늘 표식" : "하늘사격", kind: meta.kind } });
+      return true;
+    }
+    case "wardfield": { // 결계장(SR-30) — 진형 결계(보호막/완충) + 앵커 보강. 성황 무효와 분리(감소/완충만).
+      if (!unit.wardOpened) {
+        unit.wardOpened = true;
+        const party = aliveParty();
+        party.forEach((a) => grantShieldTo(unit, a, L.partyShield ?? 6));        // 전체 작은 보호막
+        frontlineAllies().forEach((a) => grantShieldTo(unit, a, L.frontShield ?? 10)); // 전열 추가 보호막
+        backlineAllies().forEach((a) => applyStatus(a, { type: "defUp", duration: L.backGuardTurns ?? 2, pct: L.backGuardPct ?? 0.15 })); // 후열 완충
+        pushLog(`${unit.name}${josa(unit.name, "이가")} 진형 결계를 펼쳤다.`);
+        playSupportFx({ casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind, guardInstanceId: unit.instanceId, heals: party.map((a) => ({ targetInstanceId: a.instanceId, amount: 0 })) });
+        return true;
+      }
+      if (unit.actionCount % 2 !== 0) return false; // 평소엔 기본 공격
+      const cand = aliveParty().filter((a) => a !== unit);
+      if (!cand.length) return false;
+      const t = cand.sort((a, b) => (a.shield || 0) - (b.shield || 0) || a.hp / a.maxHp - b.hp / b.maxHp)[0]; // 보호막/HP 최저
+      grantShieldTo(unit, t, frontlineAllies().includes(t) ? (L.frontShield ?? 10) : (L.partyShield ?? 6));
+      pushLog(`${unit.name}${josa(unit.name, "이가")} 결계를 보강했다.`);
+      playSupportFx({ casterInstanceId: unit.instanceId, text: "결계 보강!", kind: meta.kind, guardInstanceId: t.instanceId });
+      return true;
+    }
     default:
       return false;
   }
@@ -1501,6 +1555,37 @@ function lowestRatioAlly(maxRatio) {
   const c = aliveParty().filter((u) => u.hp / u.maxHp < maxRatio);
   if (c.length === 0) return null;
   return c.reduce((a, b) => (a.hp / a.maxHp <= b.hp / b.maxHp ? a : b));
+}
+// Second Class Batch 1A — 아군 후열(슬롯 b0/b1) 생존자(결계장 후열 완충 대상). frontlineAllies의 후열 버전.
+function backlineAllies() {
+  const backSlots = SLOT_ORDER.filter((k) => k.startsWith("b"));
+  return aliveParty().filter((u) => backSlots.includes(u.slotKey));
+}
+// Second Class Batch 1A — 적 등급 우선순위 가중(표식 타겟팅 공용). 보스>정예>일반. state.js RANK_OVERRIDES의 tier.
+function enemyTierRank(u) {
+  return u.tier === "boss" ? 3 : u.tier === "elite" ? 2 : 1;
+}
+// 검성 결투 표식: 보스 > 정예 > 공격력 높은 적 > 현재 HP 비율 낮은 적.
+function selectDuelTarget() {
+  const a = aliveEnemies();
+  if (!a.length) return null;
+  return a.slice().sort((x, y) =>
+    enemyTierRank(y) - enemyTierRank(x)
+    || (y.atk || 0) - (x.atk || 0)
+    || x.hp / x.maxHp - y.hp / y.maxHp
+  )[0];
+}
+// 천궁 천표식: 보스 > 후열/원거리 적 > HP 비율 낮은 적 > 공격력 높은 적.
+function selectSkyTarget() {
+  const a = aliveEnemies();
+  if (!a.length) return null;
+  const backRank = (u) => (u.role === "back" ? 1 : 0);
+  return a.slice().sort((x, y) =>
+    enemyTierRank(y) - enemyTierRank(x)
+    || backRank(y) - backRank(x)
+    || x.hp / x.maxHp - y.hp / y.maxHp
+    || (y.atk || 0) - (x.atk || 0)
+  )[0];
 }
 function damagedUnshieldedAlly() {
   const c = aliveParty().filter((u) => u.hp < u.maxHp && (u.shield || 0) <= 0);
@@ -1792,6 +1877,29 @@ function performAttack(attacker, target, opts = {}) {
   if (!opts.isCounter && tookRealDamage && attacker.team === "enemy" && gameState.party.includes(target) && target.role === "back") {
     triggerWatchbowCounter(attacker);
   }
+
+  // Second Class Batch 1A — 검성 간파 반격: 결투 표식 대상이 검성/전열 아군을 실제 타격하면 1회 반격.
+  //   isCounter면 발동 안 함(반격의 반격 금지 → 무한 연쇄 차단). 파수궁과 독립(둘 다 isCounter 가드).
+  if (!opts.isCounter && tookRealDamage && attacker.team === "enemy" && gameState.party.includes(target)) {
+    triggerSwordsaintCounter(attacker, target);
+  }
+}
+
+// Second Class Batch 1A — 검성 간파: 결투 대상(적)이 검성 또는 전열 아군을 타격하면 즉시 1회 반격.
+//   - 결투 대상에 한정(enemyAttacker.instanceId === 검성.duelTarget).
+//   - 피해는 검성 ATK의 counterMult(0.7, 60~80% 범위). 게이지/일반 행동 미소모(직접 performAttack).
+//   - 일반 행동 1회 사이 최대 1번: duelCounterReady가 false면 발동 안 함. 검성 일반 행동 시 재충전.
+function triggerSwordsaintCounter(enemyAttacker, victim) {
+  if (!enemyAttacker || enemyAttacker.isDead) return;
+  const ss = gameState.party.find((u) => !u.isDead && u.id === "swordsaint");
+  if (!ss) return;
+  if (ss.duelCounterReady === false) return;          // 이번 행동 주기엔 이미 반격함
+  if (enemyAttacker.instanceId !== ss.duelTarget) return; // 결투 대상만 반격
+  if (!(victim === ss || victim.role === "front")) return; // 검성 또는 전열 아군 피격에만
+  const mult = skillOf("swordsaint")?.logic?.counterMult ?? 0.7;
+  ss.duelCounterReady = false;
+  pushLog(`${ss.name} 간파!`);
+  performAttack(ss, enemyAttacker, { mult, skill: { name: "간파", kind: "attack" }, isCounter: true });
 }
 
 // 후열 아군 피격 → 파수궁 보복. Batch 01A 공식 정렬:

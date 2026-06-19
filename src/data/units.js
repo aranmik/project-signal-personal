@@ -141,6 +141,11 @@ export const UNIT_TEMPLATES = {
     dragonspear:{ id: "dragonspear",name: "용창",   team: "party", job: "dragonspear",role: "front", grammar: "strike", visual: "warrior", avatarKey: "dragonspear",maxHp: 108, atk: 15, speed: 7 },
     sage:       { id: "sage",       name: "현자",   team: "party", job: "sage",       role: "back",  grammar: "snipe",  visual: "priest",  avatarKey: "sage",       maxHp: 82,  atk: 12, speed: 7 },
     sunlord:    { id: "sunlord",    name: "성황",   team: "party", job: "sunlord",    role: "back",  grammar: "heal",   visual: "priest",  avatarKey: "sunlord",    maxHp: 104, atk: 11, speed: 6 },
+    // Second Class Mechanics Batch 1A — SR-25/27/30 2차 전투 씨앗(정식 미해금, Dev 전투 테스트용).
+    //   수치는 보수적 임시값(밸런스 아님). 역할: 검성=전열 처형딜러 / 천궁=후열 표식저격 / 결계장=전열 보호탱커.
+    swordsaint: { id: "swordsaint", name: "검성",   team: "party", job: "swordsaint", role: "front", grammar: "strike", visual: "warrior", avatarKey: "swordsaint", maxHp: 110, atk: 16, speed: 8 },
+    skyarcher:  { id: "skyarcher",  name: "천궁",   team: "party", job: "skyarcher",  role: "back",  grammar: "snipe",  visual: "archer",  avatarKey: "skyarcher",  maxHp: 82,  atk: 15, speed: 8 },
+    wardkeeper: { id: "wardkeeper", name: "결계장", team: "party", job: "wardkeeper", role: "front", grammar: "protect",visual: "guardian",avatarKey: "wardkeeper", maxHp: 130, atk: 10, speed: 6 },
   },
 
   enemies: {

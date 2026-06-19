@@ -1083,6 +1083,8 @@ const STATUS_CHIP = {
   counterReady: { t: "보복 준비", c: "ready" },
   // Hero Readability Polish 01B — 추적자 표식(실제 mark 상태) / 마도 충전(합성) / 금제·성벽 결속(합성).
   mark: { t: "표식", c: "mark" },
+  // Second Class Batch 1A — 검성 결투 표식(전용 칩, mark 색 공유). 천궁은 mark("표식")+defDown("방↓") 재사용.
+  duel: { t: "결투", c: "mark" },
   charging: { t: "충전", c: "charge" },
   bond: { t: "결속", c: "bond" },
 };
