@@ -6,13 +6,22 @@ import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
 import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions, depthSpeedFactor, routeReward } from "../data/routes.js";
 import { REWARDS, rewardById, REWARD_MAX_LEVEL } from "../data/rewards.js";
 import { saveFootprint } from "../data/footprints.js";
-import { renderGame, playActionFx, playStatusTickFx, playSupportFx, playStatusApplyFx, playActorFx, clearFxLayer, setFxSuppressed } from "../ui/render.js";
+import { renderGame, playActionFx, playStatusTickFx, playSupportFx, playStatusApplyFx, playActorFx, clearFxLayer, setFxSuppressed, setRenderSuppressed } from "../ui/render.js";
 import { skillOf } from "../data/skills.js";
 
 let tickTimer = null;
 // Dev Balance Lab 01 — 계측 미터(헤드리스 듀얼 sim 중에만 set). 본게임 전투에는 항상 null이라
 //   아래 전투 함수의 훅들이 전혀 동작하지 않는다(피해/회복/계산식 100% 불변). 파일 하단 섹션 참조.
 let labMeter = null;
+// Auto Run Report 01 — 헤드리스 자동 주회 모드(별도 대시보드 페이지에서만 ON). 본게임엔 항상 false.
+//   ON이면: 전투 tick 타이머를 만들지 않고(runHeadlessBattle가 수동 구동), 전투 종료 전환을 즉시(동기)
+//   처리하며, 렌더/FX/로그/발자취 기록을 생략한다. 전투 계산식/런 규칙은 일절 바꾸지 않는다.
+let headlessRun = false;
+export function setHeadlessRun(v) {
+  headlessRun = !!v;
+  setRenderSuppressed(headlessRun); // renderGame no-op(대시보드엔 게임 DOM 없음)
+  setFxSuppressed(headlessRun);     // FX DOM/타이머 생성 차단(성능·청결)
+}
 // Combat Feel Polish 01: 기본 전투 호흡 상향. 새 1x = 500ms (BASE / speed).
 const BASE_TICK_INTERVAL = 500; // 1x 기준 tick 간격
 // Run Footprints Polish 01 — 기본 배속(x2) 1틱의 현실 시간(=BASE/2=250ms). 전투 게임 틱 수에 곱해
@@ -40,6 +49,7 @@ function speedIndex() {
 function startTicking() {
   clearInterval(tickTimer);
   tickTimer = null;
+  if (headlessRun) return; // Auto Run Report 01 — 주회는 runHeadlessBattle가 tick을 수동 구동(타이머 없음)
   const interval = Math.max(
     MIN_TICK_INTERVAL,
     BASE_TICK_INTERVAL / gameState.battle.speed
@@ -2256,6 +2266,7 @@ function finishDelay() {
 
 function scheduleFinish(outcome) {
   clearTimeout(finishTimer);
+  if (headlessRun) { applyFinish(outcome); return; } // Auto Run Report 01 — 주회는 마무리 지연 없이 즉시(동기) 전환
   finishTimer = setTimeout(() => applyFinish(outcome), finishDelay());
 }
 
@@ -2311,6 +2322,7 @@ function applyFinish(outcome) {
 // Run Footprints 01 — 현재 런 요약 1건 저장(클리어/실패/포기 공용). 파티 구성은 formation(슬롯→직업) 기준,
 //   현실 전투 시간 합(combatMs)·심도·경계도를 함께 남긴다. 직업명 매핑은 표시 레이어(render)가 담당한다.
 function recordFootprint(result) {
+  if (headlessRun) return; // Auto Run Report 01 — 주회는 발자취(localStorage)를 절대 기록하지 않는다(오염 차단)
   const f = gameState.run.formation || {};
   const party = SLOT_ORDER.map((k) => (f[k] ? { slot: k, job: f[k] } : null)).filter(Boolean);
   saveFootprint({
@@ -2337,7 +2349,7 @@ export function abandonRun() {
 }
 
 function pushLog(text) {
-  if (labMeter) return; // Dev Balance Lab 01 — 헤드리스 sim 중에는 로그를 쌓지 않는다(수천 틱 누적 방지)
+  if (labMeter || headlessRun) return; // Dev Balance Lab 01 / Auto Run Report 01 — 헤드리스 중 로그 누적 생략
   gameState.logs.push(text);
   if (gameState.logs.length > 8) {
     gameState.logs.splice(0, gameState.logs.length - 8);
@@ -2473,4 +2485,25 @@ export function runDuelSimulation({ heroJob, enemyTemplate, seconds }) {
     if (gameState.dev) gameState.dev.immortal = saved.immortal;
   }
   return result;
+}
+
+/* =========================================================
+   Auto Run Report 01 — 헤드리스 풀-런 구동 프리미티브
+   런 전체(전투→보상→여정→합체/영입→보스)는 별도 Dev 모듈(src/dev/autoRunReport.js)의
+   정책/상태머신이 본게임 flow 함수(applyReward/chooseRoute/applyFusion/confirmRecruit…)를
+   그대로 호출해 진행한다 — 런 규칙을 복제하지 않는다. battle.js는 "현재 전투를 동기로 끝까지
+   돌리는" 한 가지 프리미티브만 추가로 노출한다(setHeadlessRun으로 타이머/전환을 헤드리스화).
+   ========================================================= */
+
+// 현재 진행 중인 전투(screen="battle", isRunning=true)를 동기로 끝까지 구동한다.
+//   headlessRun이면 battleTick은 타이머 없이 이 루프에서만 돈다. 종료 시 scheduleFinish가
+//   즉시 applyFinish를 호출해 다음 화면(보상/여정/결과)으로 전환된다(stopBattle이 isRunning=false).
+//   반환: true=정상 종료, false=maxTicks 초과(교착 방어 — 호출부가 런을 중단 처리).
+export function runHeadlessBattle(maxTicks = 6000) {
+  let n = 0;
+  while (gameState.battle.isRunning && n < maxTicks) {
+    battleTick();
+    n += 1;
+  }
+  return n < maxTicks;
 }

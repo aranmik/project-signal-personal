@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auto Run Report — Blind Spot Explorer · Signal Personal (Dev)</title>
+  <!--
+    Auto Run Report 01 — Dev 전용 통계 관측소(별도 엔트리, index.html/본게임과 분리).
+    실제 전투 엔진을 헤드리스로 100회+ 자동 주회해 클리어율/도달 심도/전멸 구간/파티·직업 성과를
+    대시보드로 보여준다. 밸런스 조정 아님 — 계측 전용. 발자취/localStorage/본게임 state 무오염.
+  -->
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0b0f14; color: #dfe9f2;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 13px; line-height: 1.5; }
+    #ar-app { max-width: 1080px; margin: 0 auto; padding: 18px 14px 60px; }
+    header h1 { font-size: 18px; margin: 0 0 4px; }
+    header .tag { display: inline-block; font-size: 10px; font-weight: 800; color: #7fd1a8;
+      border: 1px solid #2f5e47; background: rgba(60,180,120,.1); border-radius: 999px; padding: 2px 8px; }
+    header p { color: #9fb3c4; font-size: 11px; margin: 8px 0 0; }
+    h3 { font-size: 13px; color: #bcd6ec; border-left: 3px solid #2f6fb0; padding-left: 8px; margin: 22px 0 10px; }
+    h4 { font-size: 12px; color: #9fb8cc; margin: 0 0 6px; }
+
+    #ar-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+      background: #11161d; border: 1px solid #2c3a46; border-radius: 12px; padding: 12px; margin-top: 14px; }
+    #ar-controls label { font-size: 11px; color: #8aa0b2; margin-right: 4px; }
+    #ar-controls select, #ar-controls input { background: #1b232c; color: #e7f0f7; border: 1px solid #34434f;
+      border-radius: 8px; padding: 7px 8px; font-size: 13px; }
+    #ar-controls input { width: 120px; }
+    #ar-run-btns { display: inline-flex; gap: 6px; }
+    .ar-btn { border: 1px solid #3a5a76; border-radius: 8px; background: #23415b; color: #eaf3fb;
+      padding: 8px 13px; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .ar-btn:active { transform: translateY(1px); }
+    .ar-btn:disabled { opacity: .45; cursor: default; }
+    .ar-btn.ghost { background: #1b232c; color: #cfe0ee; }
+    #ar-cancel { background: #5b2330; border-color: #76343a; }
+    #ar-progress { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 4px; }
+    #ar-progress-bar { flex: 1; height: 10px; background: #1b232c; border: 1px solid #2c3a46; border-radius: 999px; overflow: hidden; }
+    #ar-progress-fill { height: 100%; width: 0; background: #2f7d50; transition: width .12s linear; }
+    #ar-progress-text { font-size: 11px; color: #9fb3c4; min-width: 70px; text-align: right; }
+
+    .ar-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+    .ar-card { background: #11161d; border: 1px solid #243039; border-radius: 10px; padding: 9px 11px; }
+    .ar-card .k { font-size: 10px; color: #8aa0b2; }
+    .ar-card .v { font-size: 19px; font-weight: 800; color: #eef6ff; }
+    .ar-card .s { font-size: 11px; color: #7fd1a8; font-weight: 700; }
+    .ar-meta { font-size: 11px; color: #6f8497; font-weight: 400; }
+
+    .ar-bars { display: flex; flex-direction: column; gap: 6px; }
+    .ar-bar-row { display: flex; align-items: center; gap: 8px; }
+    .ar-bar-row .lab { width: 64px; font-size: 11px; color: #9fb3c4; }
+    .ar-bar-row .bar { flex: 1; height: 16px; background: #11161d; border: 1px solid #243039; border-radius: 6px; overflow: hidden; }
+    .ar-bar-row .fill { display: block; height: 100%; background: #b5503e; }
+    .ar-bar-row .fill.alt { background: #2f7d50; }
+    .ar-bar-row .num { width: 52px; text-align: right; font-size: 12px; font-weight: 700; }
+
+    .ar-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 720px) { .ar-cols { grid-template-columns: 1fr; } }
+    .ar-tablewrap { overflow-x: auto; border: 1px solid #243039; border-radius: 10px; }
+    table { border-collapse: collapse; width: 100%; font-size: 12px; white-space: nowrap; }
+    th, td { padding: 6px 9px; border-bottom: 1px solid #1f2832; text-align: right; }
+    th.txt, td.txt { text-align: left; }
+    thead th { position: sticky; top: 0; background: #1a232c; color: #9fb8cc; font-weight: 700; }
+    tbody tr:nth-child(odd) { background: rgba(255,255,255,.015); }
+    .ar-2nd { font-size: 9px; color: #f0c674; border: 1px solid #6b5a2a; border-radius: 4px; padding: 0 4px; }
+    .ar-empty { color: #7990a2; font-size: 12px; padding: 12px; text-align: center; }
+
+    .ar-rewards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    @media (max-width: 720px) { .ar-rewards { grid-template-columns: 1fr; } }
+    .ar-rewardcol ol { margin: 0; padding-left: 20px; }
+    .ar-rewardcol li { font-size: 12px; padding: 2px 0; }
+    .ar-rewardcol li b { color: #bfe3ff; }
+
+    #ar-exports { display: flex; gap: 8px; margin-top: 20px; }
+    .ar-foot { font-size: 10px; color: #6f8497; margin-top: 18px; }
+  </style>
+</head>
+<body>
+  <div id="ar-app">
+    <header>
+      <h1>🛰️ Auto Run Report <span class="tag">Blind Spot Explorer · 계측 전용</span></h1>
+      <p>실제 전투 엔진을 헤드리스로 자동 주회해, 인간의 시간으로 직접 검증할 수 없는 조합/루트/반복 결과를 통계로 보여줍니다.
+        밸런스 조정 도구가 아니며, 본게임 진행/저장/발자취에 영향을 주지 않습니다.</p>
+    </header>
+
+    <div id="ar-controls">
+      <span><label>정책</label><select id="ar-policy">
+        <option value="random">랜덤 탐험가</option>
+        <option value="fusion">합체 우선가</option>
+      </select></span>
+      <span><label>seed</label><input id="ar-seed" type="number" placeholder="비우면 랜덤" /></span>
+      <span id="ar-run-btns">
+        <button type="button" class="ar-btn" data-count="10">10회</button>
+        <button type="button" class="ar-btn" data-count="30">30회</button>
+        <button type="button" class="ar-btn" data-count="100">100회</button>
+        <button type="button" class="ar-btn ghost" data-count="300">300회</button>
+      </span>
+      <button type="button" id="ar-cancel" class="ar-btn" disabled>취소</button>
+      <div id="ar-progress" hidden>
+        <div id="ar-progress-bar"><div id="ar-progress-fill"></div></div>
+        <span id="ar-progress-text">0 / 0</span>
+      </div>
+    </div>
+
+    <section id="ar-summary"><div class="ar-empty">정책과 횟수를 고르고 실행하세요. 100회 안정 실행이 기본입니다.</div></section>
+    <section id="ar-deathband"></section>
+    <div class="ar-cols">
+      <section id="ar-clearparty"></section>
+      <section id="ar-wipeparty"></section>
+    </div>
+    <section id="ar-jobs"></section>
+    <section id="ar-second"></section>
+    <section id="ar-rewards"></section>
+
+    <div id="ar-exports" hidden>
+      <button type="button" id="ar-copy-tsv" class="ar-btn ghost">TSV 복사</button>
+      <button type="button" id="ar-copy-json" class="ar-btn ghost">JSON 복사</button>
+    </div>
+
+    <p class="ar-foot">결과는 새로고침 전까지만 유지됩니다(저장 안 함). seed를 고정하면 같은 100회를 재현할 수 있습니다.
+      랜덤·합체 정책은 본게임 합체/레시피/보상 로직을 그대로 사용합니다(수치 변경 없음).</p>
+  </div>
+
+  <script type="module">
+    import { initAutoRunReport } from "../src/dev/autoRunReport.js";
+    initAutoRunReport();
+  </script>
+</body>
+</html>

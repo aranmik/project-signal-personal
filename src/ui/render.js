@@ -27,7 +27,14 @@ function jobAvatarHTML(id, extraClass = "av-fit--cast") {
 let fxSuppressed = false;
 export function setFxSuppressed(v) { fxSuppressed = !!v; }
 
+// Auto Run Report 01 — 헤드리스 자동 주회(별도 대시보드 페이지) 동안 renderGame을 통째로 no-op.
+//   대시보드 페이지에는 게임 DOM(#title-screen 등)이 없어 renderGame이 그대로 돌면 크래시한다.
+//   본게임에는 항상 false → 동작 동일. battle.js setHeadlessRun이 sim/주회 시작·종료에 토글한다.
+let renderSuppressed = false;
+export function setRenderSuppressed(v) { renderSuppressed = !!v; }
+
 export function renderGame(state) {
+  if (renderSuppressed) return; // Auto Run Report 01 — 헤드리스 주회 중 렌더 생략
   const titleScreen = document.getElementById("title-screen");
   const jobSelect = document.getElementById("job-select");
   const growthPanel = document.getElementById("growth-panel");
