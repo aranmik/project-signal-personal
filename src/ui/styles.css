@@ -942,17 +942,18 @@ body {
 #battle-field[data-fast="1"] .fig-react.acting { animation-duration: 0.26s; }
 #battle-field[data-fast="1"] .fig-react.acting-soft { animation-duration: 0.3s; }
 
-/* 공격/몬스터 선언: 짧고 또렷한 scale pop + 살짝 들썩 + brightness */
+/* 공격/몬스터 선언: 짧고 또렷한 scale pop + 살짝 들썩 + brightness.
+   Action Line Visibility 01 — "나 지금 행동" 체감 강화로 이동량 소폭 상향(발밑 고정이라 진형 안 밀림). */
 @keyframes sig-act {
   0%   { transform: scale(1) translateY(0);        filter: brightness(1); }
-  28%  { transform: scale(1.12) translateY(-2px);  filter: brightness(1.32); }
-  52%  { transform: scale(1.07) translateY(-1px);  filter: brightness(1.14); }
+  28%  { transform: scale(1.16) translateY(-4px);  filter: brightness(1.34); }
+  52%  { transform: scale(1.09) translateY(-2px);  filter: brightness(1.15); }
   100% { transform: scale(1) translateY(0);        filter: brightness(1); }
 }
-/* 회복 선언: 같은 선언이되 조금 더 부드럽고 따뜻하게 */
+/* 회복/원거리 선언: 돌진보다 살짝 들썩임/상체 반응(과한 전진 X) — 이동량 소폭만 상향. */
 @keyframes sig-act-soft {
   0%   { transform: scale(1) translateY(0);         filter: brightness(1); }
-  34%  { transform: scale(1.09) translateY(-1.5px); filter: brightness(1.18); }
+  34%  { transform: scale(1.12) translateY(-3px);   filter: brightness(1.2); }
   100% { transform: scale(1) translateY(0);         filter: brightness(1); }
 }
 
@@ -1393,9 +1394,10 @@ body {
 
 /* 잎여우 추격 lunge — 짧은 전진 들썩(아바타만, 위치는 .unit 기준이라 안 밀림) */
 #battle-field .unit.enemy .fig-react.lunge { animation: fx-lunge 0.3s ease-out; }
+/* Action Line Visibility 01 — 몬스터 lunge(영웅 방향 좌하단)도 "지금 행동" 체감 강화로 이동량 소폭 상향. */
 @keyframes fx-lunge {
   0% { transform: translate(0, 0) scale(1); }
-  40% { transform: translate(-5px, 5px) scale(1.08); }
+  40% { transform: translate(-8px, 8px) scale(1.12); }
   100% { transform: translate(0, 0) scale(1); }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1531,6 +1533,44 @@ body {
 /* Combat Grammar Foundation 01 — 도발선: 노랑 점선(공격선 빨강·회복선 청록과 구분). */
 .fx-svg--taunt { color: rgba(245, 210, 80, 0.95); }
 .fx-svg--taunt .fx-path { stroke-width: 2.4; stroke-dasharray: 5 4; }
+
+/* =====================================================================
+   Action Line Visibility 01 — 공통 행동선 variant 색(선 + 시작 ring 공통 currentColor).
+   lineType 색 규칙 "뒤"에 둬서 variant가 우선(같은 1-class 특이도 → 소스 순서). 모양은 lineType 유지.
+   영웅/몬스터 공통 — 같은 lineType/kind 경로를 쓰므로 자동 적용.
+   ===================================================================== */
+.fx-var--normal  { color: rgba(180, 198, 216, 0.92); } /* 중립(미분류 fallback) */
+.fx-var--melee   { color: rgba(238, 108, 82, 0.95); }  /* 근접·기본공격 — 따뜻한 공격색 */
+.fx-var--ranged  { color: rgba(120, 202, 104, 0.94); } /* 원거리 — 녹색 */
+.fx-var--heal    { color: rgba(150, 226, 198, 0.92); } /* 치유 — 민트 */
+.fx-var--guard   { color: rgba(245, 210, 80, 0.95); }  /* 보호·도발 — 금색 */
+.fx-var--support { color: rgba(122, 182, 240, 0.94); } /* 버프·응원 — 하늘색 */
+.fx-var--debuff  { color: rgba(208, 150, 240, 0.93); } /* 교란·약화 — 보라 */
+.fx-var--special { color: rgba(190, 150, 235, 0.93); } /* 특수(2차 등) — 보라빛 fallback */
+
+/* 행동선 시작점 ring — "이 actor가 출발점" 신호. 작게(16px)·짧게(0.42s), 숫자/HP바/피격 FX를 가리지 않게. */
+.fx-startpulse {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  box-shadow: 0 0 6px currentColor;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 3;
+  animation: fx-startpulse 0.42s ease-out forwards;
+}
+#battle-field[data-fast="1"] .fx-startpulse { animation-duration: 0.3s; }
+@keyframes fx-startpulse {
+  0%   { opacity: 0;    transform: scale(0.45); }
+  32%  { opacity: 0.85; transform: scale(1); }
+  100% { opacity: 0;    transform: scale(1.7); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-startpulse { animation-duration: 0.01s; }
+}
 
 /* Combat Breath Hotfix 01 — 치유선 가독성: 끝 잔상을 공격보다 약간 더 길게(잘 보이게). */
 .fx-svg--heal { animation-duration: 1.6s; }

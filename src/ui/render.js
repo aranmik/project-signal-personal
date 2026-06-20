@@ -1475,10 +1475,17 @@ export function playActionFx(event) {
   if (!layer || !field) return;
 
   const fieldRect = field.getBoundingClientRect();
-  const srcFrac = SOURCE_ANCHORS[sourceUnitId] || { fx: 0.5, fy: 0.45 };
+  // Action Line Visibility 01 — 시작점을 무기끝 앵커에서 몸통 중앙 쪽으로 끌어와 "이 캐릭터의 몸에서 출발"을 명확히.
+  //   전열/후열 겹침에서 시작 actor가 모호해지던 문제 해소(source 쪽만 보정 — target 위치는 그대로).
+  const rawFrac = SOURCE_ANCHORS[sourceUnitId] || { fx: 0.5, fy: 0.45 };
+  const srcFrac = {
+    fx: rawFrac.fx + (BODY_MID_FRAC.fx - rawFrac.fx) * START_BODY_BIAS,
+    fy: rawFrac.fy + (BODY_MID_FRAC.fy - rawFrac.fy) * START_BODY_BIAS,
+  };
+  const variant = actionLineVariant(lineType, kind);
 
   // 좌표는 .unit wrap rect 기준 → acting scale(자식 .fig-react)에 영향받지 않음(안정)
-  // Basic Action Breath 01: 시작점 = 공격자 팔/무기(srcFrac), 도착점 = 대상 테두리 중
+  // Basic Action Breath 01: 시작점 = 공격자 몸통(srcFrac), 도착점 = 대상 테두리 중
   //   공격자(치유자)와 가장 가까운 지점(borderPointToward). 중심 직격이 아니라 "닿는" 느낌.
   const s = unitPoint(sourceInstanceId, srcFrac, fieldRect);
   const t = s
@@ -1514,7 +1521,9 @@ export function playActionFx(event) {
     ? { x: t.x, y: Math.max(56, Math.min(fieldRect.height - 18, t.y - 28)) }
     : (numberAnchor(targetInstanceId, fieldRect) || t);
   const fire = () => {
-    spawnLine(layer, s, t, lineType, kind);
+    // Action Line Visibility 01 — 시작점 pulse로 "이 actor가 행동선의 출발점"을 1회 번쩍(과하지 않게).
+    spawnStartPulse(layer, s, variant);
+    spawnLine(layer, s, t, lineType, kind, variant);
     spawnPulse(layer, t, isHeal);
     // First Class Expansion 01: 피해/회복 0(상태 부여형 스킬: 중독 등)은 숫자 생략.
     // Combat Grammar Foundation 01: numberVariant(crit 등)로 피해 숫자 규격 분기.
@@ -1755,11 +1764,46 @@ const LINE_STYLE = {
   enemy:    { bowF: 0.16, bowMin: 8,  bowMax: 22, flip: 1,  head: "claw",  draw: false, rough: true },
 };
 
+// Action Line Visibility 01 — 공통 행동선 variant(색 언어). lineType(선 모양/장식)와 분리:
+//   variant = 행동 "성격" 색. 영웅/몬스터 공통(같은 lineType/kind 경로를 쓰므로 자동 적용).
+//   현재 battle/render에서 알 수 있는 lineType/kind로 가능한 만큼만 매핑하고, 애매하면 normal fallback.
+//   30종 개별 전용 문법표는 후속(Combat Visibility Grammar 01).
+function actionLineVariant(lineType, kind) {
+  // lineType이 행동 성격을 이미 잘 인코딩한다(heal/ranged/taunt/disrupt). attack은 항상 "피해 기본공격"이므로
+  //   유닛 문법(kind=heal/protect 등)으로 색을 바꾸면 오해(피해선이 회복색)가 생긴다 → strike만 따뜻한 melee로.
+  if (lineType === "heal") return "heal";
+  if (lineType === "ranged") return "ranged";
+  if (lineType === "taunt") return "guard";
+  if (lineType === "disrupt") return "debuff";
+  if (lineType === "attack") {
+    // 영웅 근접(strike) = 따뜻한 melee. 그 외(몬스터 기본공격 kind="attack" / 비근접 문법의 기본공격) = 중립 normal.
+    return kind === "strike" ? "melee" : "normal";
+  }
+  return "normal"; // 미지의 lineType → 중립 fallback
+}
+
+// Action Line Visibility 01 — 행동선 시작점을 actor 몸통 중앙 쪽으로 끌어오는 비율(0=무기끝 유지 … 1=완전 몸통중앙).
+//   전열/후열 겹침에서 "이 칸/이 캐릭터의 몸에서 선이 출발"이 읽히도록. 약간의 무기 방향성은 남긴다.
+const START_BODY_BIAS = 0.6;
+const BODY_MID_FRAC = { fx: 0.5, fy: 0.52 };
+
 // FX Density Guard 01: 동시에 떠 있는 행동선/숫자 상한 — 다수전·MAX 누적 방지.
 const MAX_FX_LINES = 7;
 const MAX_FX_NUMBERS = 8;
 
-function spawnLine(layer, s, t, lineType, kind) {
+// Action Line Visibility 01 — 행동선 시작점 ring(actor 출발점 신호). variant 색 공통(currentColor).
+//   작게(16px)·짧게(0.42s) — 숫자/HP바/피격 FX를 가리지 않고, MAX에서도 라인과 함께 떠 시작점이 흐려지지 않게.
+function spawnStartPulse(layer, s, variant) {
+  if (!s) return;
+  const el = document.createElement("span");
+  el.className = `fx-startpulse fx-var--${variant || "normal"}`;
+  el.style.left = `${s.x}px`;
+  el.style.top = `${s.y}px`;
+  el.addEventListener("animationend", () => el.remove());
+  layer.appendChild(el);
+}
+
+function spawnLine(layer, s, t, lineType, kind, variant) {
   // 상한 초과 시 가장 오래된 선 제거(읽힘 우선, 화면이 무너지지 않게)
   const lines = layer.querySelectorAll(".fx-svg");
   if (lines.length >= MAX_FX_LINES) lines[0].remove();
@@ -1783,7 +1827,9 @@ function spawnLine(layer, s, t, lineType, kind) {
   const my = (s.y + t.y) / 2 + py * (bow + jitter);
 
   const svg = document.createElementNS(SVG_NS, "svg");
-  svg.setAttribute("class", `fx-svg fx-svg--${lineType}`);
+  // Action Line Visibility 01 — 모양은 lineType(fx-svg--), 색은 variant(fx-var--)로 분리(영웅/몬스터 공통).
+  const v = variant || actionLineVariant(lineType, kind);
+  svg.setAttribute("class", `fx-svg fx-svg--${lineType} fx-var--${v}`);
   if (kind) svg.dataset.kind = kind; // Job Grammar 01 — 직업 행동 분류 hook(시각 변화 없음)
   svg.setAttribute("width", w);
   svg.setAttribute("height", h);
@@ -1798,10 +1844,10 @@ function spawnLine(layer, s, t, lineType, kind) {
   grad.setAttribute("y1", s.y);
   grad.setAttribute("x2", t.x);
   grad.setAttribute("y2", t.y);
-  // 시작점 투명 → 끝점 선명
+  // Action Line Visibility 01 — 시작부 alpha 상향(0→0.22)으로 "이 actor에게서 시작"이 읽히게. 끝점은 여전히 선명.
   grad.innerHTML =
-    '<stop offset="0%" stop-color="currentColor" stop-opacity="0"></stop>' +
-    '<stop offset="55%" stop-color="currentColor" stop-opacity="0.35"></stop>' +
+    '<stop offset="0%" stop-color="currentColor" stop-opacity="0.22"></stop>' +
+    '<stop offset="50%" stop-color="currentColor" stop-opacity="0.5"></stop>' +
     '<stop offset="100%" stop-color="currentColor" stop-opacity="0.95"></stop>';
   defs.appendChild(grad);
   svg.appendChild(defs);
