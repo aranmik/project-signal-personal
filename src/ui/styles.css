@@ -1561,6 +1561,52 @@ body {
   .fx-gather, .fx-aoe-spread, .fx-scope, .fx-markburst { animation-duration: 0.01s; }
 }
 
+/* =====================================================================
+   Combat Visibility (추가) — 속도 게이지 감소 마커 + 결속 지속선.
+   ===================================================================== */
+/* 게이지 감소 마커: 깎인 구간(보라)을 게이지 위에 잠깐 보여줬다 사라지게("여기였는데 깎였다"). */
+.tempo-bar { position: relative; }
+.tempo-drop {
+  position: absolute;
+  top: 0; bottom: 0;
+  background: linear-gradient(90deg, rgba(208, 150, 240, 0), rgba(208, 150, 240, 0.75));
+  border-right: 2px solid rgba(226, 170, 250, 0.95);
+  box-shadow: 0 0 6px rgba(208, 150, 240, 0.6);
+  pointer-events: none;
+  animation: tempo-drop 0.55s ease-out forwards;
+}
+@keyframes tempo-drop {
+  0%   { opacity: 0; transform: scaleX(0.6); transform-origin: right; }
+  25%  { opacity: 1; transform: scaleX(1);   transform-origin: right; }
+  100% { opacity: 0; transform: scaleX(1);   transform-origin: right; }
+}
+
+/* 결속(금제 악의 / 성벽 선의) 지속선: 반투명 사슬 + 흐르는 dash + 중앙 자물쇠. 결속 유지 동안 계속 노출. */
+#bond-layer { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
+.bond-svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.bond-svg--offense { color: rgba(228, 96, 110, 0.5); }   /* 악의 결속 — 붉은 사슬 */
+.bond-svg--defense { color: rgba(242, 206, 122, 0.55); } /* 선의 결속 — 금빛 사슬 */
+.bond-chain {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-dasharray: 5 4;          /* 사슬 고리 느낌 */
+  stroke-linecap: round;
+  opacity: 0.8;
+  animation: bond-flow 1.2s linear infinite; /* 사슬이 흐르는 느낌 — "지속 중" 강조 */
+}
+@keyframes bond-flow { to { stroke-dashoffset: -18; } }
+.bond-lock {
+  fill: currentColor;
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 1;
+  opacity: 0.85;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bond-chain { animation: none; }
+  .tempo-drop { animation-duration: 0.01s; }
+}
+
 /* X 타격점(기본 공격) */
 .fx-head--x .fx-xcut {
   fill: none; stroke: currentColor; stroke-width: 2.8; stroke-linecap: round;

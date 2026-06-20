@@ -131,6 +131,7 @@ export function renderGame(state) {
   battleView.dataset.status = state.battle.status;
   renderHud(state);
   renderUnits(state);
+  renderBondLinks(state); // Combat Visibility — 금제/성벽 결속 지속선(유닛 위치 갱신 직후)
   renderEncounterHud(state);
   renderLogOverlay(state);
   renderResultOverlay(state);
@@ -1015,10 +1016,72 @@ function updateFieldUnit(el, unit) {
       // 차오름은 1초 tick 사이를 부드럽게 보간
       tempoFill.style.width = `${gauge.toFixed(1)}%`;
     }
+    // Combat Visibility — 교란/워든/바드 tempo로 게이지가 깎인 경우만 "여기였다" 마커(gaugeDropFrom→현재 깎인 구간).
+    //   일반 행동 소모(게이지→0)는 플래그가 없어 마커가 뜨지 않는다.
+    if (tempoBar && unit.gaugeDropFrom != null) {
+      spawnGaugeDropMark(tempoBar, unit.gaugeDropFrom, gauge);
+      unit.gaugeDropFrom = null;
+    }
     if (tempoBar) {
       tempoBar.classList.toggle("ready-soon", (unit.actionGauge ?? 0) >= 88);
     }
   }
+}
+
+// Combat Visibility — 게이지 감소 마커: tempo-bar 안에 "깎인 구간"(toPct→fromPct)을 잠깐 보여줬다 사라지게.
+//   교란/워든/바드 tempo가 게이지를 깎은 순간 "여기였는데 깎였다"가 파랑 게이지 위에서 읽히게 한다.
+function spawnGaugeDropMark(tempoBar, fromPct, toPct) {
+  const from = Math.max(0, Math.min(100, fromPct));
+  const to = Math.max(0, Math.min(100, toPct));
+  if (from - to < 1) return; // 거의 안 깎였으면 생략
+  const m = document.createElement("span");
+  m.className = "tempo-drop";
+  m.style.left = `${to}%`;
+  m.style.width = `${from - to}%`;
+  m.addEventListener("animationend", () => m.remove());
+  tempoBar.appendChild(m);
+}
+
+// Combat Visibility — 금제(악의 결속)/성벽(선의 결속) 지속 결속선.
+//   행동선처럼 떴다 사라지지 않고, 결속(bondOffenseTarget/bondDefenseTarget)이 유지되는 동안 매 렌더 갱신해 계속 노출한다.
+//   두 대상 사이 반투명 사슬선(흐르는 dash) + 중앙 자물쇠. reconcile(키 기반)이라 위치만 갱신되고 흐름 애니메이션은 끊기지 않는다.
+function renderBondLinks(state) {
+  const layer = document.getElementById("bond-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  if (state.battle.previewKind === "layout") { layer.innerHTML = ""; return; }
+  const fieldRect = field.getBoundingClientRect();
+  const all = [...(state.party || []), ...(state.enemies || [])];
+  const byId = (id) => all.find((u) => u.instanceId === id && !u.isDead);
+  const pairs = [];
+  (state.party || []).forEach((u) => {
+    if (u.isDead) return;
+    if (u.bondOffenseTarget) { const t = byId(u.bondOffenseTarget); if (t) pairs.push({ key: u.instanceId + ">" + t.instanceId, a: u, b: t, kind: "offense" }); }
+    if (u.bondDefenseTarget) { const t = byId(u.bondDefenseTarget); if (t) pairs.push({ key: u.instanceId + ">" + t.instanceId, a: u, b: t, kind: "defense" }); }
+  });
+  const keep = new Set(pairs.map((p) => p.key));
+  // 해제된 결속 제거(사라진 것만).
+  [...layer.children].forEach((c) => { if (!keep.has(c.dataset.bondKey)) c.remove(); });
+  const w = field.clientWidth, h = field.clientHeight;
+  pairs.forEach(({ key, a, b, kind }) => {
+    const pa = unitPoint(a.instanceId, { fx: 0.5, fy: 0.5 }, fieldRect);
+    const pb = unitPoint(b.instanceId, { fx: 0.5, fy: 0.5 }, fieldRect);
+    if (!pa || !pb) return;
+    const mx = (pa.x + pb.x) / 2, my = (pa.y + pb.y) / 2 - 14;
+    let svg = [...layer.children].find((c) => c.dataset.bondKey === key);
+    if (!svg) {
+      svg = document.createElementNS(SVG_NS, "svg");
+      svg.dataset.bondKey = key;
+      svg.setAttribute("class", `bond-svg bond-svg--${kind}`);
+      const link = document.createElementNS(SVG_NS, "path"); link.setAttribute("class", "bond-chain");
+      const lock = document.createElementNS(SVG_NS, "circle"); lock.setAttribute("class", "bond-lock"); lock.setAttribute("r", "5");
+      svg.appendChild(link); svg.appendChild(lock);
+      layer.appendChild(svg);
+    }
+    svg.setAttribute("width", w); svg.setAttribute("height", h); svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    svg.querySelector(".bond-chain").setAttribute("d", `M ${pa.x} ${pa.y} Q ${mx} ${my} ${pb.x} ${pb.y}`);
+    const lock = svg.querySelector(".bond-lock"); lock.setAttribute("cx", mx); lock.setAttribute("cy", my);
+  });
 }
 
 // Combat Lifecycle Polish 01 — Death Reaction + Field Cleanup.
@@ -1152,7 +1215,8 @@ function statusChips(unit) {
   if (unit.id === "mage" && !unit.isDead && unit.charging) chips.push("charging");
   // Hero Readability Polish 01B — 결속: 금제(bondOffenseTarget) 또는 성벽 보호 아군(protectedBy) 링크가 살아 있으면 합성 칩.
   //   (mark는 위 상태 배열에서 이미 '표식' 칩으로 표시 — 추적자 조준 대상/결속 대상 공통.)
-  if (!unit.isDead && (unit.bondOffenseTarget || unit.protectedBy)) chips.push("bond");
+  // Combat Visibility — 결속 칩은 "사용자"에만(금제 bondOffenseTarget / 성벽 bondDefenseTarget). 적용 대상(protectedBy)엔 미표시 — 지속 결속선으로 인지.
+  if (!unit.isDead && (unit.bondOffenseTarget || unit.bondDefenseTarget)) chips.push("bond");
   // Second Class Batch 2 — 무희 박자(불리언/숫자 필드 unit.beat) → 무희에만 '리듬' 합성 칩(예측 가능한 박자 진행 표시).
   if (unit.id === "dancer" && !unit.isDead && unit.beat) chips.push("rhythm");
   return chips;
@@ -1805,6 +1869,9 @@ export function playActorFx(kind, casterId, opts = {}) {
 export function clearFxLayer() {
   const layer = document.getElementById("fx-layer");
   if (layer) layer.innerHTML = "";
+  // Combat Visibility — 결속 지속선도 새 전투 시작 시 정리(이전 런의 잔여 사슬 방지).
+  const bond = document.getElementById("bond-layer");
+  if (bond) bond.innerHTML = "";
 }
 
 // Action Emphasis 01: source unit "행동 선언" cue.

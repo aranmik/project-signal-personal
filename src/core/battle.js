@@ -1273,6 +1273,8 @@ function runDataSkill(unit, meta) {
       const t = highGaugeEnemy();
       if (!t) return false;
       performAttack(unit, t, { mult: L.mult, skill: meta });
+      // Combat Visibility — 워든 게이지 드레인도 "여기였다" 마커(깎이기 직전 위치 기록).
+      t.gaugeDropFrom = Math.min(100, t.actionGauge || 0);
       t.actionGauge = Math.max(0, (t.actionGauge || 0) * (1 - L.drainPct));
       applyStatus(t, { type: "atkDown", duration: L.atkDownTurns, pct: L.atkDownPct });
       return true;
@@ -1339,8 +1341,8 @@ function runDataSkill(unit, meta) {
       if (!t) return false;
       performAttack(unit, t, { mult: L.mult, skill: meta });
       // 대상 생존 시 결속 링크 갱신(다음 행동까지). 사망이면 해제.
+      //   Combat Visibility — 결속 대상엔 [표식] 칩을 붙이지 않는다(추적자/천궁 mark와 중복 방지). 대상은 지속 결속선으로 인지.
       unit.bondOffenseTarget = t.isDead ? null : t.instanceId;
-      if (!t.isDead) applyStatus(t, { type: "mark", duration: 1 });
       return true;
     }
     case "bondDefense": { // 성벽 선의 결속 — 최저 아군에 결속(그 아군 피격 시 50/50 분담: applyDamage)
@@ -1348,8 +1350,9 @@ function runDataSkill(unit, meta) {
       const ally = others.sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
       if (!ally) return false;
       ally.protectedBy = unit.instanceId; // 그 아군이 받는 피해의 50%를 성벽이 대신
+      // Combat Visibility — 성벽(사용자)에 [결속] 칩 + 지속 결속선 출처. 대상엔 mark 칩 미부여(지속선으로만 인지).
+      unit.bondDefenseTarget = ally.instanceId;
       grantShieldTo(unit, ally, L.shield);
-      applyStatus(ally, { type: "mark", duration: 1 });
       playSupportFx({ casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind, guardInstanceId: ally.instanceId });
       return true;
     }
@@ -1452,7 +1455,7 @@ function runDataSkill(unit, meta) {
         const targets = shuffle(enemies).slice(0, 2);
         targets.forEach((t, i) => {
           if (Math.random() < 0.5) applyCombatStatus(t, "speedDown");
-          else t.actionGauge = Math.max(0, (t.actionGauge || 0) - BARD_GAUGE_DROP);
+          else { t.gaugeDropFrom = Math.min(100, t.actionGauge || 0); t.actionGauge = Math.max(0, (t.actionGauge || 0) - BARD_GAUGE_DROP); }
           playActionFx({
             sourceInstanceId: unit.instanceId, sourceUnitId: unit.id, targetInstanceId: t.instanceId,
             lineType: "disrupt", kind: "disrupt", isHeal: false, amount: 0,
@@ -1892,6 +1895,8 @@ function applyDamage(target, dmg) {
 function performDisrupt(trickster, target, meta) {
   const dmg = Math.max(1, Math.round(trickster.atk * 0.5));
   applyDamage(target, dmg);
+  // Combat Visibility — 게이지 감소 표식: 깎이기 직전 위치를 기록(render가 "여기였다" 마커를 띄운다).
+  target.gaugeDropFrom = Math.min(100, target.actionGauge || 0);
   target.actionGauge = Math.max(0, (target.actionGauge || 0) - 25);
   pushLog(`${trickster.name}${josa(trickster.name, "이가")} ${target.name}${josa(target.name, "을를")} 교란했다. ${dmg} 피해.`);
   playActionFx({
