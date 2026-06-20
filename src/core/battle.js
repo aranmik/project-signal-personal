@@ -1,6 +1,6 @@
 import { gameState } from "./state.js";
 import { createInitialParty, createPreviewEnemies, createStageEnemies, createRouteEnemies, createLayoutPreviewEnemies, SLOT_ORDER, DEFAULT_FORMATION } from "./state.js";
-import { FUSION_RECIPES, BASE_JOBS, prefersFront, slotPreference, availableFusions, combatRoleOf } from "../data/jobs.js";
+import { ACTIVE_FUSION_RECIPES, BASE_JOBS, prefersFront, slotPreference, availableFusions, combatRoleOf } from "../data/jobs.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
 import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions, depthSpeedFactor, routeReward } from "../data/routes.js";
@@ -492,7 +492,7 @@ function canEnterFusion() {
 //   "실행"한 경우 반드시 동료 영입으로 보충한다(스테이지/테마와 무관한 공통 Flow).
 //   합체 없음/스킵은 영입 없이 다음 스테이지(skipFusion).
 export function applyFusion(resultId) {
-  const recipe = FUSION_RECIPES.find((r) => r.result === resultId);
+  const recipe = ACTIVE_FUSION_RECIPES.find((r) => r.result === resultId); // Unlock 01 — 1차+2차 병합 소스
   if (!recipe) return;
   const f = gameState.run.formation;
   if (partyJobIds().includes(recipe.result)) return; // 동일 직업 중복 금지 — 방어

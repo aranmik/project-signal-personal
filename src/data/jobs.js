@@ -12,8 +12,8 @@ export const ADVANCED_JOBS = [
   "forbidden", "wall", "healbow", "purifier", "mage", "bard", "gatekeeper", "tracker",
 ];
 
-// 2차 직업 분류(표시 전용 — render.js jobTierLabel 도감 단계 배지). 합체/영입/보상 로직과 무관:
-//   합체는 FUSION_RECIPES만 보고(availableFusions), SECOND_CLASS_RECIPES는 별도 비활성 — 이 배열은 단계 표기용이다.
+// 2차 직업 분류(표시 전용 — render.js jobTierLabel 도감 단계 배지). 영입/보상 로직과 무관:
+//   이 배열은 도감 단계 표기용이다. 합체는 ACTIVE_FUSION_RECIPES(= FUSION_RECIPES + SECOND_CLASS_RECIPES)를 본다 — Unlock 01.
 //   Second Class Codex Readability 01: Batch 1A/2로 Dev 전투 씨앗화된 SR-25~30도 포함(도감 배지 '2차 씨앗' 정상화).
 export const SECOND_CLASS_JOBS = [
   "dragonspear", "sage", "sunlord",
@@ -45,14 +45,26 @@ export const FUSION_RECIPES = [
   { materials: ["cleric", "trickster"],  result: "bard",    birthLine: "신관의 선율과 교란꾼의 장단이 바드의 노래가 되었다." },
 ];
 
-// 2차 직업 레시피 — 규칙/데이터 방향 기록용(1차+기본 / 1차+1차). Trial 01에선 합체 후보로
-//   노출하지 않는다(availableFusions는 FUSION_RECIPES만 본다). 후속 작업에서 활성화 시
-//   이 항목을 FUSION_RECIPES로 합치면 된다. 결과 직업(용창/현자/성황)은 이미 구현되어 있다.
+// Second Class Recipe Unlock 01 — SR-22~SR-30 2차 직업 레시피(1차+기본 / 1차+1차). 이제 실제 합체에서 활성.
+//   FUSION_RECIPES(1차)와 구조를 분리 유지한다 — 2차만 잠그거나 조정하려면 이 배열만 건드리면 된다.
+//   실제 합체 검색은 아래 ACTIVE_FUSION_RECIPES(1차+2차 병합)를 통해 두 소스를 함께 본다.
+//   재료 id는 jobStatus.js note 기준(예: 무희=바드+신관=bard+cleric / 구원자=정화사+사제=purifier+priest).
 export const SECOND_CLASS_RECIPES = [
-  { materials: ["rogue", "archer"],       result: "dragonspear", birthLine: "도적의 칼끝에 용의 숨결이 실려 용창이 되었다." },
-  { materials: ["mage", "trickster"],     result: "sage",        birthLine: "마도의 통찰과 교란꾼의 기지가 현자의 경지에 닿았다." },
-  { materials: ["vanguard", "guardian"],  result: "sunlord",     birthLine: "선봉의 깃발과 수호자의 빛이 성황의 권능으로 떠올랐다." },
+  { materials: ["rogue", "archer"],        result: "dragonspear",   birthLine: "도적의 칼끝에 용의 숨결이 실려 용창이 되었다." },
+  { materials: ["mage", "trickster"],      result: "sage",          birthLine: "마도의 통찰과 교란꾼의 기지가 현자의 경지에 닿았다." },
+  { materials: ["vanguard", "guardian"],   result: "sunlord",       birthLine: "선봉의 깃발과 수호자의 빛이 성황의 권능으로 떠올랐다." },
+  // SR-25~30 — Batch 1A/2 Dev 전투 씨앗을 실제 합체 흐름으로 해금(Unlock 01).
+  { materials: ["warden", "warrior"],      result: "swordsaint",    birthLine: "워든의 술수와 전사의 검이 하나의 결투로 벼려져 검성이 되었다." },
+  { materials: ["purifier", "priest"],     result: "redeemer",      birthLine: "정화사의 자비와 사제의 기도가 죽음을 붙잡는 구원자로 거듭났다." },
+  { materials: ["tracker", "archer"],      result: "skyarcher",     birthLine: "추적자의 표식과 궁수의 시야가 하늘을 가르는 천궁으로 피어났다." },
+  { materials: ["trapper", "trickster"],   result: "plaguebringer", birthLine: "덫꾼의 독과 교란꾼의 책략이 전장을 병들게 하는 역병술사로 번졌다." },
+  { materials: ["bard", "cleric"],         result: "dancer",        birthLine: "바드의 선율과 신관의 가호가 박자를 짓는 무희의 춤이 되었다." },
+  { materials: ["wall", "guardian"],       result: "wardkeeper",    birthLine: "성벽의 굳건함과 수호자의 결계가 진형을 지키는 결계장으로 세워졌다." },
 ];
+
+// Second Class Recipe Unlock 01 — 합체 검색용 "활성 레시피" 단일 출처(1차 + 2차 병합).
+//   availableFusions/applyFusion(battle.js)이 공통으로 이 목록을 본다. 두 원본 배열의 구조/분리는 유지.
+export const ACTIVE_FUSION_RECIPES = [...FUSION_RECIPES, ...SECOND_CLASS_RECIPES];
 
 /* =========================================================
    Role Category Foundation 01 — 직업 "성향" 분류(전투 역할 문법).
@@ -109,7 +121,8 @@ export function combatRoleLabelOf(jobId) {
 // 현재 파티(jobIds)에서 실행 가능한 레시피만 추린다.
 //   파티 내 동일 직업 중복 금지: 결과 직업을 이미 보유 중이면 그 조합은 제외.
 export function availableFusions(jobIds) {
-  return FUSION_RECIPES.filter(
+  // Second Class Recipe Unlock 01 — 1차+2차 병합 소스를 본다(기존 1차 후보는 그대로, 2차도 함께 등장).
+  return ACTIVE_FUSION_RECIPES.filter(
     (r) => r.materials.every((m) => jobIds.includes(m)) && !jobIds.includes(r.result)
   );
 }
