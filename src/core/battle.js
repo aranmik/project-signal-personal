@@ -1425,10 +1425,11 @@ function runDataSkill(unit, meta) {
       }
       unit.charging = false;
       const targets = aliveEnemies();
-      // Combat Visibility Job Grammar 01 — 발동: 적 진영 중앙에서 원이 발생해 적 전체로 퍼진다("중앙 집속→확산").
+      // Combat Grammar Follow-up 01 — 발동: 충전 때 고정한 "그 좌표"에서 보라 충격파가 적 전체로 퍼진다("그 자리에서 터진다").
+      //   시전자→각 적 원거리 행동선은 제거(noLine) — 각 적엔 도착 hit(펄스/숫자)만. 시전자 "마력 폭발!" 외침은 유지(i===0).
       playActorFx("aoeSpread", unit.instanceId, { enemyIds: targets.map((t) => t.instanceId) });
       targets.forEach((t, i) =>
-        performAttack(unit, t, { mult: L.mult, lineType: "ranged", skill: i === 0 ? { name: L.releaseName, kind: meta.kind } : undefined, noShout: i !== 0 })
+        performAttack(unit, t, { mult: L.mult, skill: i === 0 ? { name: L.releaseName, kind: meta.kind } : undefined, noShout: i !== 0, noLine: true })
       );
       pushLog(`${unit.name}${josa(unit.name, "이가")} ${L.releaseName}!`);
       return true;
@@ -1526,14 +1527,23 @@ function runDataSkill(unit, meta) {
         if (unit.actionCount % 2 === 0) applyTauntMany(unit, [...frontEnemies(), ...aliveEnemies().filter((e) => e.role !== "front")].slice(0, heroTauntCount(unit.id)));
       }
       const allies = aliveParty();
+      // Job Identity Tuning 01 — 수호의 오오라: 아군 전체 "받는 피해 고정값 감소"(aegis). 만료되면 다시 켠다(주기적 유지).
+      //   아바타보다 큰 오오라 FX + 아군 [방어] 버프칩으로 지속 인지. 성황의 수호/방어 정체성 강화.
+      if (!allies.some((a) => hasStatus(a, "aegis"))) {
+        allies.forEach((a) => applyStatus(a, { type: "aegis", duration: L.auraTurns ?? 4, flat: L.auraFlat ?? 2 }));
+        playActorFx("aura", unit.instanceId, { allyIds: allies.map((a) => a.instanceId) });
+        skillShout(unit, "수호의 오오라!", meta.kind);
+        pushLog(`${unit.name}${josa(unit.name, "이가")} 수호의 오오라를 펼쳤다 — 아군 받는 피해 -${L.auraFlat ?? 2}.`);
+        return true;
+      }
       const lowExists = allies.some((a) => a.hp / a.maxHp < L.allyHpThreshold);
       if (lowExists && !unit.sanctUsed) {
         unit.sanctUsed = true;
         allies.forEach((a) => { a.damageImmune = true; });
-        playSupportFx({
-          casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind,
-          heals: allies.map((a) => ({ targetInstanceId: a.instanceId, amount: 0 })),
-        });
+        // Combat Grammar Follow-up 01 — 성황 중심 노랑 성역 파동이 아군 전체로 퍼진다 + 시전자 "성역!" 외침.
+        //   아군은 damageImmune→[성역] 버프칩으로 상태 인지(기존 mint 회복 펄스 대신 금빛 보호 문법으로 분리).
+        playActorFx("sanctuarySpread", unit.instanceId, { allyIds: allies.map((a) => a.instanceId) });
+        skillShout(unit, meta.name + "!", meta.kind);
         pushLog(`${unit.name}${josa(unit.name, "이가")} 성역을 펼쳤다. 파티 피해 1회 무효.`);
         return true;
       }
@@ -1648,32 +1658,29 @@ function runDataSkill(unit, meta) {
       performAttack(unit, target, { mult: L.mult ?? 1.0, lineType: "ranged", skill: meta });
       return true;
     }
-    case "dance": { // 무희(SR-29) — 예측 가능한 1박/2박/3박 순환 버프(게이지/속도 무조작, 행동 카운트 기반).
+    case "dance": { // 무희(SR-29) — Job Identity Tuning 01: 공격형 로망. 1박 공격력↑ / 2박 치명↑(2명) / 피날레 속도게이지↑(무희 제외).
+      //   방어 성향(회복/보호막)은 성황으로 분리. 대상 선정 랜덤성 유지.
       const others = aliveParty().filter((a) => a !== unit);
       unit.beat = ((unit.beat || 0) % 3) + 1; // 1→2→3→1
-      if (unit.beat === 1) { // 고양 — 최고 ATK 아군 공격 강화
-        const t = (others.length ? others : [unit]).slice().sort((a, b) => b.atk - a.atk)[0];
+      if (unit.beat === 1) { // 1박 고양 — 랜덤 1명 공격력↑
+        const t = shuffle(others.length ? others : [unit])[0];
         applyCombatStatus(t, "atkUp", L.exaltPct ?? 0.10);
-        pushLog(`${unit.name} 1박, 고양!`);
-        // Combat Visibility Job Grammar 01 — 고양 대상에게 지원선(buff) + 상승 end로 "누구를 강화했는지" 보이게.
+        pushLog(`${unit.name} 1박, 고양! ${t.name} 공격력↑`);
         playSupportFx({ casterInstanceId: unit.instanceId, text: "1박!", kind: meta.kind, buffs: [t.instanceId] });
-      } else if (unit.beat === 2) { // 회전 — HP 낮은 아군 회복(없으면 최저 아군 보호막)
-        const hurt = lowestRatioAllyHurt(0.95);
-        if (hurt) {
-          const amt = healUnit(hurt, L.healAmt ?? 5);
-          pushLog(`${unit.name} 2박, 회전!`);
-          playSupportFx({ casterInstanceId: unit.instanceId, text: "2박!", kind: "heal", heals: amt > 0 ? [{ targetInstanceId: hurt.instanceId, amount: amt }] : [] });
-        } else {
-          const t = lowestRatioAllyAny() || unit;
-          grantShieldTo(unit, t, L.beat2Shield ?? 4);
-          pushLog(`${unit.name} 2박, 회전!`);
-          playSupportFx({ casterInstanceId: unit.instanceId, text: "2박!", kind: "guard", guardInstanceId: t.instanceId });
-        }
-      } else { // 피날레 — 아군 전체 작은 보호막
-        const party = aliveParty();
-        party.forEach((a) => grantShieldTo(unit, a, L.finaleShield ?? 3));
-        pushLog(`${unit.name} 3박, 피날레!`);
-        playSupportFx({ casterInstanceId: unit.instanceId, text: "피날레!", kind: "guard", guardInstanceId: unit.instanceId, heals: party.map((a) => ({ targetInstanceId: a.instanceId, amount: 0 })) });
+      } else if (unit.beat === 2) { // 2박 가락 — 랜덤 2명 치명 확률↑
+        const list = (shuffle(others).slice(0, 2));
+        const targets = list.length ? list : [unit];
+        targets.forEach((t) => applyCombatStatus(t, "critUp", L.critPct ?? STATUS_PCT));
+        pushLog(`${unit.name} 2박, 가락! 아군 ${targets.length}명 치명↑`);
+        playSupportFx({ casterInstanceId: unit.instanceId, text: "2박!", kind: meta.kind, buffs: targets.map((t) => t.instanceId) });
+      } else { // 피날레 — 무희 제외 아군 전체 속도 게이지↑("단숨에 나아간다") + 분홍 뾰로롱
+        const gain = L.finaleGauge ?? 30;
+        others.forEach((a) => {
+          a.gaugeRiseFrom = Math.min(100, a.actionGauge || 0); // render: 상승 구간 표시(읽힘)
+          a.actionGauge = Math.min(100, (a.actionGauge || 0) + gain);
+        });
+        pushLog(`${unit.name} 피날레! 아군이 리듬을 받고 단숨에 나아간다.`);
+        playActorFx("finale", unit.instanceId, { allyIds: others.map((a) => a.instanceId) });
       }
       return true;
     }
@@ -1815,12 +1822,22 @@ function grantShieldTo(caster, target, amount) {
 
 // Combat Grammar Polish 02 — 실제 피해 적용(raw): 성역 1회 무효 → shield 흡수 → 초과분 HP.
 //   결속/반격 무한연쇄 차단을 위해 "분배된 피해"는 항상 이 raw 경로로만 적용된다(재분배 없음).
+// Job Identity Tuning 01 — 성황 수호 오오라(aegis): 받는 피해 고정 감소량(없으면 0).
+function aegisFlatOf(unit) {
+  if (!Array.isArray(unit.statuses)) return 0;
+  const s = unit.statuses.find((x) => x.type === "aegis");
+  return s ? (s.flat || 0) : 0;
+}
+
 function dealRaw(target, dmg) {
   if (target.damageImmune) { // First Class Expansion 01: 성역(성황) 1회 피해 무효
     target.damageImmune = false;
     return;
   }
   let remaining = Math.max(0, dmg);
+  // Job Identity Tuning 01 — 성황 수호 오오라: 피해 적용 직전 고정값 감소(최소 1 보장 — 완전 무효는 아님).
+  const aegis = aegisFlatOf(target);
+  if (aegis > 0 && remaining > 0) remaining = Math.max(1, remaining - aegis);
   const sh = target.shield || 0;
   if (sh > 0) {
     const absorbed = Math.min(sh, remaining);
@@ -2080,6 +2097,7 @@ function performAttack(attacker, target, opts = {}) {
     amount: damage,
     delayExtra: opts.fxDelayExtra || 0,
     chained: !!opts.chained,
+    noLine: !!opts.noLine, // Combat Grammar Follow-up 01 — 광역 폭발 등: 선 생략하고 도착 hit만(피해는 그대로)
     // Combat Grammar Foundation 01 — 치명이면 주황 치명 숫자 규격(01C), 아니면 기본 빨강.
     numberVariant: isCrit ? "crit" : null,
     // 스킬이면 스킬명(더 큰 텍스트), 아니면 기본 "공격!". noShout면 외침 없음.

@@ -1022,6 +1022,11 @@ function updateFieldUnit(el, unit) {
       spawnGaugeDropMark(tempoBar, unit.gaugeDropFrom, gauge);
       unit.gaugeDropFrom = null;
     }
+    // Job Identity Tuning 01 — 무희 피날레로 게이지가 오른 경우: 상승 구간을 분홍으로 잠깐 보여준다("단숨에 나아간다").
+    if (tempoBar && unit.gaugeRiseFrom != null) {
+      spawnGaugeRiseMark(tempoBar, unit.gaugeRiseFrom, gauge);
+      unit.gaugeRiseFrom = null;
+    }
     if (tempoBar) {
       tempoBar.classList.toggle("ready-soon", (unit.actionGauge ?? 0) >= 88);
     }
@@ -1038,6 +1043,19 @@ function spawnGaugeDropMark(tempoBar, fromPct, toPct) {
   m.className = "tempo-drop";
   m.style.left = `${to}%`;
   m.style.width = `${from - to}%`;
+  m.addEventListener("animationend", () => m.remove());
+  tempoBar.appendChild(m);
+}
+
+// Job Identity Tuning 01 — 게이지 상승 마커: 무희 피날레로 오른 구간(from→to)을 분홍으로 잠깐 보여준다.
+function spawnGaugeRiseMark(tempoBar, fromPct, toPct) {
+  const from = Math.max(0, Math.min(100, fromPct));
+  const to = Math.max(0, Math.min(100, toPct));
+  if (to - from < 1) return;
+  const m = document.createElement("span");
+  m.className = "tempo-rise";
+  m.style.left = `${from}%`;
+  m.style.width = `${to - from}%`;
   m.addEventListener("animationend", () => m.remove());
   tempoBar.appendChild(m);
 }
@@ -1205,6 +1223,10 @@ const STATUS_CHIP = {
   rhythm: { t: "리듬", c: "up" },
   charging: { t: "충전", c: "charge" },
   bond: { t: "결속", c: "bond" },
+  // Combat Grammar Follow-up 01 — 성황 성역(damageImmune 파생, 표시 전용 — 효과는 damageImmune이 담당).
+  sanctuary: { t: "성역", c: "sanctuary" },
+  // Job Identity Tuning 01 — 성황 수호 오오라(실제 aegis 상태 — 받는 피해 고정 감소). 방어 버프칩.
+  aegis: { t: "방어", c: "aegis" },
 };
 function statusChips(unit) {
   const chips = (unit.statuses || []).map((s) => s.type).filter((t) => STATUS_CHIP[t]);
@@ -1219,6 +1241,8 @@ function statusChips(unit) {
   if (!unit.isDead && (unit.bondOffenseTarget || unit.bondDefenseTarget)) chips.push("bond");
   // Second Class Batch 2 — 무희 박자(불리언/숫자 필드 unit.beat) → 무희에만 '리듬' 합성 칩(예측 가능한 박자 진행 표시).
   if (unit.id === "dancer" && !unit.isDead && unit.beat) chips.push("rhythm");
+  // Combat Grammar Follow-up 01 — 성역(성황 부여) 받은 아군: damageImmune → [성역] 버프칩(1회 무효 소모 시 사라짐). 표시 전용.
+  if (!unit.isDead && unit.damageImmune) chips.push("sanctuary");
   return chips;
 }
 function statusChipsHTML(unit) {
@@ -1575,7 +1599,7 @@ export function playActionFx(event) {
   // Job Grammar 01: kind = 직업 행동 분류(strike/protect/snipe/heal/attack).
   //   현재는 행동선 data-kind 기록만 — 시각 변화 없음. 미래 직업별 FX/로그 확장 hook.
   const { sourceInstanceId, sourceUnitId, targetInstanceId, lineType, kind, isHeal, amount,
-    shoutText, shoutKind, shoutTier, numberVariant, delayExtra = 0, chained = false } = event;
+    shoutText, shoutKind, shoutTier, numberVariant, delayExtra = 0, chained = false, noLine = false } = event;
   const layer = document.getElementById("fx-layer");
   const field = document.getElementById("battle-field");
   if (!layer || !field) return;
@@ -1602,14 +1626,14 @@ export function playActionFx(event) {
   // Combat Visibility Job Grammar 01 — chained(체인 관통 2번째 선 등)은 행동자 선언/외침/대상큐를 생략하고
   //   "이어지는 선 + 도착 hit"만 그린다(이미 1번째 선에서 선언했으므로 중복 방지).
   if (!chained) {
-    // 1) 행동자 선언("나야 지금!") — source unit이 먼저 짧게 보인다.
-    cueActor(sourceInstanceId, lineType);
-    // 1a) 행동 텍스트(외침). Hero Skill 01: event.shoutText로 "공격!"/스킬명 모두 처리.
+    // 1) 행동자 선언("나야 지금!") — source unit이 먼저 짧게 보인다. (noLine=광역 폭발 등은 per-대상 선언 생략)
+    if (!noLine) cueActor(sourceInstanceId, lineType);
+    // 1a) 행동 텍스트(외침). Hero Skill 01: event.shoutText로 "공격!"/스킬명 모두 처리. (noLine에서도 시전자 외침은 유지)
     if (shoutText) {
       spawnActionShout(sourceInstanceId, shoutText, fieldRect, { tier: shoutTier, kind: shoutKind });
     }
     // 1b) 대상 신호("잡혔다") — actor보다 약한 보조 신호. 선이 도착하기 전 대상을 가리킨다.
-    spawnTargetCue(targetInstanceId, isHeal);
+    if (!noLine) spawnTargetCue(targetInstanceId, isHeal);
   }
 
   // 2) 짧은 선행 뒤 행동선 발사 + 대상 반응. 배속이면 리듬만 살게 더 짧게.
@@ -1633,8 +1657,11 @@ export function playActionFx(event) {
     : { x: t.x, y: Math.max(24, Math.min(fieldRect.height - 14, t.y - 16)) };
   const fire = () => {
     // Action Line Visibility 01 — 시작점 pulse로 "이 actor가 행동선의 출발점"을 1회 번쩍(과하지 않게).
-    spawnStartPulse(layer, s, variant);
-    spawnLine(layer, s, t, lineType, kind, variant);
+    //   Combat Grammar Follow-up 01 — noLine(광역 폭발 등)은 선/시작펄스 생략하고 도착 hit(펄스/숫자/반응)만 남긴다.
+    if (!noLine) {
+      spawnStartPulse(layer, s, variant);
+      spawnLine(layer, s, t, lineType, kind, variant);
+    }
     spawnPulse(layer, t, isHeal);
     // First Class Expansion 01: 피해/회복 0(상태 부여형 스킬: 중독 등)은 숫자 생략.
     // Combat Grammar Foundation 01: numberVariant(crit 등)로 피해 숫자 규격 분기.
@@ -1753,14 +1780,23 @@ function enemyCenter(enemyIds, fieldRect) {
   return { x: pts.reduce((a, p) => a + p.x, 0) / pts.length, y: pts.reduce((a, p) => a + p.y, 0) / pts.length };
 }
 
-// 마도/현자 집중 전조: 시전자→적 진영 중앙 선 + 중앙에 "마력이 모이는 점"(수렴 링).
+// Combat Grammar Follow-up 01 — 적 전장 고정 중앙(폴백): 상단 중앙-우측 근처(적 진형 영역).
+function fieldEnemyAnchor(fieldRect) {
+  return { x: fieldRect.width * 0.56, y: fieldRect.height * 0.26 };
+}
+
+// Combat Grammar Follow-up 01 — 마도/현자 충전 씨앗 좌표(field 비율로 고정). 충전 때 정해 발동 때 "그 자리"에서 폭발.
+const chargeSeeds = new Map(); // casterInstanceId → { fx, fy }
+
+// 마도/현자 집중 전조: 시전자→적 전장 고정 중앙 선 + 그 좌표에 "마력이 모이는 씨앗"(수렴 링).
+//   중앙 좌표는 충전 시점에 고정(발동 때 남은 적 수와 무관 — "씨앗을 그 자리에 던져둔다").
 function spawnChargeGather(casterInstanceId, enemyIds) {
   const layer = document.getElementById("fx-layer");
   const field = document.getElementById("battle-field");
   if (!layer || !field) return;
   const fieldRect = field.getBoundingClientRect();
-  const c = enemyCenter(enemyIds, fieldRect);
-  if (!c) return;
+  const c = enemyCenter(enemyIds, fieldRect) || fieldEnemyAnchor(fieldRect);
+  chargeSeeds.set(casterInstanceId, { fx: c.x / (fieldRect.width || 1), fy: c.y / (fieldRect.height || 1) });
   const s = unitPoint(casterInstanceId, BODY_MID_FRAC, fieldRect);
   if (s) { spawnStartPulse(layer, s, "special"); spawnLine(layer, s, c, "ranged", "charge", "special"); }
   const el = document.createElement("span");
@@ -1771,16 +1807,20 @@ function spawnChargeGather(casterInstanceId, enemyIds) {
   layer.appendChild(el);
 }
 
-// 광역 발동: 적 진영 중앙에서 원이 커지며 적 전체로 퍼진다(확산). 반경 = 가장 먼 적까지 + 여유.
-function spawnAoeSpread(enemyIds) {
+// 광역 발동: 충전 때 고정한 "그 좌표(씨앗)"에서 보라 충격파 원이 커지며 적 전체 영역으로 퍼진다("그 자리에서 터진다").
+//   시전자→각 적 선은 그리지 않는다(battle.js noLine). 반경 = 현재 적 전체를 덮게(없으면 고정).
+function spawnAoeSpread(casterInstanceId, enemyIds) {
   const layer = document.getElementById("fx-layer");
   const field = document.getElementById("battle-field");
   if (!layer || !field) return;
   const fieldRect = field.getBoundingClientRect();
+  const seed = chargeSeeds.get(casterInstanceId);
+  chargeSeeds.delete(casterInstanceId);
+  const c = seed
+    ? { x: seed.fx * fieldRect.width, y: seed.fy * fieldRect.height }
+    : (enemyCenter(enemyIds, fieldRect) || fieldEnemyAnchor(fieldRect));
   const pts = (enemyIds || []).map((id) => unitPoint(id, { fx: 0.5, fy: 0.5 }, fieldRect)).filter(Boolean);
-  if (!pts.length) return;
-  const c = { x: pts.reduce((a, p) => a + p.x, 0) / pts.length, y: pts.reduce((a, p) => a + p.y, 0) / pts.length };
-  const maxR = Math.max(60, ...pts.map((p) => Math.hypot(p.x - c.x, p.y - c.y))) + 44;
+  const maxR = pts.length ? Math.max(80, ...pts.map((p) => Math.hypot(p.x - c.x, p.y - c.y))) + 50 : 170;
   const el = document.createElement("span");
   el.className = "fx-aoe-spread fx-var--special";
   el.style.left = `${c.x}px`;
@@ -1788,6 +1828,82 @@ function spawnAoeSpread(enemyIds) {
   el.style.setProperty("--aoe-r", `${maxR}px`);
   el.addEventListener("animationend", () => el.remove());
   layer.appendChild(el);
+}
+
+// Combat Grammar Follow-up 01 — 성황 성역: 시전자(성황) 중심 노랑 성역 파동이 아군 전체 영역으로 퍼진다 + 각 아군 금빛 보호 펄스.
+//   "방어/보호의 권위" 느낌. 아군의 [성역] 버프칩(damageImmune 파생)으로 상태도 인지.
+function spawnSanctuarySpread(casterInstanceId, allyIds) {
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  const fieldRect = field.getBoundingClientRect();
+  const c = unitPoint(casterInstanceId, BODY_MID_FRAC, fieldRect);
+  if (!c) return;
+  const pts = (allyIds || []).map((id) => unitPoint(id, { fx: 0.5, fy: 0.5 }, fieldRect)).filter(Boolean);
+  const maxR = pts.length ? Math.max(80, ...pts.map((p) => Math.hypot(p.x - c.x, p.y - c.y))) + 50 : 150;
+  const el = document.createElement("span");
+  el.className = "fx-sanctuary";
+  el.style.left = `${c.x}px`;
+  el.style.top = `${c.y}px`;
+  el.style.setProperty("--aoe-r", `${maxR}px`);
+  el.addEventListener("animationend", () => el.remove());
+  layer.appendChild(el);
+  pts.forEach((p) => spawnGuardEndPulse(layer, p));
+}
+
+// Job Identity Tuning 01 — 성황 수호의 오오라: 아바타보다 큰 이글이글 오오라가 성황에 켜짐 + 아군 전체 금빛 파동 + 보호 펄스.
+function spawnAura(casterInstanceId, allyIds) {
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  const fieldRect = field.getBoundingClientRect();
+  const c = unitPoint(casterInstanceId, { fx: 0.5, fy: 0.5 }, fieldRect);
+  if (!c) return;
+  const aura = document.createElement("span");
+  aura.className = "fx-aura";
+  aura.style.left = `${c.x}px`;
+  aura.style.top = `${c.y}px`;
+  aura.addEventListener("animationend", () => aura.remove());
+  layer.appendChild(aura);
+  const cb = unitPoint(casterInstanceId, BODY_MID_FRAC, fieldRect) || c;
+  const pts = (allyIds || []).map((id) => unitPoint(id, { fx: 0.5, fy: 0.5 }, fieldRect)).filter(Boolean);
+  const maxR = pts.length ? Math.max(80, ...pts.map((p) => Math.hypot(p.x - cb.x, p.y - cb.y))) + 50 : 150;
+  const wave = document.createElement("span");
+  wave.className = "fx-sanctuary";
+  wave.style.left = `${cb.x}px`;
+  wave.style.top = `${cb.y}px`;
+  wave.style.setProperty("--aoe-r", `${maxR}px`);
+  wave.addEventListener("animationend", () => wave.remove());
+  layer.appendChild(wave);
+  pts.forEach((p) => spawnGuardEndPulse(layer, p));
+}
+
+// Job Identity Tuning 01 — 무희 피날레: 효과 받은 아군에게 분홍 뾰로롱(스파클) + 무희 중심 분홍 파동("단숨에 나아간다").
+function spawnFinaleFx(casterInstanceId, allyIds) {
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  const fieldRect = field.getBoundingClientRect();
+  const pts = (allyIds || []).map((id) => unitPoint(id, { fx: 0.5, fy: 0.46 }, fieldRect)).filter(Boolean);
+  pts.forEach((p) => {
+    const el = document.createElement("span");
+    el.className = "fx-finale";
+    el.style.left = `${p.x}px`;
+    el.style.top = `${p.y}px`;
+    el.addEventListener("animationend", () => el.remove());
+    layer.appendChild(el);
+  });
+  const c = unitPoint(casterInstanceId, BODY_MID_FRAC, fieldRect);
+  if (c && pts.length) {
+    const maxR = Math.max(80, ...pts.map((p) => Math.hypot(p.x - c.x, p.y - c.y))) + 40;
+    const wave = document.createElement("span");
+    wave.className = "fx-finale-wave";
+    wave.style.left = `${c.x}px`;
+    wave.style.top = `${c.y}px`;
+    wave.style.setProperty("--aoe-r", `${maxR}px`);
+    wave.addEventListener("animationend", () => wave.remove());
+    layer.appendChild(wave);
+  }
 }
 
 // 추적자/천궁 표식 부여: 시전자→대상 점선 조준선 + 대상 몸통 스코프 표식(item 6).
@@ -1858,7 +1974,10 @@ export function playActorFx(kind, casterId, opts = {}) {
     case "projectile": spawnProjectile(opts.sourceId || casterId, opts.targetId); break;
     // Combat Visibility Job Grammar 01 — 마도/현자 집중 전조 / 광역 확산 / 추적자·천궁 표식 / 표식 추적 강한 hit.
     case "chargeGather": spawnChargeGather(casterId, opts.enemyIds || []); break;
-    case "aoeSpread":    spawnAoeSpread(opts.enemyIds || []); break;
+    case "aoeSpread":    spawnAoeSpread(casterId, opts.enemyIds || []); break;
+    case "sanctuarySpread": spawnSanctuarySpread(casterId, opts.allyIds || []); break;
+    case "aura":         spawnAura(casterId, opts.allyIds || []); break;
+    case "finale":       spawnFinaleFx(casterId, opts.allyIds || []); break;
     case "mark":         spawnMarkFx(casterId, opts.targetId); break;
     case "markBurst":    spawnMarkBurst(opts.targetId); break;
   }
@@ -1960,6 +2079,10 @@ const LINE_STYLE = {
   support:  { bowF: 0.34, bowMin: 20, bowMax: 70, flip: -1, head: "spark",  draw: false },
   // Combat Visibility Job Grammar 01 — 용창 관통(붉은/주황 공격 스킬선, 단일·체인) / 추적자·천궁 표식(점선 조준선).
   pierce:   { bowF: 0.30, bowMin: 18, bowMax: 70, flip: 1,  head: "x",     draw: true, ghost: false },
+  // Combat Grammar Follow-up 01 — 특수 공격선 family 후속 확장 준비(주황/붉은 강조 — actionLineVariant가 pierce 색으로 묶음).
+  //   분쇄(crush)=묵직한 베기 / 처형(execute)=날카로운 일격. skill에서 lineType만 지정하면 바로 사용 가능(모양만 여기서 분기).
+  crush:    { bowF: 0.34, bowMin: 20, bowMax: 78, flip: 1,  head: "slash", draw: true, ghost: true },
+  execute:  { bowF: 0.26, bowMin: 16, bowMax: 64, flip: 1,  head: "x",     draw: true, ghost: false },
   mark:     { bowF: 0.18, bowMin: 12, bowMax: 40, flip: 1,  head: "spark", draw: false },
   // Hero Skill 01: 교란 — 보라/분홍 거친 왜곡선(짧게 흔들림). 작은 혼란 표식(spark).
   disrupt:  { bowF: 0.22, bowMin: 14, bowMax: 44, flip: 1,  head: "spark",  draw: false, rough: true },
@@ -1970,6 +2093,10 @@ const LINE_STYLE = {
   slash:    { bowF: 0.36, bowMin: 26, bowMax: 82, flip: 1,  head: "slash", draw: true, ghost: true },
   enemy:    { bowF: 0.16, bowMin: 8,  bowMax: 22, flip: 1,  head: "claw",  draw: false, rough: true },
 };
+
+// Combat Grammar Follow-up 01 — 특수 공격선 family(흰 일반공격과 구분되는 주황/붉은 강조). 후속 분쇄/처형 등은 여기에 lineType만
+//   추가하고 LINE_STYLE에 모양을 정의하면 자동으로 강조 색(actionLineVariant→"pierce" 색)을 받는다. 확장 단일 출처.
+const SPECIAL_ATTACK_LINETYPES = new Set(["pierce", "crush", "execute"]);
 
 // Action Line Visibility 01 — 공통 행동선 variant(색 언어). lineType(선 모양/장식)와 분리:
 //   variant = 행동 "성격" 색. 영웅/몬스터 공통(같은 lineType/kind 경로를 쓰므로 자동 적용).
@@ -1983,7 +2110,9 @@ function actionLineVariant(lineType, kind) {
   if (lineType === "taunt") return "guard";
   if (lineType === "disrupt") return "debuff";
   if (lineType === "support") return "support";
-  if (lineType === "pierce") return "pierce";   // Combat Visibility Job Grammar 01 — 용창 관통 = 붉은/주황 공격 스킬선
+  // Combat Grammar Follow-up 01 — 특수 공격선 계열: 흰 일반공격선과 구분되는 주황/붉은 강조(pierce 호평 → 후속 확장 family).
+  //   후속 분쇄(crush)/처형(execute) 등도 lineType만 추가하면 같은 강조 색(fx-var--pierce)을 받는다. 모양은 LINE_STYLE에서 분기.
+  if (SPECIAL_ATTACK_LINETYPES.has(lineType)) return "pierce";
   if (lineType === "mark") return "special";     // Combat Visibility Job Grammar 01 — 추적자/천궁 표식 = 보라빛 조준선
   if (lineType === "attack") {
     // 영웅 근접(strike) = 따뜻한 melee. 그 외(몬스터 기본공격 kind="attack" / 비근접 문법의 기본공격) = 중립 normal.

@@ -72,7 +72,8 @@ export const SKILLS = {
     logic: { type: "charge", chargeName: "예지집중", releaseName: "현자의 파동", scope: "all", mult: 1.0, allyHaste: { count: 2, pct: 0.3 } } },
 
   sunlord:   { id: "aegis", name: "성역", kind: "support",
-    logic: { type: "sanctuary", allyHpThreshold: 0.5 } },
+    // Job Identity Tuning 01 — 수호의 오오라: 아군 전체 받는 피해 -auraFlat(고정), auraTurns 지속. 만료 시 재시전.
+    logic: { type: "sanctuary", allyHpThreshold: 0.5, auraFlat: 2, auraTurns: 4 } },
 
   // Second Class Mechanics Batch 1A — SR-25/27/30 2차 전투 씨앗(정식 미해금, Dev 전투 테스트용).
   //   검성 결투: 결투 표식 우선타격 + 간파 반격(triggerSwordsaintCounter) + HP35%↓ 마무리 일섬.
@@ -94,7 +95,8 @@ export const SKILLS = {
     logic: { type: "infect", mult: 1.0, infectTurns: 3, infectTick: 2, infectDefDown: 0.12, maxInfected: 3, spreadEvery: 2 } },
   //   무희 박자: 행동마다 1박씩 진행(예측 가능). 1박 고양(atkUp) / 2박 회전(회복·보호막) / 3박 피날레(전체 보호막).
   dancer:       { id: "dance", name: "박자", kind: "support",
-    logic: { type: "dance", exaltPct: 0.10, healAmt: 5, beat2Shield: 4, finaleShield: 3 } },
+    // Job Identity Tuning 01 — 공격형: 1박 atkUp(exaltPct) / 2박 critUp(critPct, 2명) / 피날레 속도게이지+finaleGauge(무희 제외).
+    logic: { type: "dance", exaltPct: 0.10, critPct: 0.30, finaleGauge: 30 } },
 };
 
 export function skillOf(jobId) {
