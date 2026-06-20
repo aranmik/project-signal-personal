@@ -2543,6 +2543,114 @@ body {
   background: #1a2433;
 }
 
+/* Run Footprints 01 — 결과 카드 직전 발자취 1줄 + 발자취 패널 + 런 포기 버튼 */
+#result-footprint {
+  max-width: 300px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #9fb3c6;
+  text-align: center;
+  word-break: keep-all;
+}
+#result-footprint:empty { display: none; }
+
+/* 발자취 패널 — result-overlay와 같은 가벼운 오버레이(화면 점유 최소, 390px 대응) */
+#footprints-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(8, 10, 16, 0.62);
+  z-index: 30;
+}
+#footprints-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 340px;
+  max-height: 80vh;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  background: #141b26;
+  border: 1px solid #2a3a4a;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+#footprints-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+#footprints-title { font-size: 14px; font-weight: bold; color: #eef3f8; }
+#footprints-close {
+  background: transparent;
+  border: none;
+  color: #8aa0b4;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+#footprints-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.fp-empty { font-size: 12px; color: #7e91a4; text-align: center; padding: 14px 4px; }
+.fp-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: #0f1722;
+  border-left: 3px solid #3a4a5a;
+}
+.fp-row--clear  { border-left-color: #3fae6a; }
+.fp-row--defeat { border-left-color: #e94560; }
+.fp-row--abort  { border-left-color: #b08a3a; }
+.fp-result { flex: 0 0 auto; font-size: 11px; font-weight: bold; color: #cfe0ef; }
+.fp-line {
+  flex: 1 1 auto;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #9fb3c6;
+  word-break: keep-all;
+}
+#footprints-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+#footprints-actions button {
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: bold;
+  border-radius: 8px;
+  cursor: pointer;
+  background: transparent;
+  color: #8aa0b4;
+  border: 1px solid #3a4a5a;
+}
+#footprints-actions button:active { background: #1a2433; }
+
+/* 여정 화면 "런 포기" — 여정 카드와 분리된 작은 보조 버튼(기존 타이틀 버튼과 의미 구분) */
+.route-abandon {
+  align-self: center;
+  margin-top: 10px;
+  padding: 7px 14px;
+  font-size: 11px;
+  border-radius: 8px;
+  background: transparent;
+  color: #7e91a4;
+  border: 1px dashed #3a4a5a;
+  cursor: pointer;
+}
+.route-abandon:active { background: #1a2433; color: #c6d4e2; }
+
 /* 성장 선택 화면 */
 #growth-panel {
   display: flex;

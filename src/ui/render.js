@@ -6,6 +6,7 @@ import { REWARDS, rewardById, REWARD_MAX_LEVEL } from "../data/rewards.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { SLOT_ORDER, SLOT_NAMES, partySizeOf, LAYOUT_PREVIEW_CASES } from "../core/state.js";
 import { avatarSpec, avatarFigureHTML, CODEX_ENTRIES, CODEX_STATUS_LABEL } from "../data/avatars.js";
+import { loadFootprints, footprintLine, footprintsToTSV, resultLabel } from "../data/footprints.js";
 
 function jobName(id) {
   return UNIT_TEMPLATES.party[id]?.name || id;
@@ -491,6 +492,7 @@ function renderRoutePanel(state) {
     ${atmoLine}
     <p class="route-help">${PRESSURE_HELP}</p>
     <div id="route-list">${cards}</div>
+    <button type="button" class="route-abandon" data-abandon>🏳 런 포기 (발자취 기록 후 타이틀)</button>
   `;
 }
 
@@ -735,10 +737,40 @@ function renderResultOverlay(state) {
       titleEl.textContent = "모험 실패";
       restartBtn.textContent = "다시 시작";
     }
+    // Run Footprints 01 — 결과 카드 하단에 직전 발자취 1줄(방금 저장된 최신 기록).
+    const fpEl = document.getElementById("result-footprint");
+    if (fpEl) {
+      const list = loadFootprints();
+      const last = list[list.length - 1];
+      fpEl.textContent = last ? footprintLine(last, jobName) : "";
+    }
     overlay.hidden = false;
   } else {
     overlay.hidden = true;
   }
+}
+
+// Run Footprints 01 — 발자취 패널 목록 채우기(최신 먼저). main.js가 패널을 열 때 호출한다.
+//   게임 상태(gameState.screen)와 무관한 가벼운 오버레이 — 여기선 #footprints-list만 갱신.
+export function renderFootprintsList() {
+  const host = document.getElementById("footprints-list");
+  if (!host) return;
+  const list = loadFootprints().slice().reverse(); // 최신이 위로
+  if (!list.length) {
+    host.innerHTML = `<p class="fp-empty">아직 발자취가 없습니다. 런을 클리어/실패/포기하면 기록됩니다.</p>`;
+    return;
+  }
+  host.innerHTML = list.map((fp) =>
+    `<div class="fp-row fp-row--${fp.result}">
+       <span class="fp-result">${resultLabel(fp.result)}</span>
+       <span class="fp-line">${footprintLine(fp, jobName)}</span>
+     </div>`
+  ).join("");
+}
+
+// Run Footprints 01 — 복사용 TSV 텍스트(직업명 포함). main.js의 복사 핸들러가 사용.
+export function footprintsCopyText() {
+  return footprintsToTSV(loadFootprints(), jobName);
 }
 
 function renderHud(state) {

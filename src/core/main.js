@@ -1,12 +1,14 @@
 import { gameState, SLOT_ORDER } from "./state.js";
 import { slotPreference } from "../data/jobs.js";
-import { renderGame, toggleCodexDetail, closeCodexDetail } from "../ui/render.js";
+import { renderGame, toggleCodexDetail, closeCodexDetail, renderFootprintsList, footprintsCopyText } from "../ui/render.js";
 import { avatarSpec, avatarFigureHTML } from "../data/avatars.js";
+import { clearFootprints } from "../data/footprints.js";
 import {
   startRun, goTitle, applyReward, cycleSpeed, startPreview, showJobSelect,
   applyFusion, skipFusion, previewRecruit, confirmRecruit,
   swapFormationSlots, confirmArrange, continueAfterFusion, showCodex,
   showStageSelect, chooseRoute, continueFromRest, startLayoutPreview, showDevPreview,
+  abandonRun,
 } from "./battle.js";
 
 console.log("Project Signal Personal — init", gameState);
@@ -243,7 +245,9 @@ arrangePanel.addEventListener("click", (e) => {
 });
 
 // Run Structure 01A: 여정 선택 — 동적 카드는 위임으로 처리
+// Run Footprints 01: 같은 패널의 "런 포기" 버튼(data-abandon)도 위임 처리 — 발자취 기록 후 타이틀.
 document.getElementById("route-panel").addEventListener("click", (e) => {
+  if (e.target.closest("[data-abandon]")) { abandonRun(); return; }
   const b = e.target.closest("button[data-route]");
   if (b) chooseRoute(b.dataset.route);
 });
@@ -262,6 +266,49 @@ document.getElementById("to-title-btn").addEventListener("click", goTitle);
 
 // Combat Breath Preview 01: 상단 HUD 배속 순환 (2x/MAX)
 document.getElementById("speed-toggle").addEventListener("click", cycleSpeed);
+
+/* =========================================================
+   Run Footprints 01 — 발자취 패널(최근 10개). gameState.screen과 무관한 가벼운 오버레이.
+   타이틀 "발자취"로 열고, 닫기/복사(TSV)/초기화 처리. localStorage가 단일 출처라 항상 최신을 읽어 렌더.
+   ========================================================= */
+const footprintsOverlay = document.getElementById("footprints-overlay");
+function openFootprints() {
+  renderFootprintsList();
+  if (footprintsOverlay) footprintsOverlay.hidden = false;
+}
+function closeFootprints() {
+  if (footprintsOverlay) footprintsOverlay.hidden = true;
+}
+document.getElementById("title-footprints").addEventListener("click", openFootprints);
+document.getElementById("footprints-close").addEventListener("click", closeFootprints);
+// 배경(카드 바깥) 탭으로도 닫힘 — 카드 내부 클릭은 유지.
+if (footprintsOverlay) footprintsOverlay.addEventListener("click", (e) => {
+  if (e.target === footprintsOverlay) closeFootprints();
+});
+document.getElementById("footprints-clear").addEventListener("click", () => {
+  clearFootprints();
+  renderFootprintsList();
+});
+document.getElementById("footprints-copy").addEventListener("click", async () => {
+  const text = footprintsCopyText();
+  const btn = document.getElementById("footprints-copy");
+  try {
+    await navigator.clipboard.writeText(text);
+    if (btn) { btn.textContent = "복사됨!"; setTimeout(() => { btn.textContent = "복사(TSV)"; }, 1200); }
+  } catch (err) {
+    // 클립보드 권한 불가 시 폴백: 임시 textarea 선택 → execCommand 복사 시도(모바일 호환).
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      if (btn) { btn.textContent = "복사됨!"; setTimeout(() => { btn.textContent = "복사(TSV)"; }, 1200); }
+    } catch (e2) {
+      if (btn) { btn.textContent = "복사 실패"; setTimeout(() => { btn.textContent = "복사(TSV)"; }, 1200); }
+    }
+  }
+});
 
 // Combat Grammar Polish 02: 프리뷰 디버깅 바 제거 — UI 진입점 없음(startPreview는 dev 전용 잔존).
 

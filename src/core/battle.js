@@ -5,6 +5,7 @@ import { UNIT_TEMPLATES } from "../data/units.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
 import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions, depthSpeedFactor, routeReward } from "../data/routes.js";
 import { REWARDS, rewardById, REWARD_MAX_LEVEL } from "../data/rewards.js";
+import { saveFootprint } from "../data/footprints.js";
 import { renderGame, playActionFx, playStatusTickFx, playSupportFx, playStatusApplyFx, playActorFx, clearFxLayer } from "../ui/render.js";
 import { skillOf } from "../data/skills.js";
 
@@ -74,6 +75,9 @@ export function startBattle() {
   gameState.battle.status = "running";
   gameState.battle.isRunning = true;
   gameState.battle.result = null;
+
+  // Run Footprints 01 — 정식 전투만 현실 시간 측정 시작(preview/layout preview 제외).
+  if (!gameState.battle.previewKind) gameState.run.battleStartTs = performance.now();
 
   pushLog("전투 시작!");
   renderGame(gameState);
@@ -259,6 +263,8 @@ export function resetBattle() {
   gameState.run.deepForestCount = 0;         // Deep Forest Reward Rebuild 01 — 깊은 수풀 보상 단계 초기화
   gameState.run.recruitPower = 0;            // Deep Forest Reward Rebuild 01 — 깊은 수풀 영입(경계도 가산) 초기화
   gameState.run.partyHp = null;              // Stage Persistence 01 — 전투 간 HP 지속 초기화(첫 전투는 풀피)
+  gameState.run.combatMs = 0;                // Run Footprints 01 — 현실 전투 시간 누적 초기화(새 런)
+  gameState.run.battleStartTs = null;
 
   gameState.logs = ["새싹 숲 입구 — 모험 시작! 첫 전투가 끝나면 여정을 고른다."];
 
@@ -747,6 +753,11 @@ function battleTick() {
 
   if (end) {
     stopBattle();
+    // Run Footprints 01 — 정식 전투 종료 시 현실 전투 시간 누적(preview 제외). battleStartTs는 startBattle에서 설정.
+    if (end.outcome !== "preview" && gameState.run.battleStartTs != null) {
+      gameState.run.combatMs = (gameState.run.combatMs || 0) + (performance.now() - gameState.run.battleStartTs);
+      gameState.run.battleStartTs = null;
+    }
     // Victory Finish 01: 정식 런/패배는 짧은 마무리 호흡 뒤 전환(사망 연출 노출).
     //   preview는 기존대로 battle 화면에 머문다(전환 없음).
     if (end.outcome !== "preview") scheduleFinish(end.outcome);
@@ -2185,13 +2196,41 @@ function applyFinish(outcome) {
     pushLog(`심도 ${gameState.run.depth} 클리어! 보상을 선택하세요.`);
   } else if (outcome === "clear") {
     gameState.run.result = "clear";
+    recordFootprint("clear"); // Run Footprints 01 — 런 클리어 1건 기록
     pushLog("새싹숲 사자왕 격파 — 런 클리어! ▶ 다시 시작");
   } else if (outcome === "defeat") {
     gameState.battle.result = "defeat";
     gameState.run.result = "defeat";
+    recordFootprint("defeat"); // Run Footprints 01 — 모험 실패 1건 기록
     pushLog("모험 실패... ▶ 다시 시작");
   }
   renderGame(gameState);
+}
+
+// Run Footprints 01 — 현재 런 요약 1건 저장(클리어/실패/포기 공용). 파티 구성은 formation(슬롯→직업) 기준,
+//   현실 전투 시간 합(combatMs)·심도·경계도를 함께 남긴다. 직업명 매핑은 표시 레이어(render)가 담당한다.
+function recordFootprint(result) {
+  const f = gameState.run.formation || {};
+  const party = SLOT_ORDER.map((k) => (f[k] ? { slot: k, job: f[k] } : null)).filter(Boolean);
+  saveFootprint({
+    result,
+    depth: gameState.run.depth,
+    alertness: gameState.run.alertness || 0,
+    party,
+    combatMs: Math.round(gameState.run.combatMs || 0),
+    ts: Date.now(),
+  });
+}
+
+// Run Footprints 01 — 런 포기: 진행 중 전투 시간까지 합산해 "포기" 1건 기록 후 타이틀로.
+//   기존 "타이틀" 버튼(goTitle — 비기록 빠른 복귀)과 의미를 분리한다(포기는 발자취를 남긴다).
+export function abandonRun() {
+  if (gameState.run.battleStartTs != null) {
+    gameState.run.combatMs = (gameState.run.combatMs || 0) + (performance.now() - gameState.run.battleStartTs);
+    gameState.run.battleStartTs = null;
+  }
+  recordFootprint("abort");
+  goTitle();
 }
 
 function pushLog(text) {

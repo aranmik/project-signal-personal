@@ -22,6 +22,8 @@
           <button id="title-codex" type="button">직업 도감</button>
           <!-- Battlefield Preview & Layout Tune 01: Dev 전장 레이아웃 프리뷰(개발 확인용) -->
           <button id="title-dev-preview" type="button">🔧 Dev 전장 프리뷰</button>
+          <!-- Run Footprints 01: 최근 10개 런 결과/현실 전투 시간 기록 패널 진입 -->
+          <button id="title-footprints" type="button">👣 발자취</button>
         </div>
       </section>
 
@@ -158,10 +160,28 @@
         <div id="result-overlay" hidden>
           <div id="result-card">
             <div id="result-title"></div>
+            <!-- Run Footprints 01: 직전 발자취 1줄(방금 저장된 최신 기록) -->
+            <div id="result-footprint"></div>
             <div class="result-actions">
               <button id="result-restart" type="button"></button>
               <button id="result-title-btn" type="button">타이틀로</button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Run Footprints 01: 발자취 패널(최근 10개) — #game-frame 직속(타이틀/전투 어느 화면 위에도 떠야 하므로
+           #battle-view 밖에 둔다). gameState.screen과 무관한 가벼운 오버레이 — 닫기/복사/초기화는 main.js가 처리. -->
+      <div id="footprints-overlay" hidden>
+        <div id="footprints-card">
+          <div id="footprints-head">
+            <span id="footprints-title">👣 발자취 · 최근 10개</span>
+            <button id="footprints-close" type="button" aria-label="닫기">✕</button>
+          </div>
+          <div id="footprints-list"></div>
+          <div id="footprints-actions">
+            <button id="footprints-copy" type="button">복사(TSV)</button>
+            <button id="footprints-clear" type="button">초기화</button>
           </div>
         </div>
       </div>
