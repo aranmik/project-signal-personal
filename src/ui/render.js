@@ -984,6 +984,10 @@ function updateFieldUnit(el, unit) {
     }
   }
 
+  // Job Identity Tuning 02 — 결계장 지속 오오라: 결계장 생존 + 결속(wardlink) 활성 중이면 본체에 청록 오오라 글로우(발동 중 계속 노출).
+  el.classList.toggle("has-ward-aura",
+    unit.id === "wardkeeper" && !unit.isDead && Array.isArray(unit.statuses) && unit.statuses.some((s) => s.type === "wardlink"));
+
   const hpFill = el.querySelector(".hp-bar-fill");
   if (hpFill) {
     const hpPct = unit.maxHp > 0
@@ -1240,6 +1244,9 @@ const STATUS_CHIP = {
   sanctuary: { t: "성역", c: "sanctuary" },
   // Job Identity Tuning 01 — 성황 수호 오오라(실제 aegis 상태 — 받는 피해 고정 감소). 방어 버프칩.
   aegis: { t: "방어", c: "aegis" },
+  // Job Identity Tuning 02 — 결계장 파티 결속(실제 wardlink 상태) / 검성 간파 준비(합성 — parryReady 파생, 분쇄는 동적 표기).
+  wardlink: { t: "결계", c: "ward" },
+  parry: { t: "간파", c: "ready" },
 };
 function statusChips(unit) {
   const chips = (unit.statuses || []).map((s) => s.type).filter((t) => STATUS_CHIP[t]);
@@ -1256,13 +1263,20 @@ function statusChips(unit) {
   if (unit.id === "dancer" && !unit.isDead && unit.beat) chips.push("rhythm");
   // Combat Grammar Follow-up 01 — 성역(성황 부여) 받은 아군: damageImmune → [성역] 버프칩(1회 무효 소모 시 사라짐). 표시 전용.
   if (!unit.isDead && unit.damageImmune) chips.push("sanctuary");
+  // Job Identity Tuning 02 — 검성 간파 준비(parryReady) / 분쇄 스택(crushStacks>0, 동적 표기). 표시 전용.
+  if (unit.id === "swordsaint" && !unit.isDead && unit.parryReady !== false) chips.push("parry");
+  if (unit.id === "swordsaint" && !unit.isDead && (unit.crushStacks || 0) > 0) chips.push("crush");
   return chips;
 }
 function statusChipsHTML(unit) {
   const chips = statusChips(unit);
   if (chips.length === 0) return "";
   return chips.slice(0, 4)
-    .map((t) => `<span class="status-chip status-chip--${STATUS_CHIP[t].c}">${STATUS_CHIP[t].t}</span>`)
+    .map((t) => {
+      // Job Identity Tuning 02 — 분쇄는 현재 스택을 동적으로 표기(축약 "분쇄N").
+      if (t === "crush") return `<span class="status-chip status-chip--crush">분쇄${unit.crushStacks}</span>`;
+      return `<span class="status-chip status-chip--${STATUS_CHIP[t].c}">${STATUS_CHIP[t].t}</span>`;
+    })
     .join("");
 }
 
@@ -1834,13 +1848,23 @@ function spawnAoeSpread(casterInstanceId, enemyIds) {
     : (enemyCenter(enemyIds, fieldRect) || fieldEnemyAnchor(fieldRect));
   const pts = (enemyIds || []).map((id) => unitPoint(id, { fx: 0.5, fy: 0.5 }, fieldRect)).filter(Boolean);
   const maxR = pts.length ? Math.max(80, ...pts.map((p) => Math.hypot(p.x - c.x, p.y - c.y))) + 50 : 170;
-  const el = document.createElement("span");
-  el.className = "fx-aoe-spread fx-var--special";
-  el.style.left = `${c.x}px`;
-  el.style.top = `${c.y}px`;
-  el.style.setProperty("--aoe-r", `${maxR}px`);
-  el.addEventListener("animationend", () => el.remove());
-  layer.appendChild(el);
+  // Combat Feedback Polish 02 — "팡!" 밝은 보라 폭죽 코어(그 자리에서 터짐) + 충격파 원 2겹(점점 커지며 적 전체로).
+  const core = document.createElement("span");
+  core.className = "fx-blast-core fx-var--special";
+  core.style.left = `${c.x}px`;
+  core.style.top = `${c.y}px`;
+  core.addEventListener("animationend", () => core.remove());
+  layer.appendChild(core);
+  [0, 110].forEach((delay) => {
+    const ring = document.createElement("span");
+    ring.className = "fx-aoe-spread fx-var--special";
+    ring.style.left = `${c.x}px`;
+    ring.style.top = `${c.y}px`;
+    ring.style.setProperty("--aoe-r", `${maxR}px`);
+    if (delay) ring.style.animationDelay = `${delay}ms`;
+    ring.addEventListener("animationend", () => ring.remove());
+    layer.appendChild(ring);
+  });
 }
 
 // Combat Grammar Follow-up 01 — 성황 성역: 시전자(성황) 중심 노랑 성역 파동이 아군 전체 영역으로 퍼진다 + 각 아군 금빛 보호 펄스.
@@ -1956,7 +1980,65 @@ function spawnMarkBurst(targetInstanceId) {
   layer.appendChild(el);
 }
 
-// Actor FX 디스패처 — battle.js trait가 역할별로 호출. opts: { wardId, targetId, allyIds, sourceId, enemyIds }.
+// Job Identity Tuning 02 — 성기사 자가 회복: 본인 머리 위 노란 성휘 뾰로롱 + 노란 회복 숫자(일반 민트 치유와 구분).
+function spawnSelfHealFx(casterInstanceId, amount) {
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  const fieldRect = field.getBoundingClientRect();
+  const p = unitPoint(casterInstanceId, { fx: 0.5, fy: 0.16 }, fieldRect);
+  if (!p) return;
+  const el = document.createElement("span");
+  el.className = "fx-selfheal";
+  el.style.left = `${p.x}px`;
+  el.style.top = `${p.y}px`;
+  el.addEventListener("animationend", () => el.remove());
+  layer.appendChild(el);
+  if (amount > 0) {
+    const tn = numberAnchor(casterInstanceId, fieldRect);
+    if (tn) spawnNumber(layer, tn, casterInstanceId, true, amount, "selfheal");
+  }
+}
+
+// Job Identity Tuning 02 — 결계장 결계 펼침(켜짐 1회): 청록 결계 파동이 결계장 중심에서 아군 전체로(성황 금빛과 구분).
+function spawnWardAura(casterInstanceId, allyIds) {
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  const fieldRect = field.getBoundingClientRect();
+  const c = unitPoint(casterInstanceId, BODY_MID_FRAC, fieldRect);
+  if (!c) return;
+  const pts = (allyIds || []).map((id) => unitPoint(id, { fx: 0.5, fy: 0.5 }, fieldRect)).filter(Boolean);
+  const maxR = pts.length ? Math.max(80, ...pts.map((p) => Math.hypot(p.x - c.x, p.y - c.y))) + 50 : 150;
+  const el = document.createElement("span");
+  el.className = "fx-wardwave";
+  el.style.left = `${c.x}px`;
+  el.style.top = `${c.y}px`;
+  el.style.setProperty("--aoe-r", `${maxR}px`);
+  el.addEventListener("animationend", () => el.remove());
+  layer.appendChild(el);
+}
+
+// Job Identity Tuning 02 — 피해 분산: 결속 아군 각자에게 작은 청록 피해 튐(여럿이 나눠 받음이 보이게).
+function spawnWardSplash(allyIds) {
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  const fieldRect = field.getBoundingClientRect();
+  (allyIds || []).forEach((id) => {
+    if (dyingUnits.has(id) || cleanedDead.has(id)) return;
+    const p = unitPoint(id, { fx: 0.5, fy: 0.46 }, fieldRect);
+    if (!p) return;
+    const el = document.createElement("span");
+    el.className = "fx-wardsplash";
+    el.style.left = `${p.x}px`;
+    el.style.top = `${p.y}px`;
+    el.addEventListener("animationend", () => el.remove());
+    layer.appendChild(el);
+  });
+}
+
+// Actor FX 디스패처 — battle.js trait가 역할별로 호출. opts: { wardId, targetId, allyIds, sourceId, enemyIds, amount }.
 export function playActorFx(kind, casterId, opts = {}) {
   switch (kind) {
     case "guard": // 곰방패: 보호 대상 가드 펄스 + 곰 주변 보호 링("앞에서 지켜준다")
@@ -1991,6 +2073,9 @@ export function playActorFx(kind, casterId, opts = {}) {
     case "sanctuarySpread": spawnSanctuarySpread(casterId, opts.allyIds || []); break;
     case "aura":         spawnAura(casterId, opts.allyIds || []); break;
     case "finale":       spawnFinaleFx(casterId, opts.allyIds || []); break;
+    case "selfHeal":     spawnSelfHealFx(casterId, opts.amount || 0); break;
+    case "wardAura":     spawnWardAura(casterId, opts.allyIds || []); break;
+    case "wardSplash":   spawnWardSplash(opts.allyIds || []); break;
     case "mark":         spawnMarkFx(casterId, opts.targetId); break;
     case "markBurst":    spawnMarkBurst(opts.targetId); break;
   }
@@ -2356,6 +2441,7 @@ function spawnBuffPulse(layer, p) {
 //   알 수 없는 변주(roar/hit 등)는 기본 빨강으로 흡수 → "알록달록" 방지.
 //   tag(향후 관통/분쇄/처형): 빨강 숫자 앞에 짧은 텍스트 태그. 구조만 준비(현재 미사용).
 function damageNumberClass(isHeal, variant) {
+  if (isHeal && variant === "selfheal") return "fx-number--selfheal"; // Job Identity Tuning 02 — 성기사 자가회복(노랑, 민트 치유와 구분)
   if (isHeal) return "fx-number--heal";
   if (variant === "poison") return "fx-number--poison";
   if (variant === "crit") return "fx-number--crit";

@@ -1074,8 +1074,8 @@ function performAction(unit) {
   // Batch 01A — 파수궁 반격 재충전: 파수궁이 자신의 일반 행동을 수행하는 이번 턴에 반격 가능 상태를 회복한다.
   //   (반격 자체는 performAttack 직접 호출이라 이 경로를 타지 않으므로 스스로 재충전되지 않는다.)
   if (isParty && unit.id === "watchbow") unit.counterReady = true;
-  // Second Class Batch 1A — 검성 간파 반격도 같은 패턴: 일반 행동 1회 사이 1번만(이번 행동에 재충전).
-  if (isParty && unit.id === "swordsaint") unit.duelCounterReady = true;
+  // Job Identity Tuning 02 — 검성 간파 반격 재충전: 일반 행동 1회 사이 1번만(이번 행동에 재충전). [결투] 조건 제거.
+  if (isParty && unit.id === "swordsaint") unit.parryReady = true;
 
   // Boss Readiness Pressure 02 — 위압: 사자왕은 행동할 때마다 공격력이 오른다(상한까지). 시간 압박.
   //   기준 atk(menaceBaseAtk)에 누적 단계를 곱한다 → 장기전이면 미완성 파티가 버티지 못한다.
@@ -1305,18 +1305,14 @@ function runDataSkill(unit, meta) {
       pushLog(`${unit.name}${josa(unit.name, "이가")} ${targets.map((t) => t.name).join(", ")}${josa(targets[targets.length - 1].name, "을를")} 중독시켰다.`);
       return true;
     }
-    case "strikeHealShield": { // 성기사 성휘
+    case "strikeSelfHeal": { // 성기사 — Job Identity Tuning 02: 자가 회복형(보호막 지급 제거). "내 공격으로 내가 치료된다."
       const t = selectAttackTarget(aliveEnemies());
       if (!t) return false;
-      performAttack(unit, t, { mult: L.mult, skill: meta });
+      // 특수 공격 색감(pierce family — 주황)으로 "공격 스킬"임이 읽히게. + "성휘!" 외침.
+      performAttack(unit, t, { mult: L.mult, skill: meta, lineType: "pierce" });
       const selfHealed = healUnit(unit, L.selfHeal);
-      const ally = lowestRatioAllyAny();
-      if (ally) grantShieldTo(unit, ally, L.allyShield);
-      playSupportFx({
-        casterInstanceId: unit.instanceId, text: null, kind: meta.kind,
-        heals: selfHealed > 0 ? [{ targetInstanceId: unit.instanceId, amount: selfHealed }] : [],
-        guardInstanceId: ally ? ally.instanceId : null,
-      });
+      // 공격 성공 후 성기사 본인 머리 위 노란 성휘 자가회복 FX(일반 민트 치유와 구분).
+      if (selfHealed > 0) playActorFx("selfHeal", unit.instanceId, { amount: selfHealed });
       return true;
     }
     case "aoeStrike": { // 선봉 진군 — Batch 01B: 전열 적 전체 낮은 피해 + 전열 아군 방어 증가(회복 제거).
@@ -1417,7 +1413,11 @@ function runDataSkill(unit, meta) {
         pushLog(`${unit.name}${josa(unit.name, "이가")} ${L.chargeName}…`);
         if (L.allyHaste) {
           const pool = aliveParty().filter((a) => a !== unit);
-          shuffle(pool).slice(0, L.allyHaste.count).forEach((a) => { a.actionGauge += 100 * L.allyHaste.pct; });
+          // Combat Feedback Polish 02 — 아군 게이지 가속도 무희 피날레와 같은 "상승 마커"(공통 문법). 가속량/누적식은 불변(마커용 기록만).
+          shuffle(pool).slice(0, L.allyHaste.count).forEach((a) => {
+            a.gaugeRiseFrom = Math.min(100, a.actionGauge || 0);
+            a.actionGauge += 100 * L.allyHaste.pct;
+          });
         }
         // Combat Visibility Job Grammar 01 — 집중 전조: 시전자→적 진영 중앙으로 선 + 중앙에 "마력이 모이는 점".
         playActorFx("chargeGather", unit.instanceId, { enemyIds: aliveEnemies().map((e) => e.instanceId) });
@@ -1550,20 +1550,11 @@ function runDataSkill(unit, meta) {
       }
       return false; // 성역 미발동 — 도발만 갱신하고 기본 공격
     }
-    case "duel": { // 검성(SR-25) — 결투 표식 우선타격 + (HP35%↓) 마무리 일섬. 반격은 triggerSwordsaintCounter.
-      let dt = aliveEnemies().find((e) => e.instanceId === unit.duelTarget);
-      const fresh = !dt;
-      if (fresh) {
-        dt = selectDuelTarget(); // 보스>정예>고ATK>저HP
-        if (!dt) return false;
-        unit.duelTarget = dt.instanceId;
-        pushLog(`${unit.name}${josa(unit.name, "이가")} ${dt.name}에게 결투를 건다.`);
-      }
-      applyStatus(dt, { type: "duel", duration: 3 }); // 결투 표식 — 검성 행동마다 갱신(읽힘 칩)
-      const low = dt.hp / dt.maxHp <= (L.executeThreshold ?? 0.35);
-      const sk = low ? { name: "일섬", kind: meta.kind } : meta; // meta.name="결투"
-      performAttack(unit, dt, { mult: (L.mult ?? 1.1) * (low ? (L.executeMult ?? 1.4) : 1), skill: sk });
-      if (low) pushLog(`${unit.name}${josa(unit.name, "이가")} 결투 상대를 베어낸다 — 일섬!`);
+    case "crushStrike": { // 검성(SR-25) — Job Identity Tuning 02: 결투 제거. 간파(피격 반격, triggerSwordsaintParry)는 반응형.
+      //   능동 행동은 단순 공격 — 매 공격이 분쇄 스택을 쌓는다(performAttack에서 누적). 간파 준비(parryReady)는 performAction에서 재충전.
+      const t = selectAttackTarget(aliveEnemies());
+      if (!t) return false;
+      performAttack(unit, t, { mult: L.mult ?? 1.1, skill: meta, lineType: "crush" });
       return true;
     }
     case "skymark": { // 천궁(SR-27) — 천표식(받는 피해↑) + 표식 대상 강화 하늘사격. 사망 시 재지정.
@@ -1585,25 +1576,21 @@ function runDataSkill(unit, meta) {
       performAttack(unit, mt, { mult: L.mult ?? 1.3, lineType: "snipe", skill: { name: fresh ? "하늘 표식" : "하늘사격", kind: meta.kind } });
       return true;
     }
-    case "wardfield": { // 결계장(SR-30) — 진형 결계(보호막/완충) + 앵커 보강. 성황 무효와 분리(감소/완충만).
+    case "wardbond": { // 결계장(SR-30) — Job Identity Tuning 02: 파티 결속/피해 분산(성황 aegis와 차별). 결계장 생존 중 결속 유지.
+      const party = aliveParty();
+      // 생존 아군 전체에 결속(wardlink) 부여/갱신 — 지속 오오라 + [결계] 칩. 결계장 사망 시 분산은 자동 비활성(applyDamage가 검사).
+      party.forEach((a) => applyStatus(a, { type: "wardlink", duration: 999 }));
       if (!unit.wardOpened) {
         unit.wardOpened = true;
-        const party = aliveParty();
-        party.forEach((a) => grantShieldTo(unit, a, L.partyShield ?? 6));        // 전체 작은 보호막
-        frontlineAllies().forEach((a) => grantShieldTo(unit, a, L.frontShield ?? 10)); // 전열 추가 보호막
-        backlineAllies().forEach((a) => applyStatus(a, { type: "defUp", duration: L.backGuardTurns ?? 2, pct: L.backGuardPct ?? 0.15 })); // 후열 완충
-        pushLog(`${unit.name}${josa(unit.name, "이가")} 진형 결계를 펼쳤다.`);
-        playSupportFx({ casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind, guardInstanceId: unit.instanceId, heals: party.map((a) => ({ targetInstanceId: a.instanceId, amount: 0 })) });
+        pushLog(`${unit.name}${josa(unit.name, "이가")} 파티 결계를 펼쳤다 — 피해를 함께 나눈다.`);
+        skillShout(unit, meta.name + "!", meta.kind);
+        playActorFx("wardAura", unit.instanceId, { allyIds: party.map((a) => a.instanceId) });
         return true;
       }
-      if (unit.actionCount % 2 !== 0) return false; // 평소엔 기본 공격
-      const cand = aliveParty().filter((a) => a !== unit);
-      if (!cand.length) return false;
-      const t = cand.sort((a, b) => (a.shield || 0) - (b.shield || 0) || a.hp / a.maxHp - b.hp / b.maxHp)[0]; // 보호막/HP 최저
-      grantShieldTo(unit, t, frontlineAllies().includes(t) ? (L.frontShield ?? 10) : (L.partyShield ?? 6));
-      pushLog(`${unit.name}${josa(unit.name, "이가")} 결계를 보강했다.`);
-      playSupportFx({ casterInstanceId: unit.instanceId, text: "결계 보강!", kind: meta.kind, guardInstanceId: t.instanceId });
-      return true;
+      // 결속 유지 후엔 행동 낭비 없이 기본 공격(결속은 위에서 매 턴 갱신됨).
+      const t = selectAttackTarget(aliveEnemies());
+      if (t) { performAttack(unit, t, { noShout: true }); return true; }
+      return false;
     }
     case "rescue": { // 구원자(SR-26) — 구원선 부여(전투당 1회) + 보조(정화 우선→소량 회복). 발동은 dealRaw triggerSalvation.
       const hasSalv = aliveParty().some((a) => hasStatus(a, "salvation"));
@@ -1887,6 +1874,19 @@ function applyDamage(target, dmg) {
   // Boss Readiness Pressure 02 — 위압 중 사자왕은 받는 피해 감소(모든 피해원 공통: 공격/중독/교란/분배 전 단계).
   //   최소 1 보장. 위압 비활성(열쇠 2+) 보스에는 menace가 없어 영향 없음.
   if (target.menace && target.menace.dr > 0) dmg = Math.max(1, dmg * (1 - target.menace.dr));
+  // Job Identity Tuning 02 — 결계장 파티 결속: 결속된 아군이 피해를 받으면 생존 결속 아군 전체가 나눠 받는다(총량 약간 완충).
+  //   결계장 생존 중에만 작동. dealRaw로 직접 분배 → 재귀 분산 없음(무한 연쇄 차단). 성황 aegis(고정감소)와 다른 축.
+  if (hasStatus(target, "wardlink") && gameState.party.some((u) => !u.isDead && u.id === "wardkeeper")) {
+    const linked = aliveParty().filter((a) => hasStatus(a, "wardlink"));
+    if (linked.length >= 2) {
+      const buffer = skillOf("wardkeeper")?.logic?.bufferPct ?? 0.85;
+      const total = Math.max(linked.length, Math.round(dmg * buffer));      // 완충(총 피해 -%)
+      const each = Math.max(1, Math.round(total / linked.length));          // 생존 결속 아군 균등 분배(최소 1)
+      linked.forEach((a) => { dealRaw(a, each); killIfDead(a); });
+      playActorFx("wardSplash", null, { allyIds: linked.map((a) => a.instanceId) }); // 각 아군에 작게 피해 튐
+      return;
+    }
+  }
   if (target.bondOffenseTarget) {
     const partner = gameState.enemies.find((e) => e.instanceId === target.bondOffenseTarget && !e.isDead);
     if (partner) {
@@ -2041,6 +2041,14 @@ function performAttack(attacker, target, opts = {}) {
   const au = Array.isArray(attacker.statuses) && attacker.statuses.find((s) => s.type === "atkUp");
   if (au) atk = Math.round(atk * (1 + (au.pct || 0)));
 
+  // Job Identity Tuning 02 — 검성 분쇄: 공격(간파 반격 포함)마다 스택+1(최대 crushMax), 스택당 atk +crushPct.
+  //   스테이지 종료 시 파티 재생성(createInitialParty)으로 unit이 새로 만들어져 스택은 자동 초기화된다.
+  if (attacker.id === "swordsaint") {
+    const cl = (skillOf("swordsaint") && skillOf("swordsaint").logic) || {};
+    attacker.crushStacks = Math.min(cl.crushMax ?? 10, (attacker.crushStacks || 0) + 1);
+    atk = Math.round(atk * (1 + attacker.crushStacks * (cl.crushPct ?? 0.04)));
+  }
+
   const base = hasStatus(target, "guard")
     ? Math.max(1, atk - GUARD_DAMAGE_REDUCTION)
     : atk;
@@ -2118,28 +2126,25 @@ function performAttack(attacker, target, opts = {}) {
     triggerWatchbowCounter(attacker);
   }
 
-  // Second Class Batch 1A — 검성 간파 반격: 결투 표식 대상이 검성/전열 아군을 실제 타격하면 1회 반격.
+  // Job Identity Tuning 02 — 검성 간파 반격: 검성이 실제 피해를 입으면 공격자에게 즉시 1회 반격(턴당 1회). [결투] 조건 제거.
   //   isCounter면 발동 안 함(반격의 반격 금지 → 무한 연쇄 차단). 파수궁과 독립(둘 다 isCounter 가드).
   if (!opts.isCounter && tookRealDamage && attacker.team === "enemy" && gameState.party.includes(target)) {
-    triggerSwordsaintCounter(attacker, target);
+    triggerSwordsaintParry(attacker, target);
   }
 }
 
-// Second Class Batch 1A — 검성 간파: 결투 대상(적)이 검성 또는 전열 아군을 타격하면 즉시 1회 반격.
-//   - 결투 대상에 한정(enemyAttacker.instanceId === 검성.duelTarget).
-//   - 피해는 검성 ATK의 counterMult(0.7, 60~80% 범위). 게이지/일반 행동 미소모(직접 performAttack).
-//   - 일반 행동 1회 사이 최대 1번: duelCounterReady가 false면 발동 안 함. 검성 일반 행동 시 재충전.
-function triggerSwordsaintCounter(enemyAttacker, victim) {
+// Job Identity Tuning 02 — 검성 간파: 검성 본인이 피격당하면 공격자에게 즉시 1회 반격(턴당 1회). [결투] 조건 없음 — 직관화.
+//   - 피해는 검성 ATK의 counterMult. 게이지/일반 행동 미소모(직접 performAttack). 반격도 분쇄 스택에 기여(performAttack에서 누적).
+//   - parryReady가 false면 발동 안 함(이번 행동 주기엔 이미 반격). 검성 일반 행동 시 재충전.
+function triggerSwordsaintParry(enemyAttacker, victim) {
   if (!enemyAttacker || enemyAttacker.isDead) return;
   const ss = gameState.party.find((u) => !u.isDead && u.id === "swordsaint");
-  if (!ss) return;
-  if (ss.duelCounterReady === false) return;          // 이번 행동 주기엔 이미 반격함
-  if (enemyAttacker.instanceId !== ss.duelTarget) return; // 결투 대상만 반격
-  if (!(victim === ss || victim.role === "front")) return; // 검성 또는 전열 아군 피격에만
+  if (!ss || ss !== victim) return;               // 검성 본인이 피격당했을 때만
+  if (ss.parryReady === false) return;            // 이번 행동 주기엔 이미 반격함
   const mult = skillOf("swordsaint")?.logic?.counterMult ?? 0.7;
-  ss.duelCounterReady = false;
+  ss.parryReady = false;
   pushLog(`${ss.name} 간파!`);
-  performAttack(ss, enemyAttacker, { mult, skill: { name: "간파", kind: "attack" }, isCounter: true });
+  performAttack(ss, enemyAttacker, { mult, skill: { name: "간파", kind: "attack" }, isCounter: true, lineType: "crush" });
 }
 
 // 후열 아군 피격 → 파수궁 보복. Batch 01A 공식 정렬:

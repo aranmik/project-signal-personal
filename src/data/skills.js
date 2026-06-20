@@ -31,8 +31,9 @@ export const SKILLS = {
     // Batch 01C — 독 표식 서포터: 임의의 적 최대 2명 중독(독 대상 공격 시 치명 보정은 battle.js performAttack).
     logic: { type: "poison", duration: 2, count: 2 } },
 
-  paladin:   { id: "holylight", name: "성휘", kind: "support",
-    logic: { type: "strikeHealShield", target: "front", mult: 1.0, selfHeal: 6, allyShield: 8 } },
+  paladin:   { id: "holylight", name: "성휘", kind: "attack",
+    // Job Identity Tuning 02 — 자가 회복형: 공격 성공 시 자신만 회복(아군 보호막 지급 제거).
+    logic: { type: "strikeSelfHeal", mult: 1.0, selfHeal: 6 } },
 
   vanguard:  { id: "advance", name: "진군", kind: "attack",
     // Batch 01B — 선봉 정체성 정렬: 회복 제거(healFactor 삭제) → 전열 적 AoE + 전열 아군 방어 증가(battle.js).
@@ -77,14 +78,16 @@ export const SKILLS = {
 
   // Second Class Mechanics Batch 1A — SR-25/27/30 2차 전투 씨앗(정식 미해금, Dev 전투 테스트용).
   //   검성 결투: 결투 표식 우선타격 + 간파 반격(triggerSwordsaintCounter) + HP35%↓ 마무리 일섬.
-  swordsaint:{ id: "duel", name: "결투", kind: "attack",
-    logic: { type: "duel", mult: 1.1, executeThreshold: 0.35, executeMult: 1.4, counterMult: 0.7 } },
+  swordsaint:{ id: "vigilance", name: "간파", kind: "attack",
+    // Job Identity Tuning 02 — [결투] 제거. 간파(피격 시 공격자에게 반격, 턴당 1회) + 분쇄(공격마다 atk 스택, 최대 10, 스테이지 초기화).
+    logic: { type: "crushStrike", mult: 1.1, counterMult: 0.7, crushPct: 0.04, crushMax: 10 } },
   //   천궁 천표식: 표식 대상 받는 피해↑(defDown 재사용) + 표식 우선 하늘사격.
   skyarcher: { id: "skymark", name: "하늘 표식", kind: "ranged",
     logic: { type: "skymark", mult: 1.3, dmgUpPct: 0.12 } },
   //   결계장 진형 결계: 첫 행동 파티 보호막(전열 추가/후열 완충) + 주기적 앵커 보강. 성황 피해무효와 분리(감소/완충).
-  wardkeeper:{ id: "wardfield", name: "진형 결계", kind: "guard",
-    logic: { type: "wardfield", partyShield: 6, frontShield: 10, backGuardPct: 0.15, backGuardTurns: 2 } },
+  wardkeeper:{ id: "wardbond", name: "파티 결계", kind: "guard",
+    // Job Identity Tuning 02 — 파티 결속/피해 분산(성황 aegis와 차별). 아군 1명 피해를 생존 결속 아군이 나눠 받고, 총량은 약간 완충.
+    logic: { type: "wardbond", bufferPct: 0.85 } },
 
   // Second Class Mechanics Batch 2 — SR-26/28/29 2차 전투 씨앗(정식 미해금, Dev 전투 테스트용).
   //   구원자 구원선: 첫 행동에 아군 1명 '구원' 부여 → 치명 피해 직전 1회 개입(dealRaw/triggerSalvation). 보조=정화 우선+소량 회복.

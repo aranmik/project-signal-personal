@@ -1289,6 +1289,8 @@ body {
 #battle-field .unit .status-chip--bond   { background: #6fa8e0; }  /* 결속 — 청람 */
 #battle-field .unit .status-chip--sanctuary { background: #f3d877; } /* Combat Grammar Follow-up 01 — 성역(성황) 금빛 보호 */
 #battle-field .unit .status-chip--aegis { background: #8fc8d6; } /* Job Identity Tuning 01 — 수호 오오라(받는 피해 감소) 방어칩 */
+#battle-field .unit .status-chip--ward  { background: #79d6c4; } /* Job Identity Tuning 02 — 결계장 파티 결속(결계) 청록 */
+#battle-field .unit .status-chip--crush { background: #f0a85a; color: #2a1c0a; } /* Job Identity Tuning 02 — 검성 분쇄 스택(주황) */
 #battle-field .unit.dead .status-chips { opacity: 0; }
 #battle-field .unit.is-encounter .status-chips { display: none; } /* 보스 HUD가 따로 — 칩 중복 방지 */
 
@@ -1518,18 +1520,33 @@ body {
   40%  { opacity: 0.85; transform: scale(1.2); }
   100% { opacity: 0.2;  transform: scale(0.5); }
 }
-/* 광역 발동: 중앙에서 원이 커지며 적 전체로 확산. --aoe-r = 도달 반경(JS 계산). */
+/* Combat Feedback Polish 02 — 광역 발동: 중앙에서 굵은 충격파 원이 커지며 적 전체로 확산(확실히 보이게). --aoe-r = 도달 반경. */
 .fx-aoe-spread {
   position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px;
-  border-radius: 50%; border: 2px solid currentColor;
-  box-shadow: 0 0 16px currentColor;
+  border-radius: 50%; border: 3px solid currentColor;
+  background: radial-gradient(circle, transparent 0 58%, currentColor 70%, transparent 82%);
+  box-shadow: 0 0 22px currentColor, inset 0 0 10px currentColor;
   opacity: 0; pointer-events: none; z-index: 3;
-  animation: fx-aoe-spread 0.6s ease-out forwards;
+  animation: fx-aoe-spread 0.72s ease-out forwards;
 }
 @keyframes fx-aoe-spread {
-  0%   { opacity: 0;   transform: scale(1); }
-  25%  { opacity: 0.9; }
+  0%   { opacity: 0;   transform: scale(0.8); }
+  18%  { opacity: 1;   }
   100% { opacity: 0;   transform: scale(calc(var(--aoe-r, 120px) / 6)); }
+}
+/* Combat Feedback Polish 02 — "팡!" 폭죽 코어: 그 자리에서 밝은 보라가 터지듯 부풀었다 사라진다(폭발 시작점 강조). */
+.fx-blast-core {
+  position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px;
+  border-radius: 50%;
+  background: radial-gradient(circle, currentColor 0 22%, rgba(190,150,235,0.35) 48%, transparent 72%);
+  box-shadow: 0 0 26px currentColor;
+  opacity: 0; pointer-events: none; z-index: 3;
+  animation: fx-blast-core 0.42s ease-out forwards;
+}
+@keyframes fx-blast-core {
+  0%   { opacity: 0;    transform: scale(0.3); }
+  28%  { opacity: 0.95; transform: scale(1.15); }
+  100% { opacity: 0;    transform: scale(1.5); }
 }
 /* 추적자/천궁 스코프 표식(대상 몸통 조준점). */
 .fx-scope {
@@ -1560,7 +1577,7 @@ body {
   100% { opacity: 0; transform: scale(1.9); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .fx-gather, .fx-aoe-spread, .fx-scope, .fx-markburst { animation-duration: 0.01s; }
+  .fx-gather, .fx-aoe-spread, .fx-scope, .fx-markburst, .fx-blast-core { animation-duration: 0.01s; }
 }
 
 /* Combat Grammar Follow-up 01 — 성황 성역 파동: 노랑빛 원이 성황 중심에서 아군 전체로 퍼진다(방어/보호의 권위). */
@@ -1595,19 +1612,19 @@ body {
   100% { opacity: 0;   transform: scale(1.18); }
 }
 
-/* Job Identity Tuning 01 — 무희 피날레: 분홍 뾰로롱(스파클 펄스)이 아군 위에서 튄다. */
+/* Combat Feedback Polish 02 — 무희 피날레: 분홍 뾰로롱을 더 크게·로망 있게. 알파 그라데이션으로 투명하게 사라진다(짧고 선명). */
 .fx-finale {
-  position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px;
+  position: absolute; width: 32px; height: 32px; margin: -16px 0 0 -16px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 180, 224, 0.9) 0 35%, transparent 70%);
-  box-shadow: 0 0 12px rgba(255, 150, 210, 0.8);
+  background: radial-gradient(circle, rgba(255, 200, 234, 0.95) 0 24%, rgba(255, 165, 216, 0.55) 50%, rgba(255, 150, 210, 0) 78%);
+  box-shadow: 0 0 18px rgba(255, 150, 210, 0.85);
   opacity: 0; pointer-events: none; z-index: 4;
-  animation: fx-finale 0.6s ease-out forwards;
+  animation: fx-finale 0.66s ease-out forwards;
 }
 @keyframes fx-finale {
-  0%   { opacity: 0;   transform: translateY(4px) scale(0.5); }
-  35%  { opacity: 1;   transform: translateY(-2px) scale(1.1); }
-  100% { opacity: 0;   transform: translateY(-12px) scale(0.9); }
+  0%   { opacity: 0;    transform: translateY(6px) scale(0.45); }
+  32%  { opacity: 1;    transform: translateY(-3px) scale(1.2); }
+  100% { opacity: 0;    transform: translateY(-18px) scale(0.85); }
 }
 .fx-finale-wave {
   position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px;
@@ -1618,21 +1635,67 @@ body {
 }
 @media (prefers-reduced-motion: reduce) { .fx-aura, .fx-finale, .fx-finale-wave { animation-duration: 0.01s; } }
 
-/* Job Identity Tuning 01 — 게이지 상승 마커(무희 피날레): 오른 구간을 분홍으로 잠깐("단숨에 나아간다"). */
+/* Combat Feedback Polish 02 — 아군 게이지 상승 마커: 오른 구간을 분홍으로 차오르듯(왼→오 성장). 새 위치(오른 끝)를 밝게 강조
+   = "리듬을 받아 밀려나감". 적 게이지 감소(보라, 오른 끝에서 깎임)와 색·방향이 반대로 읽힌다. */
 .tempo-rise {
-  position: absolute; top: 0; bottom: 0;
-  background: linear-gradient(90deg, rgba(255, 160, 214, 0.7), rgba(255, 190, 230, 0));
-  border-left: 2px solid rgba(255, 180, 224, 0.95);
-  box-shadow: 0 0 6px rgba(255, 150, 210, 0.6);
+  position: absolute; top: -1px; bottom: -1px;
+  background: linear-gradient(90deg, rgba(255, 190, 230, 0), rgba(255, 165, 216, 0.8));
+  border-right: 2px solid rgba(255, 200, 238, 0.98);
+  box-shadow: 0 0 8px rgba(255, 150, 210, 0.75);
   pointer-events: none;
-  animation: tempo-rise 0.6s ease-out forwards;
+  animation: tempo-rise 0.62s ease-out forwards;
 }
 @keyframes tempo-rise {
-  0%   { opacity: 0; transform: scaleX(0.6); transform-origin: left; }
-  30%  { opacity: 1; transform: scaleX(1);   transform-origin: left; }
+  0%   { opacity: 0; transform: scaleX(0.5); transform-origin: left; }
+  28%  { opacity: 1; transform: scaleX(1);   transform-origin: left; }
   100% { opacity: 0; transform: scaleX(1);   transform-origin: left; }
 }
 @media (prefers-reduced-motion: reduce) { .tempo-rise { animation-duration: 0.01s; } }
+
+/* Job Identity Tuning 02 — 성기사 자가 회복: 노란 숫자 + 성휘 뾰로롱(민트 치유와 구분). */
+.fx-number--selfheal { color: #ffd76a; text-shadow: 0 0 8px rgba(255,200,80,0.6), 0 1px 2px rgba(0,0,0,0.6); }
+.fx-selfheal {
+  position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,224,140,0.95) 0 26%, rgba(250,205,90,0.5) 52%, rgba(250,205,90,0) 78%);
+  box-shadow: 0 0 16px rgba(250,205,90,0.8);
+  opacity: 0; pointer-events: none; z-index: 4;
+  animation: fx-finale 0.6s ease-out forwards; /* 떠오르며 페이드 — 무희 피날레 모션 재사용, 색만 노랑 */
+}
+/* Job Identity Tuning 02 — 결계장: 결계 파동(청록, 성황 금빛과 구분) + 피해 분산 튐 + 본체 지속 오오라. */
+.fx-wardwave {
+  position: absolute; width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px;
+  border-radius: 50%; border: 2px solid rgba(110, 224, 200, 0.9);
+  box-shadow: 0 0 18px rgba(100, 220, 195, 0.65);
+  opacity: 0; pointer-events: none; z-index: 3;
+  animation: fx-aoe-spread 0.8s ease-out forwards;
+}
+.fx-wardsplash {
+  position: absolute; width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(120,228,205,0.8) 0 40%, transparent 72%);
+  box-shadow: 0 0 9px rgba(100,220,195,0.6);
+  opacity: 0; pointer-events: none; z-index: 4;
+  animation: fx-pulse 0.45s ease-out forwards;
+}
+/* 결계장 지속 오오라 — 본체 뒤 청록 ring(발동 중 계속). .fig-react 애니메이션과 충돌 없게 .unit::after로. */
+#battle-field .unit.has-ward-aura::after {
+  content: ""; position: absolute;
+  left: 50%; top: 48%; width: 54px; height: 54px; margin: -27px 0 0 -27px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(110, 224, 200, 0.55);
+  box-shadow: 0 0 14px rgba(100, 220, 195, 0.45), inset 0 0 12px rgba(110,224,200,0.22);
+  pointer-events: none; z-index: 0;
+  animation: ward-aura-pulse 2.2s ease-in-out infinite;
+}
+@keyframes ward-aura-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(0.95); }
+  50%      { opacity: 0.9;  transform: scale(1.06); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-selfheal, .fx-wardwave, .fx-wardsplash { animation-duration: 0.01s; }
+  #battle-field .unit.has-ward-aura::after { animation: none; }
+}
 
 /* Combat Grammar Follow-up 01 — 특수 공격선 family 후속 확장(분쇄/처형). 색은 fx-var--pierce(주황), 모양만 분기. */
 .fx-svg--crush .fx-path   { stroke-width: 3.2; }
