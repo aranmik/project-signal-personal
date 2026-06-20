@@ -21,9 +21,13 @@ export const ROUTE_TYPES = {
   normal: { id: "normal", title: "새싹 숲길",  sub: "안정적인 전투",          hud: "일반 전투", kind: "battle",
     reward: { picks: 1, riskTier: "stable",   rewardTier: "low",  cardTag: "안정 · 보상 낮음",            resultLabel: "일반 전투 보상" } },
   danger: { id: "danger", title: "깊은 수풀",  sub: "위험 · 동료/합체 보상",   hud: "위험 전투", kind: "battle",
-    reward: { picks: 0, riskTier: "risky",    rewardTier: "high", cardTag: "위험 · 동료 영입/합체(파티 강화 없음)",  resultLabel: "깊은 수풀 보상", deepForest: true } },
+    // Beginner Flow Playtest Support 01 — 깊은 수풀 전투는 "현재 경계도" 진형으로 싸운다(선택 즉시 미래 경계도 X).
+    //   클리어하면 동료 영입/합체로 경계도가 오른다 → 카드 문구도 "클리어 시 경계도↑"로 읽히게 정리.
+    reward: { picks: 0, riskTier: "risky",    rewardTier: "high", cardTag: "위험 · 클리어 시 경계도↑ · 동료/합체",  resultLabel: "깊은 수풀 보상", deepForest: true } },
   elite:  { id: "elite",  title: "현자의 가지", sub: "승리 시 보스 열쇠",       hud: "정예 전투", kind: "battle",
-    reward: { picks: 2, riskTier: "veryRisky", rewardTier: "high", cardTag: "매우 위험 · 열쇠 + 큰 보상",   resultLabel: "정예 보상", key: true } },
+    // Beginner Flow Playtest Support 01 — 현자의 가지 보상은 성장 1픽으로 정리(기존 2픽 = "큰 보상" 설계였으나
+    //   클리어 직후 보상 화면이 두 번 떠 중복처럼 읽힘). 보스 열쇠 획득(key)은 그대로 유지된다.
+    reward: { picks: 1, riskTier: "veryRisky", rewardTier: "high", cardTag: "매우 위험 · 열쇠 + 보상",   resultLabel: "정예 보상", key: true } },
   rest:   { id: "rest",   title: "이슬 쉼터",  sub: "전투 없이 회복",         hud: "휴식",     kind: "rest",
     reward: { picks: 0, riskTier: "safe",     rewardTier: "none", cardTag: "회복 · 보상 없음",             resultLabel: "휴식으로 회복", heal: true } },
   boss:   { id: "boss",   title: "새싹 왕의 문", sub: "사자왕에게 도전",        hud: "보스전",   kind: "boss",
@@ -61,7 +65,11 @@ export function rollRouteOffer({ depth, bossKeys, canDeepForest = true, alertnes
   }
   else if (r === 0) choices.push("rest");
   else choices.push(canDeepForest ? "danger" : "rest"); // 깊은 수풀이 보상 불가면 휴식으로 대체
-  if (bossKeys > 0) choices.push("boss");
+  // Beginner Flow Playtest Support 01 — 보스문은 "열쇠를 모두 확보(2개)"했을 때만 노출한다.
+  //   열쇠 1개 상태에선 보스문 미노출 — 두 번째 정예(현자의 가지)를 넘어야 문이 열린다(호흡 정리).
+  //   bossMenace/위압 로직은 유지(삭제 X) — 다만 초보자 테마에선 항상 열쇠 2개=위압 해제로 보스를 만난다.
+  //   다른 테마에서 "열쇠 1개 도전(위압)"을 다시 쓰려면 이 조건만 테마별로 분기하면 된다.
+  if (bossKeys >= BOSS_MENACE.keysToSeal) choices.push("boss");
   return choices;
 }
 

@@ -208,8 +208,11 @@ export function createRouteEnemies(routeType, run) {
     return buildEnemies(specs, prefix, { scale, slots });
   }
 
-  // normal / danger — 경계도 진형. danger는 한 단계 두꺼운 진형 + 소량 강화(읽힘용).
-  const formAlert = routeType === "danger" ? alertness + 1 : alertness;
+  // normal / danger — 경계도 진형 + 소량 강화(읽힘용).
+  //   Beginner Flow Playtest Support 01 — danger도 "현재 경계도" 진형으로 싸운다(과거: alertness+1로 미래 경계도를
+  //   선택 즉시 맞닥뜨려 대응이 어려웠음). 경계도 상승은 클리어 후 영입/합체 보상에서 반영된다.
+  //   danger의 "위험" 정체성은 아래 stat 프리미엄(+12% HP / +1 atk)으로 유지된다.
+  const formAlert = alertness;
   const roles = normalFormation(formAlert);
   const specs = roles.map((r) => ROLE_ACTOR[r]);
   const slots = assignSlotsByFront(roles.map((r) => FRONT_ROLES.has(r)));
