@@ -1,6 +1,6 @@
 import { BEGINNER_THEME, STAGE_THEMES } from "../data/stages.js";
 import { ROUTE_TYPES, bossTimingLabel, bossFury, bossReadinessPressure, bossMenace, depthAtmosphere, routeReward, PRESSURE_HELP } from "../data/routes.js";
-import { availableFusions, slotPreference, combatRoleLabelOf, combatRoleOf, BASE_JOBS, ADVANCED_JOBS, SECOND_CLASS_JOBS } from "../data/jobs.js";
+import { availableFusions, slotPreference, combatRoleLabelOf, combatRoleOf, BASE_JOBS, ADVANCED_JOBS, SECOND_CLASS_JOBS, ACTIVE_FUSION_RECIPES } from "../data/jobs.js";
 import { jobStatusOf, IMPL_LABEL, VIS_LABEL } from "../data/jobStatus.js";
 import { REWARDS, rewardById, REWARD_MAX_LEVEL } from "../data/rewards.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
@@ -530,40 +530,61 @@ function renderStageSelect() {
 // Job Codex Entry Foundation — 직업 도감(관람용 창구).
 //   SR-01~24를 카드 그리드로 보여준다. 기본/합체/준비 중 상태만 표시 —
 //   직업을 눌러도 파티/게임에 아무 변화가 없다(관람 전용, 발견/저장 시스템 없음).
+// Codex Recipe Sync 01 — 합체식 표시: 기존 레시피 데이터(ACTIVE_FUSION_RECIPES = FUSION_RECIPES + SECOND_CLASS_RECIPES)에서
+//   결과 직업으로 역참조해 "합체식: 한글명 + 한글명". 기본 직업은 레시피 없음(빈 문자열). 데이터/합체 로직 변경 없음(읽기만).
+function recipeLabelFor(jobId) {
+  const r = ACTIVE_FUSION_RECIPES.find((x) => x.result === jobId);
+  if (!r) return "";
+  return `합체식: ${jobName(r.materials[0])} + ${jobName(r.materials[1])}`;
+}
+
 function renderCodex() {
   const host = document.getElementById("codex-inner");
   if (!host) return;
 
-  // Codex Detail Status 01 — 카드를 클릭 가능한 버튼으로(직업 선택 시 하단 상태판 표시). data-job = 직업 id.
-  const cards = CODEX_ENTRIES.map((e) => {
+  // Codex Recipe Sync 01 — 카드: 섹션 제목이 단계를 알리므로 카드 안 반복 문구(기본/합체 직업) 제거. 합체식 + 성향 중심.
+  const cardHTML = (e) => {
     const fig = avatarFigureHTML(e.sr, e.parts, "av-fit--codex");
-    const statusLabel = CODEX_STATUS_LABEL[e.status] || "";
     const roleLabel = combatRoleLabelOf(e.job);
     const roleLine = roleLabel ? `<span class="codex-role">성향: ${roleLabel}</span>` : "";
-    return `<button type="button" class="codex-card codex-card--${e.status}" data-codex-job="${e.job}" aria-label="${e.name} 상태판 열기">
+    const recipe = recipeLabelFor(e.job);
+    const recipeLine = recipe ? `<span class="codex-recipe">${recipe}</span>` : "";
+    return `<button type="button" class="codex-card" data-codex-job="${e.job}" aria-label="${e.name} 상태판 열기">
       <div class="codex-stage">${fig}</div>
       <div class="codex-meta">
         <span class="codex-code">${e.code}</span>
         <span class="codex-name">${e.name}</span>
         ${roleLine}
+        ${recipeLine}
       </div>
-      <span class="codex-tag codex-tag--${e.status}">${statusLabel}</span>
     </button>`;
-  }).join("");
+  };
+
+  // 섹션은 직업 "단계 배열"로 나눈다(엔트리 status가 아니라 BASE/ADVANCED/SECOND_CLASS_JOBS 기준 — 단일 출처).
+  const inTier = (arr) => CODEX_ENTRIES.filter((e) => arr.includes(e.job));
+  const section = (title, sub, entries) => entries.length ? `
+    <section class="codex-section">
+      <div class="codex-section-head"><h3>${title}</h3><span class="codex-section-sub">${sub}</span></div>
+      <div class="codex-grid">${entries.map(cardHTML).join("")}</div>
+    </section>` : "";
 
   host.innerHTML = `
     <div class="codex-header">
       <button type="button" id="codex-back" data-codex-back>← 타이틀로</button>
       <div class="codex-title-wrap">
         <h2>직업 도감</h2>
-        <p>SR-01 ~ SR-24. 직업을 누르면 <b>현재 구현 상태판</b>이 열립니다(개발/기획 확인용).</p>
+        <p>현재 상태 점검용. 직업을 누르면 <b>현재 메커니즘 상태판</b>이 열립니다.</p>
       </div>
     </div>
-    <div class="codex-grid">
-      ${cards}
-      <!-- Hero UX Polish 01C — 상세 패널을 그리드 안에 두고(전폭) 클릭한 카드 행 아래로 이동시키는 아코디언. 기본 닫힘. -->
-      <div id="codex-detail" class="codex-detail" data-open-job="" hidden></div>
-    </div>
+    ${section("기본 직업", "6종 · 기존 그림자", inTier(BASE_JOBS))}
+    ${section("1차 합체", "15종 · 은색 발밑 링", inTier(ADVANCED_JOBS))}
+    ${section("2차 합체", "9종 · 금색 발밑 링", inTier(SECOND_CLASS_JOBS))}
+    <section class="codex-section codex-section--wip">
+      <div class="codex-section-head"><h3>미확정 / 준비 중</h3><span class="codex-section-sub">SR-31~SR-36 · 6칸</span></div>
+      <p class="codex-wip-note">남은 2차 6칸은 아직 미확정입니다(역할 빈자리). 확정되면 도감에 합류합니다.</p>
+    </section>
+    <!-- Hero UX Polish 01C — 단일 상세 패널을 클릭한 카드 그리드로 이동시키는 아코디언. 기본 닫힘. -->
+    <div id="codex-detail" class="codex-detail" data-open-job="" hidden></div>
     <button type="button" class="flow-next" data-codex-back>타이틀로 돌아가기</button>
   `;
 }
@@ -571,14 +592,16 @@ function renderCodex() {
 // Hero UX Polish 01C — 도감 상세 아코디언 토글: 클릭한 카드의 "행 끝" 뒤로 상세 패널을 옮겨 카드 바로 아래(전폭)에 펼친다.
 //   같은 직업이 열려 있으면 닫는다(토글). 항상 하나만 열림(단일 패널을 이동). jobStatus 데이터/전투 로직 변경 없음.
 export function toggleCodexDetail(jobId) {
-  const grid = document.querySelector(".codex-grid");
   const el = document.getElementById("codex-detail");
-  if (!grid || !el) return;
+  if (!el) return;
   if (!el.hidden && el.dataset.openJob === jobId) { closeCodexDetail(); return; }
+  // Codex Recipe Sync 01 — 섹션이 여러 그리드라, 클릭한 카드를 전 섹션에서 찾아 그 카드가 속한 그리드에 상세를 넣는다.
+  const card = document.querySelector(`.codex-card[data-codex-job="${jobId}"]`);
+  const grid = card && card.closest(".codex-grid");
+  if (!card || !grid) return;
   const cards = [...grid.querySelectorAll(".codex-card")];
-  const idx = cards.findIndex((c) => c.dataset.codexJob === jobId);
-  if (idx < 0) return;
-  // 2열 그리드: 왼쪽 카드(짝수 인덱스)면 같은 행 오른쪽 카드 뒤에, 오른쪽 카드면 자기 뒤에 삽입 → 행 아래 전폭.
+  const idx = cards.indexOf(card);
+  // 2열 그리드: 왼쪽 카드(짝수)면 같은 행 오른쪽 카드 뒤, 오른쪽 카드면 자기 뒤 → 행 아래 전폭.
   const rowEndIdx = idx % 2 === 0 ? Math.min(idx + 1, cards.length - 1) : idx;
   cards[rowEndIdx].insertAdjacentElement("afterend", el);
   renderCodexDetail(jobId);
@@ -598,7 +621,7 @@ export function closeCodexDetail() {
 function jobTierLabel(jobId) {
   if (BASE_JOBS.includes(jobId)) return "기본";
   if (ADVANCED_JOBS.includes(jobId)) return "1차";
-  if (SECOND_CLASS_JOBS.includes(jobId)) return "2차 씨앗";
+  if (SECOND_CLASS_JOBS.includes(jobId)) return "2차"; // Codex Recipe Sync 01 — 정식 해금 반영("2차 씨앗"→"2차")
   return "미정";
 }
 

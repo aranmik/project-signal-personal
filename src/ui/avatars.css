@@ -482,6 +482,29 @@
 .codex-tag--fusion { background: rgba(240,195,106,0.14); color: #f0c36a; }
 .codex-tag--wip { background: rgba(154,168,184,0.12); color: #9aa8b8; }
 
+/* Codex Recipe Sync 01 — 도감 섹션(기본/1차/2차/미확정) + 합체식 표시. 모바일 390에서 섹션 제목 명확, 한눈에 읽히게. */
+.codex-section { margin-bottom: 18px; }
+.codex-section .codex-grid { margin-bottom: 0; }
+.codex-section-head {
+  display: flex; align-items: baseline; gap: 8px;
+  margin: 2px 2px 9px; padding-bottom: 6px;
+  border-bottom: 1px solid #2a3340;
+}
+.codex-section-head h3 { margin: 0; font-size: 14px; font-weight: 800; color: #eef3f8; }
+.codex-section-sub { font-size: 11px; color: #8aa0b4; }
+.codex-section--wip { opacity: 0.92; }
+.codex-wip-note {
+  margin: 2px 4px; padding: 10px 12px;
+  font-size: 12px; line-height: 1.5; color: #8aa0b4;
+  border: 1px dashed #313b48; border-radius: 8px; background: #141a22;
+}
+/* 합체식 — 카드 안 한 줄(코드·이름·성향 아래). 금색 계열로 "조합"임을 알림. */
+.codex-recipe {
+  flex-basis: 100%; margin-top: 2px;
+  font-size: 10.5px; line-height: 1.35; color: #d6b56a; font-weight: 600;
+  word-break: keep-all;
+}
+
 /* 영입 카드 컨테이너 — 세로 스택(부모 #recruit-list가 column) + 가로 배치, 큰 터치 영역 */
 .recruit-card {
   display: flex;
