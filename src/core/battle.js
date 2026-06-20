@@ -17,6 +17,9 @@ let labMeter = null;
 //   ON이면: 전투 tick 타이머를 만들지 않고(runHeadlessBattle가 수동 구동), 전투 종료 전환을 즉시(동기)
 //   처리하며, 렌더/FX/로그/발자취 기록을 생략한다. 전투 계산식/런 규칙은 일절 바꾸지 않는다.
 let headlessRun = false;
+// Dev Balance Lab 02 — 현재 행동 중인 유닛(회복/보호막/표식의 "시전자" 귀속용). performAction이 매 행동마다 갱신.
+//   labMeter가 null이면 의미 없음(계측 외 영향 0). 공격은 performAttack이 attacker를 직접 넘기므로 이 변수와 무관.
+let labActor = null;
 export function setHeadlessRun(v) {
   headlessRun = !!v;
   setRenderSuppressed(headlessRun); // renderGame no-op(대시보드엔 게임 DOM 없음)
@@ -1087,6 +1090,7 @@ function performAction(unit) {
 
   // Hero Skill Foundation 01: 행동 횟수(주기형 스킬 조건용). 스테이지마다 유닛 재생성 → 자연 초기화.
   unit.actionCount = (unit.actionCount || 0) + 1;
+  if (labMeter) labActor = unit; // Dev Balance Lab 02 — 이번 행동의 회복/보호막/표식 시전자 귀속(계측 전용)
 
   const isParty = gameState.party.includes(unit);
 
@@ -1263,6 +1267,7 @@ function applyStatus(unit, status) {
   } else {
     unit.statuses.push({ ...status });
   }
+  if (labMeter && status.type === "mark") labMeter.onMark(labActor, unit); // Dev Balance Lab 02 — 표식 부여 계측
 }
 function healUnit(unit, amount) {
   const before = unit.hp;
@@ -1271,7 +1276,9 @@ function healUnit(unit, amount) {
   const recv = amount > 0 ? (unit.healReceivedBonus || 0) : 0;
   unit.hp = Math.min(unit.maxHp, unit.hp + Math.max(0, amount) + recv);
   const healed = unit.hp - before;
-  if (labMeter && healed > 0) labMeter.onHeal(unit, healed); // Dev Balance Lab 01 — 회복량 계측(무동작 시 null)
+  // Dev Balance Lab 02 — 회복 계측: 시전자(labActor)·대상·시도량(req)·유효량(eff). 초과회복=req-eff(낭비). 무동작 시 null.
+  const requested = Math.max(0, amount) + recv;
+  if (labMeter && requested > 0) labMeter.onHeal(labActor, unit, requested, healed);
   return healed;
 }
 function removeNegStatus(unit) {
@@ -1828,7 +1835,10 @@ const SHIELD_GUARD = 12;   // 수호자 수호
 const SHIELD_BLESS = 8;    // 신관 축복
 const SHIELD_SANCT = 6;    // 성직자 성역(최저 1명)
 function grantShieldTo(caster, target, amount) {
-  target.shield = Math.max(target.shield || 0, amount);
+  const before = target.shield || 0;
+  target.shield = Math.max(before, amount);
+  // Dev Balance Lab 02 — 보호막 부여 계측(증가분 = refresh로 실제 오른 양). 무동작 시 null.
+  if (labMeter && target.shield > before) labMeter.onShield(caster, target, target.shield - before);
 }
 
 // Combat Grammar Polish 02 — 실제 피해 적용(raw): 성역 1회 무효 → shield 흡수 → 초과분 HP.
@@ -1862,7 +1872,7 @@ function dealRaw(target, dmg) {
     //   사망/부활 lifecycle을 건드리지 않고 "치명 피해를 받기 직전"에 가로챈다. immortal 클램프보다 먼저 판정.
     if (remaining >= target.hp && hasStatus(target, "salvation") && gameState.party.includes(target)) {
       triggerSalvation(target);
-      if (labMeter) labMeter.onDamage(target, absorbed, 0); // 구원선 개입 — shield 흡수분만 기록(HP 손실 0)
+      if (labMeter) labMeter.onDamage(target, absorbed, 0, 0); // 구원선 개입 — shield 흡수분만 기록(HP 손실 0)
       return;
     }
     target.hp -= remaining;
@@ -1872,8 +1882,9 @@ function dealRaw(target, dmg) {
   if (gameState.dev && gameState.dev.immortal && target.hp < 1 && gameState.party.includes(target)) {
     target.hp = 1;
   }
-  // Dev Balance Lab 01 — 받은 피해/막은 피해 계측(대상 기준). 1v1이라 대상으로 가해 측이 유일하게 결정된다.
-  if (labMeter) labMeter.onDamage(target, absorbed, Math.max(0, hpBefore - target.hp));
+  // Dev Balance Lab 01/02 — 받은 피해/막은 피해/오버킬 계측(대상 기준). hpLost는 보유 HP로 캡(음수 HP 과집계 방지),
+  //   초과분은 overkill로 분리. 피해/계산식은 불변(읽기만). 무동작 시 null.
+  if (labMeter) labMeter.onDamage(target, absorbed, Math.min(remaining, hpBefore), Math.max(0, remaining - hpBefore));
 }
 
 // Stage Persistence 01 — 전투 무력화 표시 + 로그. 표현만 분기(전투 판정/타겟/패배 조건은 불변).
@@ -1881,6 +1892,7 @@ function dealRaw(target, dmg) {
 function markFallen(unit) {
   unit.hp = 0;
   unit.isDead = true;
+  if (labMeter) labMeter.onFaint(unit, gameState.battle.tick); // Dev Balance Lab 02 — 기절/처치 시점 계측(생존시간/킬타임)
   const isHero = gameState.party.includes(unit);
   pushLog(isHero
     ? `${unit.name}${josa(unit.name, "이가")} 기절했다.`
@@ -2108,8 +2120,8 @@ function performAttack(attacker, target, opts = {}) {
   const poolBefore = target.hp + (target.shield || 0);
   applyDamage(target, damage);
   const tookRealDamage = (target.hp + (target.shield || 0)) < poolBefore;
-  // Dev Balance Lab 01 — 타격 계측(공격 횟수/치명/최대·평균/스킬 피해). 표시되는 damage 기준. 무동작 시 null.
-  if (labMeter) labMeter.onAttack(attacker, target, damage, isCrit, !!opts.skill);
+  // Dev Balance Lab 01/02 — 타격 계측(공격 횟수/치명/최대·평균/스킬 피해 + 반격 여부). 표시되는 damage 기준. 무동작 시 null.
+  if (labMeter) labMeter.onAttack(attacker, target, damage, isCrit, !!opts.skill, !!opts.isCounter);
 
   const verb = attackVerb(attacker);
   const ro = josa(target.name, "을를");
@@ -2371,55 +2383,62 @@ function pushLog(text) {
 // x2 환산 1초 = 게임 틱 4개(=1000ms / X2_TICK_INTERVAL 250ms). 발자취(combatNormMs)와 같은 시간 규약.
 const LAB_TICKS_PER_SEC = Math.max(1, Math.round(1000 / X2_TICK_INTERVAL));
 
-// 측정 누적기. hero/enemy 두 진영의 타격·피해·회복을 모은다(1v1이라 진영 귀속이 유일하게 결정됨).
+// Dev Balance Lab 02 — per-unit 계측 누적기(1:1/생존/다중/파티 공통). instanceId별 record를 모은다.
+//   공격은 performAttack이 attacker를 직접 넘기고, 회복/보호막/표식은 labActor(현재 행동 유닛)에 귀속한다.
+//   1:1 호환 result()도 제공해 Balance Lab 01 듀얼 표를 그대로 유지한다(총 피해량=모든 적 받은 피해 합).
 function createLabMeter() {
-  const side = () => ({
-    taken: 0,          // 이 진영이 "받은" 내구도(HP 손실 + 보호막 흡수) 합
-    shieldBlocked: 0,  // 이 진영의 보호막이 흡수한 피해 합
-    hits: 0,           // 이 진영이 가한 performAttack 횟수(타격 수)
-    hitDamage: 0,      // 이 진영 타격의 표시 피해 합(평균 산정용)
-    maxHit: 0,         // 단일 최대 타격 피해
-    crits: 0,          // 치명 타격 수
-    skillCasts: 0,     // 스킬 발동 횟수
-    skillDamage: 0,    // 스킬 표식이 붙은 타격의 피해 합
-    heal: 0,           // 받은(=수행된) 회복량 합
-  });
-  const m = { hero: side(), enemy: side() };
-  const isHero = (u) => gameState.party.includes(u);
-
-  m.onAttack = (attacker, target, damage, isCrit, isSkill) => {
-    const s = isHero(attacker) ? m.hero : m.enemy;
-    s.hits += 1;
-    s.hitDamage += damage;
-    if (damage > s.maxHit) s.maxHit = damage;
-    if (isCrit) s.crits += 1;
-    if (isSkill) s.skillDamage += damage;
+  const units = new Map();
+  const recOf = (u) => {
+    let r = units.get(u.instanceId);
+    if (!r) {
+      r = {
+        instanceId: u.instanceId, id: u.id, name: u.name, team: u.team,
+        dmgDone: 0, hits: 0, crits: 0, skillCasts: 0, skillDamage: 0, maxHit: 0, counters: 0, // 공세(공격 기준)
+        dmgTaken: 0, shieldBlocked: 0, overkillTaken: 0,                                        // 피격(대상 기준, 모든 피해원)
+        healDone: 0, overHeal: 0, shieldApplied: 0, marks: 0,                                   // 지원
+        faints: 0, faintTick: null,                                                             // 생명주기
+      };
+      units.set(u.instanceId, r);
+    }
+    return r;
   };
-  m.onDamage = (target, absorbed, hpLost) => {
-    const s = isHero(target) ? m.hero : m.enemy; // 받은 쪽에 귀속
-    s.taken += absorbed + hpLost;
-    s.shieldBlocked += absorbed;
+  const m = { units, kills: [] };
+  m.onAttack = (attacker, target, damage, isCrit, isSkill, isCounter) => {
+    const r = recOf(attacker);
+    r.dmgDone += damage; r.hits += 1;
+    if (damage > r.maxHit) r.maxHit = damage;
+    if (isCrit) r.crits += 1;
+    if (isSkill) r.skillDamage += damage;
+    if (isCounter) r.counters += 1;
   };
-  m.onSkillCast = (unit) => { (isHero(unit) ? m.hero : m.enemy).skillCasts += 1; };
-  m.onHeal = (unit, healed) => { (isHero(unit) ? m.hero : m.enemy).heal += healed; };
-
-  // 측정 결과(아군 관점). 총 피해량 = 적이 받은 피해, 받은 피해량 = 아군이 받은 피해.
+  m.onDamage = (target, absorbed, hpLost, overkill = 0) => {
+    const r = recOf(target);
+    r.dmgTaken += absorbed + hpLost; r.shieldBlocked += absorbed; r.overkillTaken += overkill;
+  };
+  m.onSkillCast = (unit) => { recOf(unit).skillCasts += 1; };
+  m.onHeal = (actor, target, requested, effective) => {
+    if (!actor) return;
+    const r = recOf(actor);
+    r.healDone += effective; r.overHeal += Math.max(0, requested - effective);
+  };
+  m.onShield = (caster, target, added) => { if (caster && added > 0) recOf(caster).shieldApplied += added; };
+  m.onMark = (caster, target) => { if (caster) recOf(caster).marks += 1; };
+  m.onFaint = (unit, tick) => {
+    const r = recOf(unit); r.faints += 1; if (r.faintTick == null) r.faintTick = tick;
+    if (unit.team === "enemy") m.kills.push(tick);
+  };
+  // 1:1 호환 결과(Balance Lab 01 듀얼 표). 총 피해량=모든 적 받은 피해 합(독/교란/광역 포함), 받은 피해량=아군 record.
   m.result = (seconds, ticks) => {
     const per = (v) => (seconds > 0 ? v / seconds : 0);
+    const all = [...units.values()];
+    const hero = all.find((r) => r.team === "party") || { hits: 0, dmgDone: 0, maxHit: 0, crits: 0, skillCasts: 0, skillDamage: 0, dmgTaken: 0, shieldBlocked: 0, healDone: 0 };
+    const totalToEnemies = all.filter((r) => r.team === "enemy").reduce((s, r) => s + r.dmgTaken, 0);
     return {
       seconds, ticks,
-      totalDamage: m.enemy.taken,
-      dps: per(m.enemy.taken),
-      attacks: m.hero.hits,
-      avgDamage: m.hero.hits ? m.hero.hitDamage / m.hero.hits : 0,
-      maxDamage: m.hero.maxHit,
-      crits: m.hero.crits,
-      skillCasts: m.hero.skillCasts,
-      skillDamage: m.hero.skillDamage,
-      damageTaken: m.hero.taken,
-      dpsTaken: per(m.hero.taken),
-      shieldBlocked: m.hero.shieldBlocked,
-      heal: m.hero.heal,
+      totalDamage: totalToEnemies, dps: per(totalToEnemies),
+      attacks: hero.hits, avgDamage: hero.hits ? hero.dmgDone / hero.hits : 0, maxDamage: hero.maxHit,
+      crits: hero.crits, skillCasts: hero.skillCasts, skillDamage: hero.skillDamage,
+      damageTaken: hero.dmgTaken, dpsTaken: per(hero.dmgTaken), shieldBlocked: hero.shieldBlocked, heal: hero.healDone,
     };
   };
   return m;
@@ -2485,6 +2504,100 @@ export function runDuelSimulation({ heroJob, enemyTemplate, seconds }) {
     if (gameState.dev) gameState.dev.immortal = saved.immortal;
   }
   return result;
+}
+
+/* =========================================================
+   Dev Balance Lab 02 — Role Value Metrics: 일반 시나리오 헤드리스 실행(아군 N vs 적 M).
+   1:1 Duel / Survival / Multi Target / Party 공통. 전투 엔진(stepCombat)을 그대로 재사용하고,
+   per-unit 미터로 생존/회복/보호막/다중/조건부 지표를 수집한다. 본게임 수치/데이터/저장 무변경.
+     - sustained=true(듀얼/생존/다중): 사망 즉시 revive → 측정시간 내내 지속(throughput + 첫 기절 + 킬레이트).
+     - sustained=false(파티 웨이브): revive 없이 자연 종료(클리어/전멸/시간초과) — 클리어·잔여HP·기절 수.
+   gameState는 잠시 빌렸다 finally에서 복구(state 오염 0). FX/로그/렌더는 헤드리스 가드로 생략.
+   ========================================================= */
+const LAB_FRONT_SLOTS = ["ef0", "ef1", "ef2", "ef3", "ef4", "ef5"];
+const LAB_BACK_SLOTS = ["eb0", "eb1", "eb2", "eb3", "eb4", "eb5"];
+
+export function runLabScenario({ allyJobs, enemyTemplates, seconds, sustained = true }) {
+  if (!Array.isArray(allyJobs) || !allyJobs.length || !Array.isArray(enemyTemplates) || !enemyTemplates.length || !seconds) return null;
+  const saved = {
+    party: gameState.party, enemies: gameState.enemies, logs: gameState.logs, screen: gameState.screen,
+    battle: { ...gameState.battle }, runDepth: gameState.run.depth, immortal: gameState.dev ? gameState.dev.immortal : false,
+  };
+  // 아군: 직업 선호 슬롯에 배치(role/grammar/jobId가 본게임과 동일하게 구성). 최대 4인.
+  const formation = { f0: null, f1: null, b0: null, b1: null };
+  allyJobs.slice(0, 4).forEach((j) => { const slot = slotPreference(j).find((k) => !formation[k]); if (slot) formation[slot] = j; });
+  const heroes = createInitialParty({ atk: 0, maxHp: 0, heal: 0, healRecv: 0 }, formation, null);
+  if (!heroes.length) return null;
+  // 적: 템플릿 배열로 생성(전열/후열 슬롯 분산 — 본게임 타겟팅 role 그대로).
+  let fi = 0, bi = 0;
+  const enemies = enemyTemplates.map((t, i) => {
+    const u = createUnit(t, `lab-e${i}-${t.id || "e"}`);
+    u.slot = u.role === "front" ? (LAB_FRONT_SLOTS[fi++] || `ef${i}`) : (LAB_BACK_SLOTS[bi++] || `eb${i}`);
+    return u;
+  });
+
+  let result = null;
+  const meter = createLabMeter();
+  try {
+    gameState.party = heroes; gameState.enemies = enemies; gameState.run.depth = 1;
+    if (gameState.dev) gameState.dev.immortal = false; // revive로 측정(불사 클램프 미사용)
+    labMeter = meter; labActor = null; setFxSuppressed(true);
+    const ticks = Math.max(1, Math.round(seconds * LAB_TICKS_PER_SEC));
+    let endTick = ticks, clearTick = null;
+    for (let i = 0; i < ticks; i++) {
+      gameState.battle.tick = i + 1; // 미터 타이밍(생존시간/킬타임)용
+      if (!sustained) {
+        const enemiesDead = enemies.every((u) => u.isDead);
+        const heroesDead = heroes.every((u) => u.isDead);
+        if (enemiesDead || heroesDead) { if (enemiesDead && clearTick == null) clearTick = i; endTick = i; break; }
+      }
+      stepCombat();
+      if (sustained) { heroes.forEach(reviveForSim); enemies.forEach(reviveForSim); }
+    }
+    const enemiesDeadFinal = enemies.every((u) => u.isDead);
+    if (!sustained && enemiesDeadFinal && clearTick == null) clearTick = endTick;
+    result = buildLabResult(meter, seconds, ticks, { sustained, endTick, clearTick, enemiesDeadFinal, heroesDeadFinal: heroes.every((u) => u.isDead) });
+  } finally {
+    labMeter = null; labActor = null; setFxSuppressed(false);
+    gameState.party = saved.party; gameState.enemies = saved.enemies; gameState.logs = saved.logs; gameState.screen = saved.screen;
+    Object.assign(gameState.battle, saved.battle); gameState.run.depth = saved.runDepth;
+    if (gameState.dev) gameState.dev.immortal = saved.immortal;
+  }
+  return result;
+}
+
+function buildLabResult(meter, seconds, ticks, ctx) {
+  const tickToSec = (t) => (t == null ? null : Math.round((t / LAB_TICKS_PER_SEC) * 10) / 10);
+  const blank = (u) => ({ instanceId: u.instanceId, id: u.id, name: u.name, team: u.team, dmgDone: 0, hits: 0, crits: 0, skillCasts: 0, skillDamage: 0, maxHit: 0, counters: 0, dmgTaken: 0, shieldBlocked: 0, overkillTaken: 0, healDone: 0, overHeal: 0, shieldApplied: 0, marks: 0, faints: 0, faintTick: null });
+  const statOf = (u) => meter.units.get(u.instanceId) || blank(u);
+  const allies = gameState.party.map((u) => {
+    const r = statOf(u);
+    return { ...r, maxHp: u.maxHp, finalHp: Math.max(0, u.hp), isDead: !!u.isDead, fainted: r.faints > 0, survivalTime: r.faintTick != null ? tickToSec(r.faintTick) : seconds };
+  });
+  const enemies = gameState.enemies.map((u) => {
+    const r = statOf(u);
+    return { instanceId: u.instanceId, id: u.id, name: u.name, maxHp: u.maxHp, finalHp: Math.max(0, u.hp), isDead: !!u.isDead, dmgTaken: r.dmgTaken, overkillTaken: r.overkillTaken, deaths: r.faints };
+  });
+  const kills = meter.kills.slice().sort((a, b) => a - b);
+  const totalDamage = enemies.reduce((s, e) => s + e.dmgTaken, 0);   // 적이 받은 총 피해(모든 적 합 = 아군 throughput)
+  const totalHealing = allies.reduce((s, a) => s + a.healDone, 0);
+  const totalShieldAbsorbed = allies.reduce((s, a) => s + a.shieldBlocked, 0);
+  const totalDamageTaken = allies.reduce((s, a) => s + a.dmgTaken, 0);
+  const remainingHp = allies.reduce((s, a) => s + a.finalHp, 0);
+  const maxHpTotal = allies.reduce((s, a) => s + a.maxHp, 0);
+  const faintCount = allies.filter((a) => a.isDead).length;
+  return {
+    seconds, ticks, sustained: ctx.sustained, allies, enemies, kills,
+    targetsHit: enemies.filter((e) => e.dmgTaken > 0).length,
+    killCount: kills.length, firstKillTime: kills.length ? tickToSec(kills[0]) : null,
+    overkillLoss: enemies.reduce((s, e) => s + e.overkillTaken, 0),
+    totalDamage, dps: seconds > 0 ? totalDamage / seconds : 0,
+    totalHealing, totalShieldAbsorbed, totalDamageTaken,
+    remainingHp, maxHpTotal, remainingHpRatio: maxHpTotal ? remainingHp / maxHpTotal : 0,
+    faintCount, survivorCount: allies.length - faintCount,
+    result: ctx.sustained ? null : (ctx.enemiesDeadFinal ? "clear" : ctx.heroesDeadFinal ? "wipe" : "timeout"),
+    clearTime: ctx.clearTick != null ? tickToSec(ctx.clearTick) : null,
+  };
 }
 
 /* =========================================================
