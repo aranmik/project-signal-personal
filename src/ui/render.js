@@ -642,6 +642,8 @@ export function renderCodexDetail(jobId) {
       </span>
     </div>
 
+    ${s.tagline ? `<p class="cd-tagline">${s.tagline}</p>` : ""}
+
     <div class="cd-section">
       <h4>실제 구현</h4>
       <p>${s.behavior}</p>

@@ -12,8 +12,13 @@ export const ADVANCED_JOBS = [
   "forbidden", "wall", "healbow", "purifier", "mage", "bard", "gatekeeper", "tracker",
 ];
 
-// 2차 직업 (1차+기본 또는 1차+1차). 규칙/데이터 방향만 정리 — Trial 01에선 비노출(아래 주석 참고).
-export const SECOND_CLASS_JOBS = ["dragonspear", "sage", "sunlord"];
+// 2차 직업 분류(표시 전용 — render.js jobTierLabel 도감 단계 배지). 합체/영입/보상 로직과 무관:
+//   합체는 FUSION_RECIPES만 보고(availableFusions), SECOND_CLASS_RECIPES는 별도 비활성 — 이 배열은 단계 표기용이다.
+//   Second Class Codex Readability 01: Batch 1A/2로 Dev 전투 씨앗화된 SR-25~30도 포함(도감 배지 '2차 씨앗' 정상화).
+export const SECOND_CLASS_JOBS = [
+  "dragonspear", "sage", "sunlord",
+  "swordsaint", "redeemer", "skyarcher", "plaguebringer", "dancer", "wardkeeper",
+];
 
 // 합체 레시피 — job id 기반 판단. materials 2개 → result 1개. 순서 무관(availableFusions가 흡수).
 //   birthLine: 합체 결과 화면용 탄생 문구 — "소모/제거"가 아니라 "탄생"으로 읽히게.
