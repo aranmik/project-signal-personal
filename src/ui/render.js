@@ -1081,24 +1081,37 @@ function renderBondLinks(state) {
   // 해제된 결속 제거(사라진 것만).
   [...layer.children].forEach((c) => { if (!keep.has(c.dataset.bondKey)) c.remove(); });
   const w = field.clientWidth, h = field.clientHeight;
+  // Combat Target-Link Polish 01 — 결속선 시작/끝을 아바타 "몸통 중앙(가슴)" 기준으로 연결(둘이 직접 묶인 느낌).
+  const BOND_ANCHOR = { fx: 0.5, fy: 0.46 };
   pairs.forEach(({ key, a, b, kind }) => {
-    const pa = unitPoint(a.instanceId, { fx: 0.5, fy: 0.5 }, fieldRect);
-    const pb = unitPoint(b.instanceId, { fx: 0.5, fy: 0.5 }, fieldRect);
+    const pa = unitPoint(a.instanceId, BOND_ANCHOR, fieldRect);
+    const pb = unitPoint(b.instanceId, BOND_ANCHOR, fieldRect);
     if (!pa || !pb) return;
-    const mx = (pa.x + pb.x) / 2, my = (pa.y + pb.y) / 2 - 14;
+    const mx = (pa.x + pb.x) / 2, my = (pa.y + pb.y) / 2 - 8; // 살짝만 휨 — 더 직접 연결 느낌
     let svg = [...layer.children].find((c) => c.dataset.bondKey === key);
     if (!svg) {
       svg = document.createElementNS(SVG_NS, "svg");
       svg.dataset.bondKey = key;
       svg.setAttribute("class", `bond-svg bond-svg--${kind}`);
-      const link = document.createElementNS(SVG_NS, "path"); link.setAttribute("class", "bond-chain");
-      const lock = document.createElementNS(SVG_NS, "circle"); lock.setAttribute("class", "bond-lock"); lock.setAttribute("r", "5");
-      svg.appendChild(link); svg.appendChild(lock);
+      // Combat Target-Link Polish 01 — 연결 코어(가는 실선) + 체인 마디(흐르는 dash) + 중앙 자물쇠(본체+고리) = "봉인/연결" 시각 언어.
+      const core = document.createElementNS(SVG_NS, "path"); core.setAttribute("class", "bond-core");
+      const chain = document.createElementNS(SVG_NS, "path"); chain.setAttribute("class", "bond-chain");
+      const lock = document.createElementNS(SVG_NS, "g"); lock.setAttribute("class", "bond-lock");
+      const shackle = document.createElementNS(SVG_NS, "path");
+      shackle.setAttribute("class", "bond-lock-shackle");
+      shackle.setAttribute("d", "M -2.4 -0.4 L -2.4 -2.6 A 2.4 2.4 0 0 1 2.4 -2.6 L 2.4 -0.4");
+      const body = document.createElementNS(SVG_NS, "rect");
+      body.setAttribute("class", "bond-lock-body");
+      body.setAttribute("x", "-3.6"); body.setAttribute("y", "-0.4"); body.setAttribute("width", "7.2"); body.setAttribute("height", "6.2"); body.setAttribute("rx", "1.5");
+      lock.appendChild(shackle); lock.appendChild(body);
+      svg.appendChild(core); svg.appendChild(chain); svg.appendChild(lock);
       layer.appendChild(svg);
     }
     svg.setAttribute("width", w); svg.setAttribute("height", h); svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-    svg.querySelector(".bond-chain").setAttribute("d", `M ${pa.x} ${pa.y} Q ${mx} ${my} ${pb.x} ${pb.y}`);
-    const lock = svg.querySelector(".bond-lock"); lock.setAttribute("cx", mx); lock.setAttribute("cy", my);
+    const d = `M ${pa.x} ${pa.y} Q ${mx} ${my} ${pb.x} ${pb.y}`;
+    svg.querySelector(".bond-core").setAttribute("d", d);
+    svg.querySelector(".bond-chain").setAttribute("d", d);
+    svg.querySelector(".bond-lock").setAttribute("transform", `translate(${mx} ${my})`);
   });
 }
 
@@ -2084,6 +2097,8 @@ const LINE_STYLE = {
   crush:    { bowF: 0.34, bowMin: 20, bowMax: 78, flip: 1,  head: "slash", draw: true, ghost: true },
   execute:  { bowF: 0.26, bowMin: 16, bowMax: 64, flip: 1,  head: "x",     draw: true, ghost: false },
   mark:     { bowF: 0.18, bowMin: 12, bowMax: 40, flip: 1,  head: "spark", draw: false },
+  // Combat Target-Link Polish 01 — 추적 사격(추적자 추격/천궁 사격): 직선 저격선(녹색 유지). 시작 굵고 끝 얇은 테이퍼 + 화살촉("꿰뚫는다").
+  snipe:    { bowF: 0.03, bowMin: 1,  bowMax: 6,  flip: 1,  head: "arrow", draw: false, taper: true, taperStart: 3.4, taperEnd: 0.5 },
   // Hero Skill 01: 교란 — 보라/분홍 거친 왜곡선(짧게 흔들림). 작은 혼란 표식(spark).
   disrupt:  { bowF: 0.22, bowMin: 14, bowMax: 44, flip: 1,  head: "spark",  draw: false, rough: true },
   // Combat Grammar Foundation 01: 도발 — 노랑 점선(공격선/회복선과 구분). 화려하지 않게.
@@ -2106,7 +2121,7 @@ function actionLineVariant(lineType, kind) {
   // lineType이 행동 성격을 이미 잘 인코딩한다(heal/ranged/taunt/disrupt). attack은 항상 "피해 기본공격"이므로
   //   유닛 문법(kind=heal/protect 등)으로 색을 바꾸면 오해(피해선이 회복색)가 생긴다 → strike만 따뜻한 melee로.
   if (lineType === "heal") return "heal";
-  if (lineType === "ranged") return "ranged";
+  if (lineType === "ranged" || lineType === "snipe") return "ranged"; // Combat Target-Link Polish 01 — 저격선도 녹색 유지
   if (lineType === "taunt") return "guard";
   if (lineType === "disrupt") return "debuff";
   if (lineType === "support") return "support";
@@ -2184,10 +2199,13 @@ function spawnLine(layer, s, t, lineType, kind, variant) {
   grad.setAttribute("x2", t.x);
   grad.setAttribute("y2", t.y);
   // Action Line Visibility 01 — 시작부 alpha 상향(0→0.22)으로 "이 actor에게서 시작"이 읽히게. 끝점은 여전히 선명.
-  grad.innerHTML =
-    '<stop offset="0%" stop-color="currentColor" stop-opacity="0.22"></stop>' +
-    '<stop offset="50%" stop-color="currentColor" stop-opacity="0.5"></stop>' +
-    '<stop offset="100%" stop-color="currentColor" stop-opacity="0.95"></stop>';
+  //   Combat Target-Link Polish 01 — 저격선(taper)은 시작(굵은 쪽)이 또렷하게 — 시작부터 진하게.
+  grad.innerHTML = cfg.taper
+    ? '<stop offset="0%" stop-color="currentColor" stop-opacity="0.9"></stop>' +
+      '<stop offset="100%" stop-color="currentColor" stop-opacity="0.95"></stop>'
+    : '<stop offset="0%" stop-color="currentColor" stop-opacity="0.22"></stop>' +
+      '<stop offset="50%" stop-color="currentColor" stop-opacity="0.5"></stop>' +
+      '<stop offset="100%" stop-color="currentColor" stop-opacity="0.95"></stop>';
   defs.appendChild(grad);
   svg.appendChild(defs);
 
@@ -2204,14 +2222,29 @@ function spawnLine(layer, s, t, lineType, kind, variant) {
     svg.appendChild(ghost);
   }
 
-  const path = document.createElementNS(SVG_NS, "path");
-  path.setAttribute("class", "fx-path");
-  path.setAttribute("d", `M ${s.x} ${s.y} Q ${mx} ${my} ${t.x} ${t.y}`);
-  path.setAttribute("stroke", `url(#${gid})`);
-  // dash draw-in 타입만 pathLength 정규화로 "그려짐"(꽂힘).
-  //   점선 타입(heal/enemy)은 실제 dash 패턴이라 정규화하지 않는다.
-  if (cfg.draw) path.setAttribute("pathLength", "1");
-  svg.appendChild(path);
+  if (cfg.taper) {
+    // Combat Target-Link Polish 01 — 저격선: 스트로크가 아니라 "시작 굵고 끝 얇은" 필드 폴리곤(s쪽 넓고 t쪽 한 점).
+    //   직선 + 테이퍼 + 화살촉으로 "팟! 꿰뚫는다"가 일반 곡선 원거리와 구분된다.
+    const sH = cfg.taperStart ?? 3.2, eH = cfg.taperEnd ?? 0.6;
+    const poly = document.createElementNS(SVG_NS, "path");
+    poly.setAttribute("class", "fx-taper"); // fx-path(fill:none) 제외 — 인라인 그라데이션 fill 유지
+    poly.setAttribute("d",
+      `M ${s.x + px * sH} ${s.y + py * sH}` +
+      ` L ${t.x + px * eH} ${t.y + py * eH}` +
+      ` L ${t.x - px * eH} ${t.y - py * eH}` +
+      ` L ${s.x - px * sH} ${s.y - py * sH} Z`);
+    poly.setAttribute("fill", `url(#${gid})`);
+    svg.appendChild(poly);
+  } else {
+    const path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute("class", "fx-path");
+    path.setAttribute("d", `M ${s.x} ${s.y} Q ${mx} ${my} ${t.x} ${t.y}`);
+    path.setAttribute("stroke", `url(#${gid})`);
+    // dash draw-in 타입만 pathLength 정규화로 "그려짐"(꽂힘).
+    //   점선 타입(heal/enemy)은 실제 dash 패턴이라 정규화하지 않는다.
+    if (cfg.draw) path.setAttribute("pathLength", "1");
+    svg.appendChild(path);
+  }
 
   // 끝점 장식 — 끝 접선 방향(t - control)으로 회전, 타입별 성격
   const ang = (Math.atan2(t.y - my, t.x - mx) * 180) / Math.PI;

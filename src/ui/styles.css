@@ -1659,31 +1659,34 @@ body {
   100% { opacity: 0; transform: scaleX(1);   transform-origin: right; }
 }
 
-/* 결속(금제 악의 / 성벽 선의) 지속선: 반투명 사슬 + 흐르는 dash + 중앙 자물쇠. 결속 유지 동안 계속 노출. */
+/* Combat Target-Link Polish 01 — 결속(금제 악의 / 성벽 선의) 지속선: 연결 코어(가는 실선) + 체인 마디(흐르는 dash) +
+   중앙 자물쇠(본체+고리). "봉인/연결/결속 상태"의 시각 언어 — 행동선처럼 떴다 사라지지 않고 결속 유지 동안 계속 노출. */
 #bond-layer { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
 .bond-svg { position: absolute; left: 0; top: 0; overflow: visible; }
-.bond-svg--offense { color: rgba(228, 96, 110, 0.5); }   /* 악의 결속 — 붉은 사슬 */
-.bond-svg--defense { color: rgba(242, 206, 122, 0.55); } /* 선의 결속 — 금빛 사슬 */
+.bond-svg--offense { color: rgba(230, 98, 112, 0.62); }   /* 악의 결속 — 붉은 사슬 */
+.bond-svg--defense { color: rgba(244, 208, 126, 0.66); }  /* 선의 결속 — 금빛 사슬 */
+/* 연결 코어 — 끊기지 않고 묶여 있다는 연속감(체인 dash 아래 깔림). */
+.bond-core {
+  fill: none; stroke: currentColor; stroke-width: 1; opacity: 0.3; stroke-linecap: round;
+}
+/* 체인 마디 — 둥근 짧은 dash로 "사슬 고리". 흐르며 지속 강조. */
 .bond-chain {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.4;
-  stroke-dasharray: 5 4;          /* 사슬 고리 느낌 */
-  stroke-linecap: round;
-  opacity: 0.8;
-  animation: bond-flow 1.2s linear infinite; /* 사슬이 흐르는 느낌 — "지속 중" 강조 */
+  fill: none; stroke: currentColor; stroke-width: 2.6;
+  stroke-dasharray: 1.6 5.6; stroke-linecap: round;
+  opacity: 0.9; animation: bond-flow 1.4s linear infinite;
 }
-@keyframes bond-flow { to { stroke-dashoffset: -18; } }
-.bond-lock {
-  fill: currentColor;
-  stroke: rgba(255, 255, 255, 0.55);
-  stroke-width: 1;
-  opacity: 0.85;
-}
+@keyframes bond-flow { to { stroke-dashoffset: -14.4; } }
+/* 중앙 자물쇠 — 본체(rect) + 고리(shackle): "봉인/결속" 모티프. */
+.bond-lock-body { fill: currentColor; stroke: rgba(255, 255, 255, 0.6); stroke-width: 0.8; opacity: 0.92; }
+.bond-lock-shackle { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; opacity: 0.95; }
 @media (prefers-reduced-motion: reduce) {
   .bond-chain { animation: none; }
   .tempo-drop { animation-duration: 0.01s; }
 }
+
+/* Combat Target-Link Polish 01 — 추적 사격 저격선: 시작 굵고 끝 얇은 테이퍼(필드 폴리곤) + 화살촉(녹색 variant 유지). */
+.fx-taper { stroke: none; }
+.fx-svg--snipe .fx-head--arrow { fill: currentColor; }
 
 /* X 타격점(기본 공격) */
 .fx-head--x .fx-xcut {

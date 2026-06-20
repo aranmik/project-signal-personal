@@ -1497,7 +1497,8 @@ function runDataSkill(unit, meta) {
       if (!t) return false; // 이미 처치됨 → 기본 공격
       const mult = L.mult + (unit.aimFullHp ? L.fullHpBonus : 0);
       // Hero Readability Polish 01B — 표식 대상 추격임을 로그에 짧게 드러낸다(chase 플래그, 표시 전용). 피해/수치 불변.
-      performAttack(unit, t, { mult, lineType: "ranged", skill: { name: L.releaseName, kind: meta.kind }, chase: true });
+      // Combat Target-Link Polish 01 — 추적 성공은 곡선 원거리가 아니라 직선 저격선(snipe). 표식/피해/타겟 판정 불변.
+      performAttack(unit, t, { mult, lineType: "snipe", skill: { name: L.releaseName, kind: meta.kind }, chase: true });
       // Combat Visibility Job Grammar 01 — 추격 성공 즉시 표식 칩 제거(item 7) + 스코프 위치 강한 hit burst(item 8).
       t.statuses = (t.statuses || []).filter((s) => s.type !== "mark");
       playActorFx("markBurst", unit.instanceId, { targetId: t.instanceId });
@@ -1580,7 +1581,8 @@ function runDataSkill(unit, meta) {
         applyStatus(mt, { type: "defDown", duration: 3, pct: L.dmgUpPct ?? 0.12 }); // 갱신(FX 없이)
       }
       applyStatus(mt, { type: "mark", duration: 3 }); // 표식 칩 유지(기존 mark 문법 재사용)
-      performAttack(unit, mt, { mult: L.mult ?? 1.3, lineType: "ranged", skill: { name: fresh ? "하늘 표식" : "하늘사격", kind: meta.kind } });
+      // Combat Target-Link Polish 01 — 천궁의 표식 대상 사격도 직선 저격선(snipe)으로 "꿰뚫는다". 표식/피해/타겟 판정 불변.
+      performAttack(unit, mt, { mult: L.mult ?? 1.3, lineType: "snipe", skill: { name: fresh ? "하늘 표식" : "하늘사격", kind: meta.kind } });
       return true;
     }
     case "wardfield": { // 결계장(SR-30) — 진형 결계(보호막/완충) + 앵커 보강. 성황 무효와 분리(감소/완충만).
