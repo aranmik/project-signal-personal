@@ -67,17 +67,26 @@ export function shortWhen(ts) {
   return `${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-// 발자취 1건 → 한 줄 요약 텍스트(결과 · 심도 · 경계도 · 전투시간 · 파티 · 시각).
-export function footprintLine(fp, nameOf) {
-  const when = shortWhen(fp.ts);
-  return `${resultLabel(fp.result)} · 심도 ${fp.depth} · 경계도 ${fp.alertness} · ${formatTime(fp.combatMs)} · ${partyText(fp.party, nameOf)}${when ? ` · ${when}` : ""}`;
+// Run Footprints Polish 01 — 시간 표시: 실측(combatMs) + x2환산(combatNormMs).
+//   구기록(combatNormMs 없음)은 실측만 표시(하위 호환).
+export function footprintTimeText(fp) {
+  const real = `실측 ${formatTime(fp.combatMs)}`;
+  if (fp.combatNormMs == null) return real;
+  return `${real} · x2환산 ${formatTime(fp.combatNormMs)}`;
 }
 
-// 전체 목록 → 복사용 TSV(헤더 포함). 열: 시각/결과/심도/경계도/전투시간/파티.
+// 발자취 1건 → 한 줄 요약 텍스트(결과 · 심도 · 경계도 · 실측/x2환산 · 파티 · 시각). 결과 오버레이 1줄 + title/aria 공용.
+export function footprintLine(fp, nameOf) {
+  const when = shortWhen(fp.ts);
+  return `${resultLabel(fp.result)} · 심도 ${fp.depth} · 경계도 ${fp.alertness} · ${footprintTimeText(fp)} · ${partyText(fp.party, nameOf)}${when ? ` · ${when}` : ""}`;
+}
+
+// 전체 목록 → 복사용 TSV(헤더 포함). 열: 시각/결과/심도/경계도/실측전투시간/x2환산전투시간/파티(텍스트 유지).
 export function footprintsToTSV(list, nameOf) {
-  const head = ["시각", "결과", "심도", "경계도", "전투시간", "파티"].join("\t");
+  const head = ["시각", "결과", "심도", "경계도", "실측전투시간", "x2환산전투시간", "파티"].join("\t");
   const rows = (list || []).map((fp) =>
-    [shortWhen(fp.ts), resultLabel(fp.result), fp.depth, fp.alertness, formatTime(fp.combatMs), partyText(fp.party, nameOf)].join("\t")
+    [shortWhen(fp.ts), resultLabel(fp.result), fp.depth, fp.alertness, formatTime(fp.combatMs),
+     (fp.combatNormMs == null ? "-" : formatTime(fp.combatNormMs)), partyText(fp.party, nameOf)].join("\t")
   );
   return [head, ...rows].join("\n");
 }

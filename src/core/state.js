@@ -369,6 +369,9 @@ export const gameState = {
     // Run Footprints 01 — 현실 전투 시간 누적(ms). 전투 화면에서만 누적(선택/보상/편성 제외). resetBattle에서 0.
     combatMs: 0,
     battleStartTs: null,        // 현재 전투 시작 시각(performance.now). 전투 종료 시 차이를 combatMs에 더한다.
+    // Run Footprints Polish 01 — 기본 배속(x2) 환산 전투시간 누적. 전투 게임 틱 수 × x2 틱 간격으로 쌓는다
+    //   (배속과 무관한 "게임 길이"를 x2 현실시간으로 환산 — MAX 60ms floor도 자동 반영).
+    combatNormMs: 0,
     routeChoices: null,         // 현재 제시된 여정 선택지(route id 배열) — 화면 갱신에도 고정
     currentRouteType: "normal", // 현재/직전 인카운터 타입(HUD 표시 + 승리 처리 분기)
     rewardPicks: 0,             // Reward Pressure 01 — 현재 보상 화면에서 남은 성장 선택 횟수(길 프로필 기반)

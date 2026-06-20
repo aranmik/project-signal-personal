@@ -6,7 +6,7 @@ import { REWARDS, rewardById, REWARD_MAX_LEVEL } from "../data/rewards.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { SLOT_ORDER, SLOT_NAMES, partySizeOf, LAYOUT_PREVIEW_CASES } from "../core/state.js";
 import { avatarSpec, avatarFigureHTML, CODEX_ENTRIES, CODEX_STATUS_LABEL } from "../data/avatars.js";
-import { loadFootprints, footprintLine, footprintsToTSV, resultLabel } from "../data/footprints.js";
+import { loadFootprints, footprintLine, footprintTimeText, footprintsToTSV, resultLabel } from "../data/footprints.js";
 
 function jobName(id) {
   return UNIT_TEMPLATES.party[id]?.name || id;
@@ -760,12 +760,29 @@ export function renderFootprintsList() {
     host.innerHTML = `<p class="fp-empty">아직 발자취가 없습니다. 런을 클리어/실패/포기하면 기록됩니다.</p>`;
     return;
   }
-  host.innerHTML = list.map((fp) =>
-    `<div class="fp-row fp-row--${fp.result}">
-       <span class="fp-result">${resultLabel(fp.result)}</span>
-       <span class="fp-line">${footprintLine(fp, jobName)}</span>
-     </div>`
-  ).join("");
+  // Run Footprints Polish 01 — 한 줄 텍스트 대신 메타(결과·심도·경계도·실측/x2환산) + 최종 파티 아바타 미니.
+  //   아바타는 .av-stage 스코프 안에서만 파츠·티어 링(1차 은/2차 금)이 렌더되므로 파티 컨테이너에 av-stage를 준다.
+  const ava = (p) => `<span class="fp-ava" title="${jobName(p.job)}">${jobAvatarHTML(p.job, "av-fit--fp")}</span>`;
+  host.innerHTML = list.map((fp) => {
+    const party = fp.party || [];
+    const front = party.filter((p) => String(p.slot).startsWith("f"));
+    const back = party.filter((p) => String(p.slot).startsWith("b"));
+    const partyHtml = party.length
+      ? `<div class="fp-party av-stage">
+           <span class="fp-ava-group">${front.map(ava).join("")}</span>
+           ${front.length && back.length ? `<span class="fp-sep"></span>` : ""}
+           <span class="fp-ava-group">${back.map(ava).join("")}</span>
+         </div>`
+      : "";
+    return `<div class="fp-row fp-row--${fp.result}" title="${footprintLine(fp, jobName)}">
+       <div class="fp-meta">
+         <span class="fp-result">${resultLabel(fp.result)}</span>
+         <span class="fp-stat">심도 ${fp.depth} · 경계도 ${fp.alertness}</span>
+         <span class="fp-time">${footprintTimeText(fp)}</span>
+       </div>
+       ${partyHtml}
+     </div>`;
+  }).join("");
 }
 
 // Run Footprints 01 — 복사용 TSV 텍스트(직업명 포함). main.js의 복사 핸들러가 사용.

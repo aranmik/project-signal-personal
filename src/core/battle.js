@@ -12,6 +12,9 @@ import { skillOf } from "../data/skills.js";
 let tickTimer = null;
 // Combat Feel Polish 01: 기본 전투 호흡 상향. 새 1x = 500ms (BASE / speed).
 const BASE_TICK_INTERVAL = 500; // 1x 기준 tick 간격
+// Run Footprints Polish 01 — 기본 배속(x2) 1틱의 현실 시간(=BASE/2=250ms). 전투 게임 틱 수에 곱해
+//   "x2로 봤다면 걸렸을 현실 전투시간"을 환산한다. 틱 수는 배속과 무관(게임 길이)이라 MAX 60ms floor도 자동 반영.
+const X2_TICK_INTERVAL = BASE_TICK_INTERVAL / 2;
 
 // Combat Breath Preview 01: 배속 스텝 1x→2x→3x→4x→MAX 순환.
 //   MAX는 무제한이 아니라 "안전 상한"을 둔 빠른 모드 — interval을 MIN_TICK_INTERVAL로 floor한다.
@@ -265,6 +268,7 @@ export function resetBattle() {
   gameState.run.partyHp = null;              // Stage Persistence 01 — 전투 간 HP 지속 초기화(첫 전투는 풀피)
   gameState.run.combatMs = 0;                // Run Footprints 01 — 현실 전투 시간 누적 초기화(새 런)
   gameState.run.battleStartTs = null;
+  gameState.run.combatNormMs = 0;            // Run Footprints Polish 01 — x2 환산 전투시간 누적 초기화
 
   gameState.logs = ["새싹 숲 입구 — 모험 시작! 첫 전투가 끝나면 여정을 고른다."];
 
@@ -756,6 +760,8 @@ function battleTick() {
     // Run Footprints 01 — 정식 전투 종료 시 현실 전투 시간 누적(preview 제외). battleStartTs는 startBattle에서 설정.
     if (end.outcome !== "preview" && gameState.run.battleStartTs != null) {
       gameState.run.combatMs = (gameState.run.combatMs || 0) + (performance.now() - gameState.run.battleStartTs);
+      // Run Footprints Polish 01 — x2 환산: 이 전투의 게임 틱 수 × x2 틱 간격(배속 무관 — 게임 길이 기준).
+      gameState.run.combatNormMs = (gameState.run.combatNormMs || 0) + (gameState.battle.tick || 0) * X2_TICK_INTERVAL;
       gameState.run.battleStartTs = null;
     }
     // Victory Finish 01: 정식 런/패배는 짧은 마무리 호흡 뒤 전환(사망 연출 노출).
@@ -2218,6 +2224,7 @@ function recordFootprint(result) {
     alertness: gameState.run.alertness || 0,
     party,
     combatMs: Math.round(gameState.run.combatMs || 0),
+    combatNormMs: Math.round(gameState.run.combatNormMs || 0), // Polish 01 — x2 환산 전투시간
     ts: Date.now(),
   });
 }
@@ -2227,6 +2234,7 @@ function recordFootprint(result) {
 export function abandonRun() {
   if (gameState.run.battleStartTs != null) {
     gameState.run.combatMs = (gameState.run.combatMs || 0) + (performance.now() - gameState.run.battleStartTs);
+    gameState.run.combatNormMs = (gameState.run.combatNormMs || 0) + (gameState.battle.tick || 0) * X2_TICK_INTERVAL;
     gameState.run.battleStartTs = null;
   }
   recordFootprint("abort");
