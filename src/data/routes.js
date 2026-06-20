@@ -66,60 +66,66 @@ export function rollRouteOffer({ depth, bossKeys, canDeepForest = true, alertnes
 }
 
 // 보스 도전 타이밍 감각(초보자 테마 기준) — "지금 갈지/더 돌지" 읽힘용.
-//   빠른 8~11 / 적정 12~17 / 늦은 18~24 / 너무 늦음 25+.
+//   Beginner Theme Clear Feel 01 — 25~35심도를 "정석/이상 도전" 구간으로 재정렬.
+//   이른 ~20 / 빠른 승부 21~24 / 정석 25~30 / 충분히 준비 31~35 / 욕심·장기전 36+.
 export function bossTimingLabel(depth) {
-  if (depth < 8) return "이른 도전";
-  if (depth <= 11) return "빠른 도전";
-  if (depth <= 17) return "적정 도전";
-  if (depth <= 24) return "늦은 도전";
-  return "너무 늦은 도전";
+  if (depth <= 20) return "이른 도전";
+  if (depth <= 24) return "빠른 승부";
+  if (depth <= 30) return "정석 도전";
+  if (depth <= 35) return "충분히 준비한 도전";
+  return "욕심내는 도전";
 }
 
 /* =========================================================
    01B — 심도 스케일링: "심도는 적을 강하게 만든다."
    심도(여정 깊이)가 오를수록 적 HP/공격력이 오른다. 보수적 선형 + 과심도 가속.
    HP를 atk보다 크게 키운다 — 전투가 "길어지되" 한 대가 과하게 아프진 않게(어뷰징 완화도 겸).
-   감각 밴드: 1~8 입문 / 9~16 적정 보스 준비 / 17~22 거칠어짐 / 23~29 오래 머문 대가 / 30+ 과심도.
+   Beginner Theme Clear Feel 01 — 25~35를 정석/이상 도전 구간으로 두기 위해 추가 가속을 위로 민다.
+   감각 밴드: 1~24 준비/정석 준비 / 25~35 정석~이상 도전(선형만) / 33~39 거칠어짐 / 40+ 과심도.
    ========================================================= */
 export function depthScale(depth) {
   const d = Math.max(1, depth);
   let hp = 1 + (d - 1) * 0.06;   // 심도당 +6% HP
   let atk = 1 + (d - 1) * 0.035; // 심도당 +3.5% 공격력
-  if (d >= 30) {                 // 과심도 — 오래 머문 대가가 확실히 커진다
-    hp += (d - 29) * 0.05;
-    atk += (d - 29) * 0.03;
-  } else if (d >= 23) {          // 거친 숲 — 가속 시작
-    hp += (d - 22) * 0.03;
-    atk += (d - 22) * 0.02;
+  if (d >= 40) {                 // 과심도 — 오래 머문 대가가 확실히 커진다
+    hp += (d - 39) * 0.05;
+    atk += (d - 39) * 0.03;
+  } else if (d >= 33) {          // 거친 숲 — 가속 시작
+    hp += (d - 32) * 0.03;
+    atk += (d - 32) * 0.02;
   }
   return { hp, atk };
 }
 
 // Run Structure 01C — 심도 분위기: 심도가 깊어질수록 "숲의 온도/공기"가 바뀐다(읽힘용).
-//   1~29 기본 / 30+ 위협 / 40+ 분노. tier=전장·패널 class hook, label=문구. "보스를 오래 미룬 대가"를
+//   Beginner Theme Clear Feel 01 — 25~35 정석 구간은 평온 유지, 분위기는 36+에서만 바뀐다.
+//   1~35 기본 / 36+ 위협 / 46+ 분노. tier=전장·패널 class hook, label=문구. "보스를 오래 미룬 대가"를
 //   숫자가 아니라 전장 분위기로도 보이게 한다.
 export function depthAtmosphere(depth) {
   const d = Math.max(1, depth || 1);
-  if (d >= 40) return { tier: "fury",   label: "숲이 분노로 가득찹니다" };
-  if (d >= 30) return { tier: "threat", label: "숲이 위협으로 가득찹니다" };
+  if (d >= 46) return { tier: "fury",   label: "숲이 분노로 가득찹니다" };
+  if (d >= 36) return { tier: "threat", label: "숲이 위협으로 가득찹니다" };
   return { tier: "", label: "" };
 }
 
-// Run Structure 01C — 심도 속도 압박: 심도 30+/40+에서 몬스터 행동 게이지 충전 가속(영웅 불변).
+// Run Structure 01C — 심도 속도 압박: 심도 36+/46+에서 몬스터 행동 게이지 충전 가속(영웅 불변).
+//   Beginner Theme Clear Feel 01 — 25~35 정석 구간은 평속 유지, 가속은 36+에서만.
 //   일반 전투 행동 빈도로도 "숲이 거칠어졌다"가 느껴지게. 보수적 상한(×1.5) — 폭주 방지.
 export function depthSpeedFactor(depth) {
   const d = Math.max(1, depth || 1);
-  if (d >= 40) return 1.5;
-  if (d >= 30) return 1.3;
+  if (d >= 46) return 1.5;
+  if (d >= 36) return 1.3;
   return 1;
 }
 
 // 보스 심도 강화(광폭화) — 늦게 도전할수록 사자왕이 강해진다. depthScale 위에 곱하는 추가 배수.
 //   도전을 "막지" 않는다 — 빠른 도전도 가능하되, 늦으면 보스가 숲의 깊이에 반응한다.
 //   stage 0=평상 / 1=분노(늦은) / 2=광폭화(과심도). label·log는 UI/로그 체감용.
+//   Beginner Theme Clear Feel 01 — 25~35를 정석/이상 도전으로 두기 위해 분노/광폭화를 위로 민다.
+//   분노 36+ / 광폭화 45+. 25~35 보스전은 광폭화 없이 정상 도전이 된다.
 export function bossFury(depth) {
-  if (depth >= 25) return { stage: 2, hp: 1.35, atk: 1.25, label: "광폭화", log: "깊어진 숲의 힘으로 사자왕이 광폭화했다." };
-  if (depth >= 18) return { stage: 1, hp: 1.18, atk: 1.12, label: "분노",   log: "사자왕이 숲의 깊이에 반응한다." };
+  if (depth >= 45) return { stage: 2, hp: 1.35, atk: 1.25, label: "광폭화", log: "깊어진 숲의 힘으로 사자왕이 광폭화했다." };
+  if (depth >= 36) return { stage: 1, hp: 1.18, atk: 1.12, label: "분노",   log: "사자왕이 숲의 깊이에 반응한다." };
   return { stage: 0, hp: 1, atk: 1, label: "", log: "" };
 }
 
