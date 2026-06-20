@@ -1,15 +1,18 @@
 import { gameState } from "./state.js";
-import { createInitialParty, createPreviewEnemies, createStageEnemies, createRouteEnemies, createLayoutPreviewEnemies, SLOT_ORDER, DEFAULT_FORMATION } from "./state.js";
+import { createInitialParty, createPreviewEnemies, createStageEnemies, createRouteEnemies, createLayoutPreviewEnemies, createUnit, SLOT_ORDER, DEFAULT_FORMATION } from "./state.js";
 import { ACTIVE_FUSION_RECIPES, BASE_JOBS, ADVANCED_JOBS, SECOND_CLASS_JOBS, prefersFront, slotPreference, availableFusions, combatRoleOf } from "../data/jobs.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
 import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions, depthSpeedFactor, routeReward } from "../data/routes.js";
 import { REWARDS, rewardById, REWARD_MAX_LEVEL } from "../data/rewards.js";
 import { saveFootprint } from "../data/footprints.js";
-import { renderGame, playActionFx, playStatusTickFx, playSupportFx, playStatusApplyFx, playActorFx, clearFxLayer } from "../ui/render.js";
+import { renderGame, playActionFx, playStatusTickFx, playSupportFx, playStatusApplyFx, playActorFx, clearFxLayer, setFxSuppressed } from "../ui/render.js";
 import { skillOf } from "../data/skills.js";
 
 let tickTimer = null;
+// Dev Balance Lab 01 — 계측 미터(헤드리스 듀얼 sim 중에만 set). 본게임 전투에는 항상 null이라
+//   아래 전투 함수의 훅들이 전혀 동작하지 않는다(피해/회복/계산식 100% 불변). 파일 하단 섹션 참조.
+let labMeter = null;
 // Combat Feel Polish 01: 기본 전투 호흡 상향. 새 1x = 500ms (BASE / speed).
 const BASE_TICK_INTERVAL = 500; // 1x 기준 tick 간격
 // Run Footprints Polish 01 — 기본 배속(x2) 1틱의 현실 시간(=BASE/2=250ms). 전투 게임 틱 수에 곱해
@@ -713,9 +716,10 @@ function stopBattle() {
   gameState.battle.isRunning = false;
 }
 
-function battleTick() {
-  gameState.battle.tick += 1;
-
+// Dev Balance Lab 01 — 한 "전투 스텝"(게이지 충전 → 준비된 유닛 1명 행동)을 단일 함수로 추출.
+//   본게임 battleTick과 헤드리스 듀얼 sim이 같은 엔진 경로를 공유한다(게이지 공식/행동 분기 복제 없음).
+//   tick 카운트/렌더/종료판정/마무리는 battleTick이, 반복 호출은 sim 루프(runDuelSimulation)가 담당한다.
+function stepCombat() {
   const allUnits = [
     ...gameState.party.filter((u) => !u.isDead),
     ...gameState.enemies.filter((u) => !u.isDead),
@@ -749,6 +753,11 @@ function battleTick() {
   if (ready.length > 0) {
     performAction(ready[0]);
   }
+}
+
+function battleTick() {
+  gameState.battle.tick += 1;
+  stepCombat();
 
   const end = checkBattleEnd();
 
@@ -1099,6 +1108,7 @@ function performAction(unit) {
 
   // 영웅: 스킬 조건을 만족하면 스킬 사용(아니면 기본 공격으로 fallback). 적은 스킬 없음.
   if (isParty && trySkill(unit)) {
+    if (labMeter) labMeter.onSkillCast(unit); // Dev Balance Lab 01 — 스킬 발동 횟수 계측(무동작 시 null)
     unit.actionGauge -= 100;
     return;
   }
@@ -1250,7 +1260,9 @@ function healUnit(unit, amount) {
   //   회복 0/연출용 호출엔 가산하지 않음. 최대 HP 초과는 기존대로 제한. 쉼터/HP 보정은 healUnit을 안 거쳐 무영향.
   const recv = amount > 0 ? (unit.healReceivedBonus || 0) : 0;
   unit.hp = Math.min(unit.maxHp, unit.hp + Math.max(0, amount) + recv);
-  return unit.hp - before;
+  const healed = unit.hp - before;
+  if (labMeter && healed > 0) labMeter.onHeal(unit, healed); // Dev Balance Lab 01 — 회복량 계측(무동작 시 null)
+  return healed;
 }
 function removeNegStatus(unit) {
   // Batch 01A — 정화 대상 디버프(정화사 전용 사용처). speedDown 추가(공식 디버프 목록 정렬).
@@ -1823,13 +1835,15 @@ function dealRaw(target, dmg) {
     target.damageImmune = false;
     return;
   }
+  const hpBefore = target.hp; // Dev Balance Lab 01 — 실제 HP 손실 계측용(피해/계산식 불변, 읽기만)
+  let absorbed = 0;
   let remaining = Math.max(0, dmg);
   // Job Identity Tuning 01 — 성황 수호 오오라: 피해 적용 직전 고정값 감소(최소 1 보장 — 완전 무효는 아님).
   const aegis = aegisFlatOf(target);
   if (aegis > 0 && remaining > 0) remaining = Math.max(1, remaining - aegis);
   const sh = target.shield || 0;
   if (sh > 0) {
-    const absorbed = Math.min(sh, remaining);
+    absorbed = Math.min(sh, remaining);
     target.shield = sh - absorbed;
     remaining -= absorbed;
   }
@@ -1838,6 +1852,7 @@ function dealRaw(target, dmg) {
     //   사망/부활 lifecycle을 건드리지 않고 "치명 피해를 받기 직전"에 가로챈다. immortal 클램프보다 먼저 판정.
     if (remaining >= target.hp && hasStatus(target, "salvation") && gameState.party.includes(target)) {
       triggerSalvation(target);
+      if (labMeter) labMeter.onDamage(target, absorbed, 0); // 구원선 개입 — shield 흡수분만 기록(HP 손실 0)
       return;
     }
     target.hp -= remaining;
@@ -1847,6 +1862,8 @@ function dealRaw(target, dmg) {
   if (gameState.dev && gameState.dev.immortal && target.hp < 1 && gameState.party.includes(target)) {
     target.hp = 1;
   }
+  // Dev Balance Lab 01 — 받은 피해/막은 피해 계측(대상 기준). 1v1이라 대상으로 가해 측이 유일하게 결정된다.
+  if (labMeter) labMeter.onDamage(target, absorbed, Math.max(0, hpBefore - target.hp));
 }
 
 // Stage Persistence 01 — 전투 무력화 표시 + 로그. 표현만 분기(전투 판정/타겟/패배 조건은 불변).
@@ -2081,6 +2098,8 @@ function performAttack(attacker, target, opts = {}) {
   const poolBefore = target.hp + (target.shield || 0);
   applyDamage(target, damage);
   const tookRealDamage = (target.hp + (target.shield || 0)) < poolBefore;
+  // Dev Balance Lab 01 — 타격 계측(공격 횟수/치명/최대·평균/스킬 피해). 표시되는 damage 기준. 무동작 시 null.
+  if (labMeter) labMeter.onAttack(attacker, target, damage, isCrit, !!opts.skill);
 
   const verb = attackVerb(attacker);
   const ro = josa(target.name, "을를");
@@ -2318,8 +2337,140 @@ export function abandonRun() {
 }
 
 function pushLog(text) {
+  if (labMeter) return; // Dev Balance Lab 01 — 헤드리스 sim 중에는 로그를 쌓지 않는다(수천 틱 누적 방지)
   gameState.logs.push(text);
   if (gameState.logs.length > 8) {
     gameState.logs.splice(0, gameState.logs.length - 8);
   }
+}
+
+/* =========================================================
+   Dev Balance Lab 01 — 계측 미터 + 헤드리스 듀얼 시뮬레이터
+   본게임 전투 엔진(stepCombat/performAction/performAttack/healUnit…)을 "그대로" 재사용해
+   아군 1 vs 적 1을 측정 시간만큼 돌리고 지표를 수집한다. 전투 공식/직업 스탯/스킬 수치/몬스터
+   데이터/합체/보상/localStorage는 일절 건드리지 않는다(이 도구는 계측 전용이다).
+     - labMeter가 null이 아닐 때만 위 전투 함수의 훅이 기록한다(본게임 전투엔 항상 null → 동작 불변).
+     - sim은 gameState.party/enemies/logs/screen/run.depth/battle/dev.immortal을 잠시 빌렸다가 복구한다.
+     - FX/로그/렌더는 setFxSuppressed + pushLog 가드로 생략(피해/회복/계산식은 불변, 표시만 생략).
+     - 사망 시 즉시 HP 복구(revive)로 측정 시간 내내 전투가 끊기지 않게 한다(나라 요청).
+   향후 Auto Run Report 01은 이 미터(createLabMeter)와 sim 헬퍼를 재사용해 다회 주회로 확장할 수 있다.
+   ========================================================= */
+
+// x2 환산 1초 = 게임 틱 4개(=1000ms / X2_TICK_INTERVAL 250ms). 발자취(combatNormMs)와 같은 시간 규약.
+const LAB_TICKS_PER_SEC = Math.max(1, Math.round(1000 / X2_TICK_INTERVAL));
+
+// 측정 누적기. hero/enemy 두 진영의 타격·피해·회복을 모은다(1v1이라 진영 귀속이 유일하게 결정됨).
+function createLabMeter() {
+  const side = () => ({
+    taken: 0,          // 이 진영이 "받은" 내구도(HP 손실 + 보호막 흡수) 합
+    shieldBlocked: 0,  // 이 진영의 보호막이 흡수한 피해 합
+    hits: 0,           // 이 진영이 가한 performAttack 횟수(타격 수)
+    hitDamage: 0,      // 이 진영 타격의 표시 피해 합(평균 산정용)
+    maxHit: 0,         // 단일 최대 타격 피해
+    crits: 0,          // 치명 타격 수
+    skillCasts: 0,     // 스킬 발동 횟수
+    skillDamage: 0,    // 스킬 표식이 붙은 타격의 피해 합
+    heal: 0,           // 받은(=수행된) 회복량 합
+  });
+  const m = { hero: side(), enemy: side() };
+  const isHero = (u) => gameState.party.includes(u);
+
+  m.onAttack = (attacker, target, damage, isCrit, isSkill) => {
+    const s = isHero(attacker) ? m.hero : m.enemy;
+    s.hits += 1;
+    s.hitDamage += damage;
+    if (damage > s.maxHit) s.maxHit = damage;
+    if (isCrit) s.crits += 1;
+    if (isSkill) s.skillDamage += damage;
+  };
+  m.onDamage = (target, absorbed, hpLost) => {
+    const s = isHero(target) ? m.hero : m.enemy; // 받은 쪽에 귀속
+    s.taken += absorbed + hpLost;
+    s.shieldBlocked += absorbed;
+  };
+  m.onSkillCast = (unit) => { (isHero(unit) ? m.hero : m.enemy).skillCasts += 1; };
+  m.onHeal = (unit, healed) => { (isHero(unit) ? m.hero : m.enemy).heal += healed; };
+
+  // 측정 결과(아군 관점). 총 피해량 = 적이 받은 피해, 받은 피해량 = 아군이 받은 피해.
+  m.result = (seconds, ticks) => {
+    const per = (v) => (seconds > 0 ? v / seconds : 0);
+    return {
+      seconds, ticks,
+      totalDamage: m.enemy.taken,
+      dps: per(m.enemy.taken),
+      attacks: m.hero.hits,
+      avgDamage: m.hero.hits ? m.hero.hitDamage / m.hero.hits : 0,
+      maxDamage: m.hero.maxHit,
+      crits: m.hero.crits,
+      skillCasts: m.hero.skillCasts,
+      skillDamage: m.hero.skillDamage,
+      damageTaken: m.hero.taken,
+      dpsTaken: per(m.hero.taken),
+      shieldBlocked: m.hero.shieldBlocked,
+      heal: m.hero.heal,
+    };
+  };
+  return m;
+}
+
+// sim 전용: 측정 시간 동안 양쪽이 죽지 않고 계속 싸우도록 사망 즉시 HP 복구.
+//   HP 흐름은 자연스럽게 두되(저HP 조건 스킬이 정상 작동) 전투가 끝나지 않게 한다.
+//   피해/회복 집계는 이 복구 전에 dealRaw/healUnit 훅에서 이미 기록되었다.
+function reviveForSim(u) {
+  if (u && u.isDead) { u.isDead = false; u.hp = u.maxHp; }
+}
+
+// 헤드리스 듀얼 1회 실행 → 측정 결과 반환. config: { heroJob, enemyTemplate, seconds }.
+//   enemyTemplate = UNIT_TEMPLATES.enemies[key] 또는 Lab 내부 더미 템플릿(본게임 데이터 오염 없음).
+export function runDuelSimulation({ heroJob, enemyTemplate, seconds }) {
+  if (!heroJob || !enemyTemplate || !seconds) return null;
+
+  // 원상복구용 스냅샷 — 본게임 상태를 잠시 빌린다.
+  const saved = {
+    party: gameState.party,
+    enemies: gameState.enemies,
+    logs: gameState.logs,
+    screen: gameState.screen,
+    battle: { ...gameState.battle },
+    runDepth: gameState.run.depth,
+    immortal: gameState.dev ? gameState.dev.immortal : false,
+  };
+
+  // 샌드박스 유닛: 본게임 생성식 그대로 재사용(공식 복제 없음).
+  //   아군은 직업 선호 슬롯(전열/후열)에 배치 → role/grammar/jobId가 본게임과 동일하게 구성된다.
+  const slot = prefersFront(heroJob) ? "f0" : "b0";
+  const hero = createInitialParty({ atk: 0, maxHp: 0, heal: 0, healRecv: 0 }, { [slot]: heroJob }, null)[0];
+  if (!hero) return null;
+  const enemy = createUnit(enemyTemplate, `lab-${enemyTemplate.id || "enemy"}-1`);
+
+  let result = null;
+  const meter = createLabMeter();
+  try {
+    gameState.party = [hero];
+    gameState.enemies = [enemy];
+    gameState.run.depth = 1;                              // 심도 가속 없음(순수 1:1)
+    if (gameState.dev) gameState.dev.immortal = false;    // sim은 불사 클램프 대신 revive 사용
+    labMeter = meter;
+    setFxSuppressed(true);
+
+    const ticks = Math.max(1, Math.round(seconds * LAB_TICKS_PER_SEC));
+    for (let i = 0; i < ticks; i++) {
+      stepCombat();
+      reviveForSim(hero);
+      reviveForSim(enemy);
+    }
+    result = meter.result(seconds, ticks);
+  } finally {
+    // 항상 복구(에러가 나도 본게임 상태가 오염되지 않게).
+    labMeter = null;
+    setFxSuppressed(false);
+    gameState.party = saved.party;
+    gameState.enemies = saved.enemies;
+    gameState.logs = saved.logs;
+    gameState.screen = saved.screen;
+    Object.assign(gameState.battle, saved.battle);
+    gameState.run.depth = saved.runDepth;
+    if (gameState.dev) gameState.dev.immortal = saved.immortal;
+  }
+  return result;
 }

@@ -3,6 +3,8 @@ import { slotPreference } from "../data/jobs.js";
 import { renderGame, toggleCodexDetail, closeCodexDetail, renderFootprintsList, footprintsCopyText } from "../ui/render.js";
 import { avatarSpec, avatarFigureHTML } from "../data/avatars.js";
 import { clearFootprints } from "../data/footprints.js";
+// Dev Balance Lab 01 — Dev(?dev=1) 전용 계측 도구(1:1 듀얼 시뮬레이터/데미지 미터). 일반 플레이엔 노출 안 됨.
+import { openBalanceLab } from "../dev/balanceLab.js";
 import {
   startRun, goTitle, applyReward, cycleSpeed, startPreview, showJobSelect,
   applyFusion, skipFusion, previewRecruit, confirmRecruit,
@@ -57,6 +59,19 @@ if (gameState.dev && gameState.dev.on) {
   });
   (document.getElementById("title-inner") || document.body).appendChild(panel);
   console.log("[DEV] 2차 직업 테스트 패널 ON (?dev=1). 정식 해금 아님 — 버튼으로 2차 씨앗 파티 전투 시작.");
+
+  // Dev Balance Lab 01 — 타이틀에 "🧪 Balance Lab" 진입 버튼(계측 전용). dev.on일 때만 생성 → 일반 플레이 비노출.
+  const labBtn = document.createElement("button");
+  labBtn.id = "dev-balancelab-btn";
+  labBtn.type = "button";
+  labBtn.textContent = "🧪 Balance Lab (계측)";
+  // Dev 전용 — styles.css 오염 없이 인라인으로 톤만 맞춘다(계측 도구 = teal). 모바일에서도 깨지지 않게 full-width.
+  labBtn.style.cssText =
+    "display:block;width:100%;margin-top:10px;padding:9px 10px;font-size:12px;font-weight:800;cursor:pointer;" +
+    "border:1px dashed #2f5e47;border-radius:10px;background:rgba(60,180,120,.1);color:#7fd1a8;";
+  labBtn.addEventListener("click", openBalanceLab);
+  (document.getElementById("title-inner") || document.body).appendChild(labBtn);
+  console.log("[DEV] Balance Lab 진입 버튼 ON (?dev=1) — 1:1 듀얼 시뮬레이터/데미지 미터. 본게임 무영향.");
 }
 
 renderGame(gameState);

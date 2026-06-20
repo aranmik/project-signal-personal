@@ -20,6 +20,13 @@ function jobAvatarHTML(id, extraClass = "av-fit--cast") {
   return avatarFigureHTML(spec.sr, spec.parts, extraClass);
 }
 
+// Dev Balance Lab 01 — 헤드리스 듀얼 시뮬레이션 동안 FX 출력을 억제하는 플래그(기본 OFF).
+//   battle.js가 sim 시작/종료에 setFxSuppressed(true/false)를 호출한다. 본게임 전투에는 항상 false라
+//   동작이 완전히 동일하다. sim은 화면 밖(Lab 오버레이)에서 수천 틱을 도므로, FX DOM 생성/타이머를 막아
+//   성능과 화면 청결을 지킨다(계산식/피해/회복은 그대로 — 표시만 생략).
+let fxSuppressed = false;
+export function setFxSuppressed(v) { fxSuppressed = !!v; }
+
 export function renderGame(state) {
   const titleScreen = document.getElementById("title-screen");
   const jobSelect = document.getElementById("job-select");
@@ -1583,6 +1590,7 @@ function spawnActionShout(sourceInstanceId, text, fieldRect, opts = {}) {
 //   시전자에 스킬 외침 + 각 회복 대상에 회복 pulse/숫자 + guard 대상에 방패 pulse.
 //   라인 없이 "파티에 닿았다"를 표현(다수 대상은 area pulse처럼 읽힘). 과밀 상한 공유.
 export function playSupportFx({ casterInstanceId, text, kind, heals = [], guardInstanceId, buffs = [] }) {
+  if (fxSuppressed) return; // Dev Balance Lab 01 — 헤드리스 sim 중 표시 생략
   const layer = document.getElementById("fx-layer");
   const field = document.getElementById("battle-field");
   if (!layer || !field) return;
@@ -1646,6 +1654,7 @@ const actingUnits = new Set();
 
 // battle.js에서 행동 발생 시 호출 (전투 계산과 분리된 FX 이벤트)
 export function playActionFx(event) {
+  if (fxSuppressed) return; // Dev Balance Lab 01 — 헤드리스 sim 중 표시 생략
   // Job Grammar 01: kind = 직업 행동 분류(strike/protect/snipe/heal/attack).
   //   현재는 행동선 data-kind 기록만 — 시각 변화 없음. 미래 직업별 FX/로그 확장 hook.
   const { sourceInstanceId, sourceUnitId, targetInstanceId, lineType, kind, isHeal, amount,
@@ -1725,6 +1734,7 @@ export function playActionFx(event) {
 //   행동선/펄스/리액션 없이 작은 숫자만 — 기존 숫자 상한(MAX_FX_NUMBERS)을 공유해
 //   MAX/다수전에서도 과밀해지지 않는다. 죽는 중/정리된 유닛은 생략.
 export function playStatusTickFx({ targetInstanceId, amount, kind }) {
+  if (fxSuppressed) return; // Dev Balance Lab 01 — 헤드리스 sim 중 표시 생략
   if (dyingUnits.has(targetInstanceId) || cleanedDead.has(targetInstanceId)) return;
   const layer = document.getElementById("fx-layer");
   const field = document.getElementById("battle-field");
@@ -1737,6 +1747,7 @@ export function playStatusTickFx({ targetInstanceId, amount, kind }) {
 // Combat Grammar Foundation 01 — 상태 적용 FX(머리 위 짧은 기호 팝). 버프/디버프가 "걸렸다"를 읽게.
 //   과하지 않게 — 작은 텍스트(공↑/속↓ 등)가 머리 위로 살짝 떠올랐다 사라진다. variant=up/down 색 구분.
 export function playStatusApplyFx(targetInstanceId, label, variant = "") {
+  if (fxSuppressed) return; // Dev Balance Lab 01 — 헤드리스 sim 중 표시 생략
   if (!label) return;
   if (dyingUnits.has(targetInstanceId) || cleanedDead.has(targetInstanceId)) return;
   const layer = document.getElementById("fx-layer");
@@ -2063,6 +2074,7 @@ function spawnWardSplash(allyIds) {
 
 // Actor FX 디스패처 — battle.js trait가 역할별로 호출. opts: { wardId, targetId, allyIds, sourceId, enemyIds, amount }.
 export function playActorFx(kind, casterId, opts = {}) {
+  if (fxSuppressed) return; // Dev Balance Lab 01 — 헤드리스 sim 중 표시 생략
   switch (kind) {
     case "guard": // 곰방패: 보호 대상 가드 펄스 + 곰 주변 보호 링("앞에서 지켜준다")
       spawnGuardPulse(opts.wardId || casterId);

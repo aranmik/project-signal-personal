@@ -13,7 +13,10 @@ export function partySizeOf(run) {
   return SLOT_ORDER.filter((k) => f[k]).length;
 }
 
-function createUnit(template, instanceId, bonuses = { atk: 0, maxHp: 0 }) {
+// Dev Balance Lab 01 — 계측 도구가 본게임 유닛 생성식을 "복제하지 않고" 그대로 재사용하도록 export.
+//   본게임 흐름은 createInitialParty/createStageEnemies 등을 통해서만 이 함수를 호출한다(동작 불변).
+//   Lab은 이 함수로 단일 적/실험용 더미 유닛을 만든다 — UNIT_TEMPLATES(본게임 데이터)는 건드리지 않는다.
+export function createUnit(template, instanceId, bonuses = { atk: 0, maxHp: 0 }) {
   const maxHp = template.maxHp + bonuses.maxHp;
   return {
     ...template,
