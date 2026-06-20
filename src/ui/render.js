@@ -1444,7 +1444,7 @@ function spawnActionShout(sourceInstanceId, text, fieldRect, opts = {}) {
 // Hero Skill Foundation 01 — 비-라인 지원 스킬 FX(수호/축복/성역).
 //   시전자에 스킬 외침 + 각 회복 대상에 회복 pulse/숫자 + guard 대상에 방패 pulse.
 //   라인 없이 "파티에 닿았다"를 표현(다수 대상은 area pulse처럼 읽힘). 과밀 상한 공유.
-export function playSupportFx({ casterInstanceId, text, kind, heals = [], guardInstanceId }) {
+export function playSupportFx({ casterInstanceId, text, kind, heals = [], guardInstanceId, buffs = [] }) {
   const layer = document.getElementById("fx-layer");
   const field = document.getElementById("battle-field");
   if (!layer || !field) return;
@@ -1484,6 +1484,21 @@ export function playSupportFx({ casterInstanceId, text, kind, heals = [], guardI
       else spawnBuffPulse(layer, g);
     }
   }
+
+  // Combat Visibility Job Grammar 01 — 아군 버프 대상들(바드 리듬·무희 1박 등): 시전자→대상 지원선 + 상승 end per 대상.
+  //   "누가 누구에게"가 대상 수만큼 읽힌다. 회복(heal)과 결이 다른 support/buff 문법(치유 FX와 안 섞임).
+  buffs.forEach((id) => {
+    if (!id || id === casterInstanceId) return;
+    if (dyingUnits.has(id) || cleanedDead.has(id)) return;
+    const g = unitPoint(id, { fx: 0.5, fy: 0.46 }, fieldRect);
+    if (!g) return;
+    if (s) {
+      spawnStartPulse(layer, s, "support");
+      spawnLine(layer, s, g, "support", kind, "support");
+    }
+    spawnBuffPulse(layer, g);
+    reactUnit(id, true);
+  });
 }
 
 // Action Emphasis 01: 시선 우선순위 = acting > line > target reaction > idle.
@@ -1496,7 +1511,7 @@ export function playActionFx(event) {
   // Job Grammar 01: kind = 직업 행동 분류(strike/protect/snipe/heal/attack).
   //   현재는 행동선 data-kind 기록만 — 시각 변화 없음. 미래 직업별 FX/로그 확장 hook.
   const { sourceInstanceId, sourceUnitId, targetInstanceId, lineType, kind, isHeal, amount,
-    shoutText, shoutKind, shoutTier, numberVariant } = event;
+    shoutText, shoutKind, shoutTier, numberVariant, delayExtra = 0, chained = false } = event;
   const layer = document.getElementById("fx-layer");
   const field = document.getElementById("battle-field");
   if (!layer || !field) return;
@@ -1520,15 +1535,18 @@ export function playActionFx(event) {
     : null;
   if (!s || !t) return;
 
-  // 1) 행동자 선언("나야 지금!") — source unit이 먼저 짧게 보인다.
-  cueActor(sourceInstanceId, lineType);
-  // 1a) 행동 텍스트(외침). Hero Skill 01: event.shoutText로 "공격!"/스킬명 모두 처리.
-  //   (이전엔 공격만 하드코딩 → 이제 스킬명도 같은 채널로. heal 단일 치유도 텍스트가 뜬다.)
-  if (shoutText) {
-    spawnActionShout(sourceInstanceId, shoutText, fieldRect, { tier: shoutTier, kind: shoutKind });
+  // Combat Visibility Job Grammar 01 — chained(체인 관통 2번째 선 등)은 행동자 선언/외침/대상큐를 생략하고
+  //   "이어지는 선 + 도착 hit"만 그린다(이미 1번째 선에서 선언했으므로 중복 방지).
+  if (!chained) {
+    // 1) 행동자 선언("나야 지금!") — source unit이 먼저 짧게 보인다.
+    cueActor(sourceInstanceId, lineType);
+    // 1a) 행동 텍스트(외침). Hero Skill 01: event.shoutText로 "공격!"/스킬명 모두 처리.
+    if (shoutText) {
+      spawnActionShout(sourceInstanceId, shoutText, fieldRect, { tier: shoutTier, kind: shoutKind });
+    }
+    // 1b) 대상 신호("잡혔다") — actor보다 약한 보조 신호. 선이 도착하기 전 대상을 가리킨다.
+    spawnTargetCue(targetInstanceId, isHeal);
   }
-  // 1b) 대상 신호("잡혔다") — actor보다 약한 보조 신호. 선이 도착하기 전 대상을 가리킨다.
-  spawnTargetCue(targetInstanceId, isHeal);
 
   // 2) 짧은 선행 뒤 행동선 발사 + 대상 반응. 배속이면 리듬만 살게 더 짧게.
   const speed = Number(field.dataset.speed) || 1;
@@ -1559,7 +1577,7 @@ export function playActionFx(event) {
     if (amount > 0) spawnNumber(layer, tn, targetInstanceId, isHeal, amount, numberVariant);
     reactUnit(targetInstanceId, isHeal);
   };
-  setTimeout(fire, lead);
+  setTimeout(fire, lead + delayExtra);
 }
 
 // Status & Effect Foundation 01 — 상태 tick FX(poison 등).
@@ -1664,7 +1682,88 @@ function cueLunge(instanceId) {
   });
 }
 
-// Actor FX 디스패처 — battle.js trait가 역할별로 호출. opts: { wardId, targetId, allyIds, sourceId }.
+// Combat Visibility Job Grammar 01 — 적 진영 중앙점(살아있는 적 unitPoint 평균). 집속/확산 기준.
+function enemyCenter(enemyIds, fieldRect) {
+  const pts = (enemyIds || []).map((id) => unitPoint(id, { fx: 0.5, fy: 0.5 }, fieldRect)).filter(Boolean);
+  if (!pts.length) return null;
+  return { x: pts.reduce((a, p) => a + p.x, 0) / pts.length, y: pts.reduce((a, p) => a + p.y, 0) / pts.length };
+}
+
+// 마도/현자 집중 전조: 시전자→적 진영 중앙 선 + 중앙에 "마력이 모이는 점"(수렴 링).
+function spawnChargeGather(casterInstanceId, enemyIds) {
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  const fieldRect = field.getBoundingClientRect();
+  const c = enemyCenter(enemyIds, fieldRect);
+  if (!c) return;
+  const s = unitPoint(casterInstanceId, BODY_MID_FRAC, fieldRect);
+  if (s) { spawnStartPulse(layer, s, "special"); spawnLine(layer, s, c, "ranged", "charge", "special"); }
+  const el = document.createElement("span");
+  el.className = "fx-gather fx-var--special";
+  el.style.left = `${c.x}px`;
+  el.style.top = `${c.y}px`;
+  el.addEventListener("animationend", () => el.remove());
+  layer.appendChild(el);
+}
+
+// 광역 발동: 적 진영 중앙에서 원이 커지며 적 전체로 퍼진다(확산). 반경 = 가장 먼 적까지 + 여유.
+function spawnAoeSpread(enemyIds) {
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  const fieldRect = field.getBoundingClientRect();
+  const pts = (enemyIds || []).map((id) => unitPoint(id, { fx: 0.5, fy: 0.5 }, fieldRect)).filter(Boolean);
+  if (!pts.length) return;
+  const c = { x: pts.reduce((a, p) => a + p.x, 0) / pts.length, y: pts.reduce((a, p) => a + p.y, 0) / pts.length };
+  const maxR = Math.max(60, ...pts.map((p) => Math.hypot(p.x - c.x, p.y - c.y))) + 44;
+  const el = document.createElement("span");
+  el.className = "fx-aoe-spread fx-var--special";
+  el.style.left = `${c.x}px`;
+  el.style.top = `${c.y}px`;
+  el.style.setProperty("--aoe-r", `${maxR}px`);
+  el.addEventListener("animationend", () => el.remove());
+  layer.appendChild(el);
+}
+
+// 추적자/천궁 표식 부여: 시전자→대상 점선 조준선 + 대상 몸통 스코프 표식(item 6).
+function spawnMarkFx(casterInstanceId, targetInstanceId) {
+  if (!targetInstanceId) return;
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  if (dyingUnits.has(targetInstanceId) || cleanedDead.has(targetInstanceId)) return;
+  const fieldRect = field.getBoundingClientRect();
+  const s = unitPoint(casterInstanceId, BODY_MID_FRAC, fieldRect);
+  const t = unitPoint(targetInstanceId, { fx: 0.5, fy: 0.46 }, fieldRect);
+  if (!t) return;
+  if (s) { spawnStartPulse(layer, s, "special"); spawnLine(layer, s, t, "mark", "mark", "special"); }
+  const el = document.createElement("span");
+  el.className = "fx-scope fx-var--special";
+  el.style.left = `${t.x}px`;
+  el.style.top = `${t.y}px`;
+  el.addEventListener("animationend", () => el.remove());
+  layer.appendChild(el);
+}
+
+// 표식 추적 성공 hit: 스코프 위치에서 사방으로 터지는 강한 hit(일반 hit ring보다 큼·강함, item 8).
+function spawnMarkBurst(targetInstanceId) {
+  if (!targetInstanceId) return;
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  const fieldRect = field.getBoundingClientRect();
+  const t = unitPoint(targetInstanceId, { fx: 0.5, fy: 0.46 }, fieldRect);
+  if (!t) return;
+  const el = document.createElement("span");
+  el.className = "fx-markburst";
+  el.style.left = `${t.x}px`;
+  el.style.top = `${t.y}px`;
+  el.addEventListener("animationend", () => el.remove());
+  layer.appendChild(el);
+}
+
+// Actor FX 디스패처 — battle.js trait가 역할별로 호출. opts: { wardId, targetId, allyIds, sourceId, enemyIds }.
 export function playActorFx(kind, casterId, opts = {}) {
   switch (kind) {
     case "guard": // 곰방패: 보호 대상 가드 펄스 + 곰 주변 보호 링("앞에서 지켜준다")
@@ -1693,6 +1792,11 @@ export function playActorFx(kind, casterId, opts = {}) {
       break;
     case "lunge": cueLunge(casterId); break;
     case "projectile": spawnProjectile(opts.sourceId || casterId, opts.targetId); break;
+    // Combat Visibility Job Grammar 01 — 마도/현자 집중 전조 / 광역 확산 / 추적자·천궁 표식 / 표식 추적 강한 hit.
+    case "chargeGather": spawnChargeGather(casterId, opts.enemyIds || []); break;
+    case "aoeSpread":    spawnAoeSpread(opts.enemyIds || []); break;
+    case "mark":         spawnMarkFx(casterId, opts.targetId); break;
+    case "markBurst":    spawnMarkBurst(opts.targetId); break;
   }
 }
 
@@ -1787,6 +1891,9 @@ const LINE_STYLE = {
   heal:     { bowF: 0.50, bowMin: 34, bowMax: 92, flip: -1, head: "cross",  draw: false },
   // Combat Visibility Polish 01 — 서포터/버프 행동선(지원 대상 연결). 얇은 점선 + 작은 표식(공격/회복선과 구분).
   support:  { bowF: 0.34, bowMin: 20, bowMax: 70, flip: -1, head: "spark",  draw: false },
+  // Combat Visibility Job Grammar 01 — 용창 관통(붉은/주황 공격 스킬선, 단일·체인) / 추적자·천궁 표식(점선 조준선).
+  pierce:   { bowF: 0.30, bowMin: 18, bowMax: 70, flip: 1,  head: "x",     draw: true, ghost: false },
+  mark:     { bowF: 0.18, bowMin: 12, bowMax: 40, flip: 1,  head: "spark", draw: false },
   // Hero Skill 01: 교란 — 보라/분홍 거친 왜곡선(짧게 흔들림). 작은 혼란 표식(spark).
   disrupt:  { bowF: 0.22, bowMin: 14, bowMax: 44, flip: 1,  head: "spark",  draw: false, rough: true },
   // Combat Grammar Foundation 01: 도발 — 노랑 점선(공격선/회복선과 구분). 화려하지 않게.
@@ -1808,6 +1915,9 @@ function actionLineVariant(lineType, kind) {
   if (lineType === "ranged") return "ranged";
   if (lineType === "taunt") return "guard";
   if (lineType === "disrupt") return "debuff";
+  if (lineType === "support") return "support";
+  if (lineType === "pierce") return "pierce";   // Combat Visibility Job Grammar 01 — 용창 관통 = 붉은/주황 공격 스킬선
+  if (lineType === "mark") return "special";     // Combat Visibility Job Grammar 01 — 추적자/천궁 표식 = 보라빛 조준선
   if (lineType === "attack") {
     // 영웅 근접(strike) = 따뜻한 melee. 그 외(몬스터 기본공격 kind="attack" / 비근접 문법의 기본공격) = 중립 normal.
     return kind === "strike" ? "melee" : "normal";

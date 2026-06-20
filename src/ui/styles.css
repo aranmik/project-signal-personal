@@ -1490,6 +1490,77 @@ body {
 }
 .fx-svg--support .fx-head { animation: fx-head-soft 0.5s ease-out 0.12s forwards; }
 
+/* =====================================================================
+   Combat Visibility Job Grammar 01 — 직업 문법 색/선형 + 신규 FX(집속/확산/스코프/burst).
+   ===================================================================== */
+.fx-var--pierce { color: rgba(245, 140, 70, 0.96); }        /* 용창 관통 — 붉은/주황 공격 스킬색 */
+.fx-svg--pierce .fx-path { stroke-width: 3; }                /* 단일 굵은 선(체인 관통) */
+.fx-svg--mark .fx-path { stroke-width: 2; stroke-dasharray: 3 4; } /* 추적자/천궁 표식 — 점선 조준선(보라빛 special) */
+
+/* 도발 노랑 점선 — 조금 더 천천히 사라지게(영웅·몬스터 공통 fade 늦춤).
+   2x/MAX 배속 override(#battle-field[data-fast/speed] .fx-svg, id 특이도)보다 뒤에 같은 특이도로 둬서 우선. */
+.fx-svg--taunt { animation-duration: 1.9s; }
+#battle-field[data-fast="1"] .fx-svg--taunt { animation-duration: 1.35s; }   /* 2x: 일반 0.78s보다 느리게 */
+#battle-field[data-speed="MAX"] .fx-svg--taunt { animation-duration: 0.95s; } /* MAX: 일반 0.5s보다 느리게 */
+
+/* 마도/현자 집중: 적 진영 중앙 "마력이 모이는 점"(바깥→안 수렴). */
+.fx-gather {
+  position: absolute; width: 40px; height: 40px; margin: -20px 0 0 -20px;
+  border-radius: 50%; border: 2px solid currentColor;
+  box-shadow: 0 0 14px currentColor inset, 0 0 10px currentColor;
+  opacity: 0; pointer-events: none; z-index: 3;
+  animation: fx-gather 0.9s ease-in forwards;
+}
+@keyframes fx-gather {
+  0%   { opacity: 0;    transform: scale(2.2); }
+  40%  { opacity: 0.85; transform: scale(1.2); }
+  100% { opacity: 0.2;  transform: scale(0.5); }
+}
+/* 광역 발동: 중앙에서 원이 커지며 적 전체로 확산. --aoe-r = 도달 반경(JS 계산). */
+.fx-aoe-spread {
+  position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px;
+  border-radius: 50%; border: 2px solid currentColor;
+  box-shadow: 0 0 16px currentColor;
+  opacity: 0; pointer-events: none; z-index: 3;
+  animation: fx-aoe-spread 0.6s ease-out forwards;
+}
+@keyframes fx-aoe-spread {
+  0%   { opacity: 0;   transform: scale(1); }
+  25%  { opacity: 0.9; }
+  100% { opacity: 0;   transform: scale(calc(var(--aoe-r, 120px) / 6)); }
+}
+/* 추적자/천궁 스코프 표식(대상 몸통 조준점). */
+.fx-scope {
+  position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px;
+  border-radius: 50%; border: 1.5px solid currentColor;
+  opacity: 0; pointer-events: none; z-index: 3;
+  animation: fx-scope 0.7s ease-out forwards;
+}
+.fx-scope::before, .fx-scope::after { content: ""; position: absolute; background: currentColor; }
+.fx-scope::before { left: 50%; top: -4px; width: 1.5px; height: 34px; margin-left: -0.75px; }
+.fx-scope::after  { top: 50%; left: -4px; height: 1.5px; width: 34px; margin-top: -0.75px; }
+@keyframes fx-scope {
+  0%   { opacity: 0;   transform: scale(1.6) rotate(0deg); }
+  40%  { opacity: 0.9; transform: scale(1) rotate(0deg); }
+  100% { opacity: 0;   transform: scale(0.9) rotate(45deg); }
+}
+/* 표식 추적 성공 burst — 일반 hit ring보다 큼·강함(주황). */
+.fx-markburst {
+  position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px;
+  border-radius: 50%; border: 3px solid rgba(255, 196, 120, 0.95);
+  box-shadow: 0 0 20px rgba(255, 170, 90, 0.7);
+  opacity: 0; pointer-events: none; z-index: 4;
+  animation: fx-markburst 0.5s ease-out forwards;
+}
+@keyframes fx-markburst {
+  0%   { opacity: 0; transform: scale(0.4); }
+  30%  { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 0; transform: scale(1.9); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-gather, .fx-aoe-spread, .fx-scope, .fx-markburst { animation-duration: 0.01s; }
+}
+
 /* X 타격점(기본 공격) */
 .fx-head--x .fx-xcut {
   fill: none; stroke: currentColor; stroke-width: 2.8; stroke-linecap: round;

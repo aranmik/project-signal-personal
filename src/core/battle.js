@@ -1,6 +1,6 @@
 import { gameState } from "./state.js";
 import { createInitialParty, createPreviewEnemies, createStageEnemies, createRouteEnemies, createLayoutPreviewEnemies, SLOT_ORDER, DEFAULT_FORMATION } from "./state.js";
-import { ACTIVE_FUSION_RECIPES, BASE_JOBS, prefersFront, slotPreference, availableFusions, combatRoleOf } from "../data/jobs.js";
+import { ACTIVE_FUSION_RECIPES, BASE_JOBS, ADVANCED_JOBS, SECOND_CLASS_JOBS, prefersFront, slotPreference, availableFusions, combatRoleOf } from "../data/jobs.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
 import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions, depthSpeedFactor, routeReward } from "../data/routes.js";
@@ -840,13 +840,32 @@ function applyCombatStatus(target, type, pct = STATUS_PCT) {
 // 도발(신규 문법): 도발자→대상. 대상의 다음 "기본 공격" 타겟을 도발자로 강제(특수행동 X).
 //   여러 도발이 들어오면 마지막 도발자가 우선(tauntedBy 덮어쓰기). 단일 대상.
 function applyTaunt(caster, target) {
-  target.tauntedBy = caster.instanceId;
-  applyStatus(target, { type: "taunted", duration: STATUS_MAX_TURNS });
-  pushLog(`${caster.name}${josa(caster.name, "이가")} ${target.name}${josa(target.name, "을를")} 도발했다.`);
-  playActionFx({
-    sourceInstanceId: caster.instanceId, sourceUnitId: caster.id, targetInstanceId: target.instanceId,
-    lineType: "taunt", kind: "taunt", isHeal: false, amount: 0,
-    shoutText: "도발!", shoutKind: "taunt", shoutTier: "skill",
+  applyTauntMany(caster, [target]);
+}
+
+// Combat Visibility Job Grammar 01 — 영웅 도발 대상 수(직업 티어): 기본 2 / 1차 3 / 2차 4.
+//   ※ 나라 "3차"=현재 구조상 2차 직업으로 해석. 도발 효과 구조(강제 타겟 redirect)는 그대로, "대상 수"만 티어로.
+function heroTauntCount(jobId) {
+  if (SECOND_CLASS_JOBS.includes(jobId)) return 4;
+  if (ADVANCED_JOBS.includes(jobId)) return 3;
+  return 2; // 기본 직업
+}
+
+// 도발: 최대 N명에게 "나를 봐!"(taunted — 다음 기본 공격을 도발자에게). 대상마다 노랑 점선 도발선. 외침은 1회.
+//   효과 구조 불변(applyStatus taunted + tauntedBy redirect). N은 호출부에서 heroTauntCount로 정한다.
+function applyTauntMany(caster, foes) {
+  const list = (foes || []).filter(Boolean);
+  if (!list.length) return;
+  const names = list.map((f) => f.name).join(", ");
+  pushLog(`${caster.name}${josa(caster.name, "이가")} ${names}${josa(names, "을를")} 도발했다 — 나를 봐!`);
+  list.forEach((foe, i) => {
+    foe.tauntedBy = caster.instanceId;
+    applyStatus(foe, { type: "taunted", duration: STATUS_MAX_TURNS });
+    playActionFx({
+      sourceInstanceId: caster.instanceId, sourceUnitId: caster.id, targetInstanceId: foe.instanceId,
+      lineType: "taunt", kind: "taunt", isHeal: false, amount: 0,
+      shoutText: i === 0 ? "나를 봐!" : null, shoutKind: "taunt", shoutTier: "skill",
+    });
   });
 }
 
@@ -1142,8 +1161,9 @@ function trySkill(unit) {
       // Combat Grammar Foundation 01 — 도발(주기): 2번째 행동마다 전열 적 1명을 도발한다.
       //   그 적의 "다음 기본 공격"이 수호자를 향한다(탱커가 어그로를 끈다). 보스 포효 등 특수행동은 안 끊김.
       if (unit.actionCount % 2 === 0) {
-        const foe = selectAttackTarget(enemies);
-        if (foe) { applyTaunt(unit, foe); return true; }
+        // Combat Visibility Job Grammar 01 — 기본 직업 도발 = 최대 2명(티어). 효과 구조(강제 타겟) 불변.
+        const foes = [...frontEnemies(), ...aliveEnemies().filter((e) => e.role !== "front")].slice(0, heroTauntCount(unit.id));
+        if (foes.length) { applyTauntMany(unit, foes); return true; }
       }
       // 수호: 피해 입었고 보호막 없는 아군 중 HP 비율 최저에게 보호막 부여(+그래도 기본 공격은 수행).
       const ward = damagedUnshieldedAlly();
@@ -1396,10 +1416,14 @@ function runDataSkill(unit, meta) {
           const pool = aliveParty().filter((a) => a !== unit);
           shuffle(pool).slice(0, L.allyHaste.count).forEach((a) => { a.actionGauge += 100 * L.allyHaste.pct; });
         }
+        // Combat Visibility Job Grammar 01 — 집중 전조: 시전자→적 진영 중앙으로 선 + 중앙에 "마력이 모이는 점".
+        playActorFx("chargeGather", unit.instanceId, { enemyIds: aliveEnemies().map((e) => e.instanceId) });
         return true;
       }
       unit.charging = false;
       const targets = aliveEnemies();
+      // Combat Visibility Job Grammar 01 — 발동: 적 진영 중앙에서 원이 발생해 적 전체로 퍼진다("중앙 집속→확산").
+      playActorFx("aoeSpread", unit.instanceId, { enemyIds: targets.map((t) => t.instanceId) });
       targets.forEach((t, i) =>
         performAttack(unit, t, { mult: L.mult, lineType: "ranged", skill: i === 0 ? { name: L.releaseName, kind: meta.kind } : undefined, noShout: i !== 0 })
       );
@@ -1421,7 +1445,8 @@ function runDataSkill(unit, meta) {
         const targets = shuffle(otherAllies).slice(0, 2);
         targets.forEach((t) => applyCombatStatus(t, Math.random() < 0.5 ? "atkUp" : "critUp"));
         pushLog(`${unit.name}${josa(unit.name, "이가")} 리듬을 연주했다 — 아군 ${targets.length}명에게 가락을 실었다.`);
-        playSupportFx({ casterInstanceId: unit.instanceId, text: "리듬!", kind: meta.kind, guardInstanceId: targets[0] ? targets[0].instanceId : null });
+        // Combat Visibility Job Grammar 01 — 아군 전원에게 지원선(buff) + 상승 end. "누가 누구에게"가 보이게(대상 수만큼).
+        playSupportFx({ casterInstanceId: unit.instanceId, text: "리듬!", kind: meta.kind, buffs: targets.map((t) => t.instanceId) });
       } else {
         // 템포 — 생존 적 최대 2명에 해로운 효과(speedDown 또는 게이지 -25, 대상별 랜덤). 기존 효과/수치 그대로(대상 수만 1→2).
         const targets = shuffle(enemies).slice(0, 2);
@@ -1441,11 +1466,13 @@ function runDataSkill(unit, meta) {
     case "taunt": { // 수문장 도발
       if (hasStatus(unit, "taunt")) return false; // 이미 도발 중이면 기본 공격
       applyStatus(unit, { type: "taunt", duration: L.turns });
+      // Combat Visibility Job Grammar 01 — 1차 직업 도발 = 최대 3명에 도발선(+taunted). 어그로 구조(taunt status)는 유지.
+      applyTauntMany(unit, [...frontEnemies(), ...aliveEnemies().filter((e) => e.role !== "front")].slice(0, heroTauntCount(unit.id)));
       if (L.alsoStrike) {
         const t = selectAttackTarget(aliveEnemies());
         if (t) performAttack(unit, t, { noShout: true });
       }
-      playSupportFx({ casterInstanceId: unit.instanceId, text: meta.name + "!", kind: meta.kind, guardInstanceId: unit.instanceId });
+      playSupportFx({ casterInstanceId: unit.instanceId, text: null, kind: meta.kind, guardInstanceId: unit.instanceId });
       return true;
     }
     case "aim": { // 추적자 조준 → 추격 (2행동)
@@ -1456,6 +1483,8 @@ function runDataSkill(unit, meta) {
         unit.aimFullHp = t.hp >= t.maxHp;
         applyStatus(t, { type: "mark", duration: 2 });
         skillShout(unit, meta.name + "!", meta.kind);
+        // Combat Visibility Job Grammar 01 — 표식 부여 행동선(점선 mark/aim) + 대상 몸통 스코프 표식(item 6).
+        playActorFx("mark", unit.instanceId, { targetId: t.instanceId });
         pushLog(`${unit.name}${josa(unit.name, "이가")} ${t.name}${josa(t.name, "을를")} 조준했다.`);
         return true;
       }
@@ -1465,24 +1494,34 @@ function runDataSkill(unit, meta) {
       const mult = L.mult + (unit.aimFullHp ? L.fullHpBonus : 0);
       // Hero Readability Polish 01B — 표식 대상 추격임을 로그에 짧게 드러낸다(chase 플래그, 표시 전용). 피해/수치 불변.
       performAttack(unit, t, { mult, lineType: "ranged", skill: { name: L.releaseName, kind: meta.kind }, chase: true });
+      // Combat Visibility Job Grammar 01 — 추격 성공 즉시 표식 칩 제거(item 7) + 스코프 위치 강한 hit burst(item 8).
+      t.statuses = (t.statuses || []).filter((s) => s.type !== "mark");
+      playActorFx("markBurst", unit.instanceId, { targetId: t.instanceId });
       return true;
     }
     case "pierce": { // 용창 관통 (전열 + 후열, 처치 시 1회 추가 — 무한 방지)
+      // Combat Visibility Job Grammar 01 — "체인 관통": 동시 2선이 아니라 용창→전열→후열로 순차 이어지는 한 줄기 공격선.
+      //   붉은/주황 공격 스킬선(lineType "pierce"). 피해/타겟 판정은 기존 유지(시각 표현만 체인).
       const target = frontEnemies()[0] || aliveEnemies()[0];
       if (!target) return false;
-      performAttack(unit, target, { mult: L.mult, skill: meta });
+      performAttack(unit, target, { mult: L.mult, skill: meta, lineType: "pierce" });
       const back = aliveEnemies().filter((e) => e.role !== "front" && e !== target);
       if (back.length) {
-        performAttack(unit, back[0], { mult: L.mult * 0.7, lineType: "ranged", noShout: true });
+        // 두 번째 선은 전열 대상의 몸에서 후열로 이어진다(fxSourceId) + 살짝 늦게(delayExtra) → 체인 감각.
+        performAttack(unit, back[0], { mult: L.mult * 0.7, lineType: "pierce", noShout: true, fxSourceId: target.instanceId, fxDelayExtra: 170, chained: true });
         if (back[0].isDead) {
           const more = aliveEnemies().filter((e) => e.role !== "front");
-          if (more.length) performAttack(unit, more[0], { mult: L.mult * 0.7, lineType: "ranged", noShout: true });
+          if (more.length) performAttack(unit, more[0], { mult: L.mult * 0.7, lineType: "pierce", noShout: true, fxSourceId: back[0].instanceId, fxDelayExtra: 340, chained: true });
         }
       }
       return true;
     }
     case "sanctuary": { // 성황 — 도발 보유 + (저체력 아군 시) 1회 파티 피해 무효
-      if (!hasStatus(unit, "taunt")) applyStatus(unit, { type: "taunt", duration: 1 });
+      if (!hasStatus(unit, "taunt")) {
+        applyStatus(unit, { type: "taunt", duration: 1 });
+        // Combat Visibility Job Grammar 01 — 2차 직업 도발 = 최대 4명 도발선. 과밀 방지로 2번째 행동마다만 선을 그린다.
+        if (unit.actionCount % 2 === 0) applyTauntMany(unit, [...frontEnemies(), ...aliveEnemies().filter((e) => e.role !== "front")].slice(0, heroTauntCount(unit.id)));
+      }
       const allies = aliveParty();
       const lowExists = allies.some((a) => a.hp / a.maxHp < L.allyHpThreshold);
       if (lowExists && !unit.sanctUsed) {
@@ -1521,6 +1560,8 @@ function runDataSkill(unit, meta) {
         if (!mt) return false;
         unit.skyTarget = mt.instanceId;
         applyCombatStatus(mt, "defDown", L.dmgUpPct ?? 0.12); // 받는 피해 소폭↑(방↓ 칩 + FX 1회)
+        // Combat Visibility Job Grammar 01 — 천표식 부여 행동선(추적자와 공통 mark 문법, item 6).
+        playActorFx("mark", unit.instanceId, { targetId: mt.instanceId });
         pushLog(`${unit.name}${josa(unit.name, "이가")} ${mt.name}에게 하늘 표식을 새겼다.`);
       } else {
         applyStatus(mt, { type: "defDown", duration: 3, pct: L.dmgUpPct ?? 0.12 }); // 갱신(FX 없이)
@@ -1611,7 +1652,8 @@ function runDataSkill(unit, meta) {
         const t = (others.length ? others : [unit]).slice().sort((a, b) => b.atk - a.atk)[0];
         applyCombatStatus(t, "atkUp", L.exaltPct ?? 0.10);
         pushLog(`${unit.name} 1박, 고양!`);
-        skillShout(unit, "1박!", meta.kind);
+        // Combat Visibility Job Grammar 01 — 고양 대상에게 지원선(buff) + 상승 end로 "누구를 강화했는지" 보이게.
+        playSupportFx({ casterInstanceId: unit.instanceId, text: "1박!", kind: meta.kind, buffs: [t.instanceId] });
       } else if (unit.beat === 2) { // 회전 — HP 낮은 아군 회복(없으면 최저 아군 보호막)
         const hurt = lowestRatioAllyHurt(0.95);
         if (hurt) {
@@ -2022,13 +2064,17 @@ function performAttack(attacker, target, opts = {}) {
 
   const line = opts.lineType || attackLineType(attacker);
   playActionFx({
-    sourceInstanceId: attacker.instanceId,
+    // Combat Visibility Job Grammar 01 — 체인 관통: fxSourceId로 선 시작점을 다른 유닛(전열 대상)에서 출발시키고
+    //   chained/delayExtra로 순차 연결한다(피해는 동기 적용·시각만 체인).
+    sourceInstanceId: opts.fxSourceId || attacker.instanceId,
     sourceUnitId: attacker.id,
     targetInstanceId: target.instanceId,
     lineType: line,
     kind: actionKindOf(attacker, attacker.team === "party"),
     isHeal: false,
     amount: damage,
+    delayExtra: opts.fxDelayExtra || 0,
+    chained: !!opts.chained,
     // Combat Grammar Foundation 01 — 치명이면 주황 치명 숫자 규격(01C), 아니면 기본 빨강.
     numberVariant: isCrit ? "crit" : null,
     // 스킬이면 스킬명(더 큰 텍스트), 아니면 기본 "공격!". noShout면 외침 없음.
