@@ -39,6 +39,9 @@
     #ar-progress-bar { flex: 1; height: 10px; background: #1b232c; border: 1px solid #2c3a46; border-radius: 999px; overflow: hidden; }
     #ar-progress-fill { height: 100%; width: 0; background: #2f7d50; transition: width .12s linear; }
     #ar-progress-text { font-size: 11px; color: #9fb3c4; min-width: 70px; text-align: right; }
+    .ar-desc { width: 100%; margin: 2px 0 0; font-size: 11px; color: #7fb3d6; }
+    .ar-mini { font-size: 10px; padding: 2px 8px; margin-left: 8px; border: 1px solid #34434f; border-radius: 6px;
+      background: #1b232c; color: #cfe0ee; cursor: pointer; vertical-align: middle; font-weight: 400; }
 
     .ar-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
     .ar-card { background: #11161d; border: 1px solid #243039; border-radius: 10px; padding: 9px 11px; }
@@ -85,10 +88,8 @@
     </header>
 
     <div id="ar-controls">
-      <span><label>정책</label><select id="ar-policy">
-        <option value="random">랜덤 탐험가</option>
-        <option value="fusion">합체 우선가</option>
-      </select></span>
+      <span><label>정책</label><select id="ar-policy"></select></span>
+      <span><label>프로필</label><select id="ar-profile"></select></span>
       <span><label>seed</label><input id="ar-seed" type="number" placeholder="비우면 랜덤" /></span>
       <span id="ar-run-btns">
         <button type="button" class="ar-btn" data-count="10">10회</button>
@@ -101,9 +102,11 @@
         <div id="ar-progress-bar"><div id="ar-progress-fill"></div></div>
         <span id="ar-progress-text">0 / 0</span>
       </div>
+      <p id="ar-desc" class="ar-desc"></p>
     </div>
 
-    <section id="ar-summary"><div class="ar-empty">정책과 횟수를 고르고 실행하세요. 100회 안정 실행이 기본입니다.</div></section>
+    <section id="ar-summary"><div class="ar-empty">정책·프로필·횟수를 고르고 실행하세요. 100회 안정 실행이 기본입니다.</div></section>
+    <section id="ar-compare"></section>
     <section id="ar-deathband"></section>
     <div class="ar-cols">
       <section id="ar-clearparty"></section>
