@@ -1452,26 +1452,36 @@ export function playSupportFx({ casterInstanceId, text, kind, heals = [], guardI
 
   if (text) spawnActionShout(casterInstanceId, text, fieldRect, { tier: "skill", kind });
 
+  // Combat Visibility Polish 01 — 시전자 몸통 시작점(행동선 공통 시작 문법). heal/support 선이 여기서 출발해
+  //   "누가 누구에게 무엇을"이 텍스트 없이 읽힌다. 영웅/몬스터(풀양·올빼미·사슴 등) 공통.
+  const s = unitPoint(casterInstanceId, BODY_MID_FRAC, fieldRect);
+
   heals.forEach((h) => {
     if (dyingUnits.has(h.targetInstanceId) || cleanedDead.has(h.targetInstanceId)) return;
     const p = unitPoint(h.targetInstanceId, { fx: 0.5, fy: 0.46 }, fieldRect);
-    if (p) spawnPulse(layer, p, true);
-    if (h.amount > 0) {
-      const tn = numberAnchor(h.targetInstanceId, fieldRect);
-      if (tn) spawnNumber(layer, tn, h.targetInstanceId, true, h.amount);
+    // 실제 회복(amount>0)이고 자기 자신이 아닐 때만 heal 선(보호막용 더미 amount 0 / 자가 회복은 선 생략 — 과밀 방지).
+    if (s && p && h.amount > 0 && h.targetInstanceId !== casterInstanceId) {
+      spawnStartPulse(layer, s, "heal");
+      spawnLine(layer, s, p, "heal", kind, "heal");
     }
+    if (p) spawnPulse(layer, p, true); // heal end — 민트 펄스(뾰로롱)
+    if (h.amount > 0 && p) spawnNumber(layer, { x: p.x, y: Math.max(24, p.y - 16) }, h.targetInstanceId, true, h.amount);
     reactUnit(h.targetInstanceId, true);
   });
 
   if (guardInstanceId && !dyingUnits.has(guardInstanceId) && !cleanedDead.has(guardInstanceId)) {
     const g = unitPoint(guardInstanceId, { fx: 0.5, fy: 0.46 }, fieldRect);
     if (g) {
-      const s = document.createElement("span");
-      s.className = "fx-pulse fx-pulse--guard";
-      s.style.left = `${g.x}px`;
-      s.style.top = `${g.y}px`;
-      s.addEventListener("animationend", () => s.remove());
-      layer.appendChild(s);
+      // Combat Visibility Polish 01 — 보호(guard/ward)=방패 end / 그 외(buff/support/command)=능력치 상승 end.
+      const isGuardKind = kind === "guard" || kind === "ward";
+      const variant = isGuardKind ? "guard" : "support";
+      // 아군 대상이면 시전자→대상 지원선(자기 자신 대상이면 0길이라 선 생략).
+      if (s && guardInstanceId !== casterInstanceId) {
+        spawnStartPulse(layer, s, variant);
+        spawnLine(layer, s, g, "support", kind, variant);
+      }
+      if (isGuardKind) spawnGuardEndPulse(layer, g);
+      else spawnBuffPulse(layer, g);
     }
   }
 }
@@ -1534,9 +1544,11 @@ export function playActionFx(event) {
   );
   const bigTarget = tgtTierEl &&
     (tgtTierEl.dataset.tier === "boss" || tgtTierEl.dataset.tier === "elite");
+  // Combat Visibility Polish 01 — 피해 숫자를 머리 위가 아니라 "타격 지점(End=hit ring) 바로 위"에 붙인다.
+  //   "피해가 실제 적중 지점에서 발생"하는 느낌 강화. 큰 대상은 기존(28px 위)·소형도 End 기준 16px 위(화면 안 clamp).
   const tn = bigTarget
     ? { x: t.x, y: Math.max(56, Math.min(fieldRect.height - 18, t.y - 28)) }
-    : (numberAnchor(targetInstanceId, fieldRect) || t);
+    : { x: t.x, y: Math.max(24, Math.min(fieldRect.height - 14, t.y - 16)) };
   const fire = () => {
     // Action Line Visibility 01 — 시작점 pulse로 "이 actor가 행동선의 출발점"을 1회 번쩍(과하지 않게).
     spawnStartPulse(layer, s, variant);
@@ -1767,10 +1779,14 @@ let __fxLineSeq = 0;
 //   heal   = 청록 점선 + 십자가(회복)
 //   (구버전 straight/slash/enemy는 미사용 — 호환 위해 정의만 남겨둔다)
 const LINE_STYLE = {
-  attack:   { bowF: 0.32, bowMin: 22, bowMax: 74, flip: 1,  head: "x",      draw: true, ghost: true },
-  ranged:   { bowF: 0.74, bowMin: 52, bowMax: 150, flip: 1, head: "target", draw: true },
+  // Combat Visibility Polish 01 — 일반 공격 = 흰색 단일 선(ghost 2라인 제거). 단순·명확.
+  attack:   { bowF: 0.28, bowMin: 18, bowMax: 64, flip: 1,  head: "x",      draw: true, ghost: false },
+  // Combat Visibility Polish 01 — 원거리 = 2라인(본선 + 뒤따르는 잔상선) + 과녁. "쏘아진 두 줄" 느낌(일반공격에서 이동).
+  ranged:   { bowF: 0.74, bowMin: 52, bowMax: 150, flip: 1, head: "target", draw: true, ghost: true },
   // Combat Breath Hotfix 01: 치유선 곡률↑(아군 간격 좁아도 아바타 사이에 안 묻히게 위로 크게 호).
   heal:     { bowF: 0.50, bowMin: 34, bowMax: 92, flip: -1, head: "cross",  draw: false },
+  // Combat Visibility Polish 01 — 서포터/버프 행동선(지원 대상 연결). 얇은 점선 + 작은 표식(공격/회복선과 구분).
+  support:  { bowF: 0.34, bowMin: 20, bowMax: 70, flip: -1, head: "spark",  draw: false },
   // Hero Skill 01: 교란 — 보라/분홍 거친 왜곡선(짧게 흔들림). 작은 혼란 표식(spark).
   disrupt:  { bowF: 0.22, bowMin: 14, bowMax: 44, flip: 1,  head: "spark",  draw: false, rough: true },
   // Combat Grammar Foundation 01: 도발 — 노랑 점선(공격선/회복선과 구분). 화려하지 않게.
@@ -1974,6 +1990,26 @@ function spawnPulse(layer, t, isHeal) {
   p.style.top = `${t.y}px`;
   p.addEventListener("animationend", () => p.remove());
   layer.appendChild(p);
+}
+
+// Combat Visibility Polish 01 — 보호(방패) end 펄스: 금빛 링(능력 상승과 결 구분).
+function spawnGuardEndPulse(layer, p) {
+  const el = document.createElement("span");
+  el.className = "fx-pulse fx-pulse--guard";
+  el.style.left = `${p.x}px`;
+  el.style.top = `${p.y}px`;
+  el.addEventListener("animationend", () => el.remove());
+  layer.appendChild(el);
+}
+
+// Combat Visibility Polish 01 — 버프/지원 end 펄스: 하늘빛 "능력치 상승"(위로 솟음 — 회복/방패와 다른 결).
+function spawnBuffPulse(layer, p) {
+  const el = document.createElement("span");
+  el.className = "fx-pulse fx-pulse--buff";
+  el.style.left = `${p.x}px`;
+  el.style.top = `${p.y}px`;
+  el.addEventListener("animationend", () => el.remove());
+  layer.appendChild(el);
 }
 
 // Run Structure 01C — 피해 숫자 규격: 의미별로만 색을 둔다(임의 색 줄이기). 영웅/몬스터 동일 규칙.

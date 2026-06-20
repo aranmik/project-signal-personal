@@ -959,8 +959,8 @@ function traitRangedFocus(unit, heroes) {
   const pool = back.length ? back : heroes;
   const t = redirectIfTaunted(unit, pool.reduce((a, b) => (a.hp <= b.hp ? a : b)));
   introTrait(unit, "깃새가 뒤쪽을 노렸다.");
-  // Monster Identity 02 — "멀리서 쏜다": 선과 함께 작은 투사체가 날아간다(보조 감각).
-  if (t) { playActorFx("projectile", unit.instanceId, { targetId: t.instanceId }); performAttack(unit, t, { mult: 0.9, lineType: "ranged" }); }
+  // Combat Visibility Polish 01 — 발사체 제거(행동선과 정보 중복). 원거리는 ranged 행동선 공통 문법으로만 읽힌다.
+  if (t) performAttack(unit, t, { mult: 0.9, lineType: "ranged" });
   return true;
 }
 
