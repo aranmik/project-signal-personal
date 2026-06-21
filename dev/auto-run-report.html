@@ -40,6 +40,12 @@
     #ar-progress-fill { height: 100%; width: 0; background: #2f7d50; transition: width .12s linear; }
     #ar-progress-text { font-size: 11px; color: #9fb3c4; min-width: 70px; text-align: right; }
     .ar-desc { width: 100%; margin: 2px 0 0; font-size: 11px; color: #7fb3d6; }
+    .ar-verdict { display: inline-block; font-size: 11px; font-weight: 800; border-radius: 6px; padding: 1px 8px; letter-spacing: .03em; }
+    .ar-verdict.pass { color: #0c1a12; background: #6fd19a; }
+    .ar-verdict.watch { color: #1c1606; background: #e6c578; }
+    .ar-verdict.fail { color: #2a0f12; background: #f0a0a0; }
+    .ar-flags { margin: 4px 0 0; padding-left: 18px; }
+    .ar-flags li { font-size: 12px; color: #cfe0ee; padding: 2px 0; }
     .ar-mini { font-size: 10px; padding: 2px 8px; margin-left: 8px; border: 1px solid #34434f; border-radius: 6px;
       background: #1b232c; color: #cfe0ee; cursor: pointer; vertical-align: middle; font-weight: 400; }
 
@@ -88,6 +94,7 @@
     </header>
 
     <div id="ar-controls">
+      <span><label>테마</label><select id="ar-theme"></select></span>
       <span><label>정책</label><select id="ar-policy"></select></span>
       <span><label>프로필</label><select id="ar-profile"></select></span>
       <span><label>seed</label><input id="ar-seed" type="number" placeholder="비우면 랜덤" /></span>
@@ -105,7 +112,10 @@
       <p id="ar-desc" class="ar-desc"></p>
     </div>
 
-    <section id="ar-summary"><div class="ar-empty">정책·프로필·횟수를 고르고 실행하세요. 100회 안정 실행이 기본입니다.</div></section>
+    <section id="ar-validation"><div class="ar-empty">테마·정책·프로필·횟수를 고르고 실행하면 목표 대비 PASS/WATCH/FAIL 판정이 표시됩니다.</div></section>
+    <section id="ar-flags"></section>
+    <section id="ar-targets"></section>
+    <section id="ar-summary"></section>
     <section id="ar-compare"></section>
     <section id="ar-deathband"></section>
     <div class="ar-cols">
