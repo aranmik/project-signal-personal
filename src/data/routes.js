@@ -116,6 +116,98 @@ export function depthScale(depth) {
   return { hp, atk };
 }
 
+/* =========================================================
+   Forest Director 01 — 전투 타입별 최소 품질선 + 심도 구간 압력 레이어.
+   철학 전환: "심도/경계도 → 적 수/스탯 → 전투"(절대 기준)가 아니라,
+              "루트/전투 타입 → 최소 품질선 → 심도/경계도 가산 압력 → 최종 전투".
+   ① 압력 레이어 분리: 적 수(directorCount)와 스탯(directorScale)을 별도 곡선으로 두고
+      step 위치를 어긋나게 해 "심도 9에 적 수 + 스탯 동시 급등(절벽)"을 막는다.
+   ② 적 수는 심도 밴드에서만 결정(경계도와 분리) — 경계도는 "조합(조직화)"만 바꾼다(체력 뻥튀기보다 조합 압박).
+   ③ 정예/보스는 심도에 종속되지 않는 최소 품질선(floor)을 먼저 갖고, 심도/경계도는 그 위에 곱만 한다.
+   ※ 직업/스킬/몬스터/스테이지/보상 데이터(units/skills/jobs/stages/rewards)는 일절 바꾸지 않는다 — "생성 규칙"만.
+   ========================================================= */
+export const DEPTH_BANDS = [
+  { id: 1, min: 1,  max: 4,  label: "준비 구간" },
+  { id: 2, min: 5,  max: 8,  label: "첫 선택의 대가" },
+  { id: 3, min: 9,  max: 13, label: "숲의 반응" },
+  { id: 4, min: 14, max: 20, label: "보스 준비" },
+  { id: 5, min: 21, max: 30, label: "로망" },
+  { id: 6, min: 31, max: Infinity, label: "과심도" },
+];
+export function depthBand(depth) {
+  const d = Math.max(1, depth || 1);
+  return DEPTH_BANDS.find((b) => d >= b.min && d <= b.max) || DEPTH_BANDS[DEPTH_BANDS.length - 1];
+}
+
+// ① 적 수 — 전투 타입 × 심도 밴드(완만, 경계도와 분리). 마찰 전투(일반/영입/결속)는 2,3,4,4,5,6.
+//    위험(danger)은 +1(상한 6). 정예 호위 수는 eliteEscortCount(별도 floor).
+const COUNT_BY_BAND = { friction: [2, 3, 4, 4, 5, 6], danger: [3, 4, 4, 5, 6, 6] };
+export function directorCount(routeType, depth) {
+  const b = depthBand(depth).id - 1;
+  if (routeType === "danger") return COUNT_BY_BAND.danger[b];
+  return COUNT_BY_BAND.friction[b]; // normal / ally / bond — 마찰 전투
+}
+
+// ② 스탯 스케일 — 밴드 계단(횡보 → 살짝 상승). depthScale(연속 +6%/심도)보다 완만하고,
+//    step 위치를 "적 수 step(밴드 경계 d5/9/14/21)"과 어긋나게(밴드 중간 d3/7/11/17/25)에서 올려 동시 급등을 막는다.
+const SCALE_STEPS = [
+  { from: 1,  hp: 1.00, atk: 1.00 },
+  { from: 3,  hp: 1.06, atk: 1.03 },
+  { from: 7,  hp: 1.16, atk: 1.08 },
+  { from: 11, hp: 1.30, atk: 1.14 },
+  { from: 17, hp: 1.48, atk: 1.22 },
+  { from: 25, hp: 1.72, atk: 1.34 },
+  { from: 33, hp: 2.05, atk: 1.50 },
+];
+export function directorScale(depth) {
+  const d = Math.max(1, depth || 1);
+  let s = SCALE_STEPS[0];
+  for (const step of SCALE_STEPS) if (d >= step.from) s = step;
+  let hp = s.hp, atk = s.atk;
+  if (d >= 40) { hp += (d - 39) * 0.04; atk += (d - 39) * 0.025; } // 과심도 추가 가산(감각 유지)
+  return { hp, atk };
+}
+
+// ② 조합(조직화) — 적 수는 directorCount로 고정하고, 경계도가 "역할 구성"만 두껍게 한다.
+//    낮은 경계도 = 근접/원거리 마찰. 높을수록 탱/힐/서폿 주입(조합 압박) — 수는 안 늘린다.
+export function directorRoles(routeType, depth, alertness) {
+  const count = directorCount(routeType, depth);
+  const out = [];
+  const add = (r) => { if (out.length < count) out.push(r); };
+  if (alertness >= 1) add("tank");            // 전열 방벽
+  add("melee");
+  if (count >= 3) add("ranged");              // 후열 압박
+  if (alertness >= 3) add("healer");          // 조직화: 힐러(조합 압박)
+  if (alertness >= 4) add("support");         // 서포터(약화/보호)
+  if (alertness >= 5) add("tank");            // 두꺼운 전열
+  while (out.length < count) add(out.length % 2 ? "ranged" : "melee"); // 남는 자리 = 마찰
+  return out;
+}
+
+// ③ 정예전 최소 호위 수 — 언제 만나도 "정예 1 + 소형 최소 3". 밴드/경계도로 +1까지 두꺼워진다(floor 아래로 안 내려감).
+const ELITE_ESCORT_FLOOR = [3, 3, 4, 4, 5, 5];
+export function eliteEscortCount(depth, alertness) {
+  const floor = ELITE_ESCORT_FLOOR[depthBand(depth).id - 1];
+  return Math.min(6, floor + (alertness >= 4 ? 1 : 0));
+}
+
+// ③ 보스 최소 기본값 — 심도/경계도와 무관한 floor. depth(directorScale)/fury/readiness는 이 위에 곱(가산 압력)만.
+//    "도적+사제 2인이 쉽게 못 잡는" 기본값 — 4인/합체 파티가 도전할 때 비로소 가능성이 생기는 목표물.
+//    (기존 RANK_OVERRIDES.boss 520/15보다 높은 바닥 — 낮은 심도라고 약해지지 않게.)
+export const BOSS_FLOOR = { hp: 760, atk: 21 };
+
+// 위험도/품질선 읽힘 태그(dev 관측용 — 전투 타입 + 밴드 + 조직화 상태).
+export function combatDirectorTag(routeType, depth, alertness, party4Reached) {
+  const band = depthBand(depth);
+  const t = [`B${band.id}`];
+  if (routeType === "elite") t.push("ELITE_FLOOR");
+  else if (routeType === "boss") t.push("BOSS_FLOOR");
+  else if (routeType === "danger") t.push("RISK");
+  if (!party4Reached) t.push("PRE4");
+  if (alertness >= 4) t.push("ORG");
+  return t;
+}
+
 // Run Structure 01C — 심도 분위기: 심도가 깊어질수록 "숲의 온도/공기"가 바뀐다(읽힘용).
 //   Beginner Theme Clear Feel 01 — 25~35 정석 구간은 평온 유지, 분위기는 36+에서만 바뀐다.
 //   1~35 기본 / 36+ 위협 / 46+ 분노. tier=전장·패널 class hook, label=문구. "보스를 오래 미룬 대가"를

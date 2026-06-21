@@ -3,8 +3,8 @@ import { stagePlan } from "../data/stages.js";
 import { combatRoleOf } from "../data/jobs.js"; // Run Reward Training 01 — 역할 기반 훈련 대상 필터
 import {
   ELITE_POOL, BOSS_ENCOUNTER,
-  depthScale, bossFury, bossReadinessPressure, bossMenace, normalFormation, eliteEscort, ROLE_ACTOR, FRONT_ROLES,
-  effectiveAlertness,
+  bossFury, bossReadinessPressure, bossMenace, ROLE_ACTOR, FRONT_ROLES, effectiveAlertness,
+  directorScale, directorCount, directorRoles, eliteEscortCount, BOSS_FLOOR,
 } from "../data/routes.js";
 
 // Boss Early Challenge Pressure 01 — 현재 배치(formation)의 채워진 슬롯 수 = 파티 인원.
@@ -170,31 +170,32 @@ export function createStageEnemies(stage) {
 //   boss = 사자왕(심도 fury 추가 강화). 정예/보스 본체 구성은 stages.js 재활용.
 export function createRouteEnemies(routeType, run) {
   const depth = run.depth;
-  // Route Grammar 02 — 진형/정예 조직도는 "유효 경계도"(4인 전엔 잠복으로 낮음)를 본다.
-  //   4인 완성 전까지는 숲이 본격 반응하지 않는 준비 구간(즉시 처벌 대신 잠복 압력).
+  // Forest Director 01 — 압력 레이어 분리: 적 수=directorCount(밴드) / 스탯=directorScale(완만 계단) /
+  //   조합(조직화)=유효 경계도. 정예/보스는 심도 종속 대신 최소 품질선(floor)을 먼저 갖는다.
   const alertness = effectiveAlertness(run);
-  const scale = depthScale(depth);
+  const scale = directorScale(depth);
   const prefix = `d${depth}`;
 
   if (routeType === "boss") {
     const fury = bossFury(depth);
-    // Boss Early Challenge Pressure 01 — 심도 분노(fury)와 별개로 "준비 부족" 보정을 보스에만 곱한다.
-    //   빠른/얕은 도전을 막지 않되, 미완성 파티면 사자왕이 압도하도록(낮은 심도 보스의 약함을 보정).
+    // Boss Early Challenge Pressure 01 — 심도 분노(fury)와 별개 "준비 부족" 보정(미완성 파티면 사자왕이 압도).
     const ready = bossReadinessPressure({
       depth, bossKeys: run.bossKeys || 0, fusionCount: run.fusionCount || 0, partySize: partySizeOf(run),
     });
-    // Boss Readiness Pressure 02 — Elite Key Seal: 열쇠 2개 미만이면 위압 활성(DR + 행동마다 atk 램프).
-    //   스탯 압박(ready)/심도 분노(fury)와 별개 축 — 보스에만, 보스전에서만 건다.
-    const menace = bossMenace(run.bossKeys || 0);
+    const menace = bossMenace(run.bossKeys || 0); // Elite Key Seal: 열쇠 2 미만이면 위압(DR + atk 램프)
     const bscale = { hp: scale.hp * fury.hp * ready.hp, atk: scale.atk * fury.atk * ready.atk };
     const units = buildEnemies(BOSS_ENCOUNTER, prefix, { scale: bscale, slots: ["boss"] });
     units.forEach((u) => {
+      // Forest Director 01 — 보스 최소 기본값(floor) 보장: 낮은 심도라고 사자왕이 일반몹처럼 약해지지 않게.
+      //   floor(BOSS_FLOOR) × (심도/분노/준비부족 압력)으로, 심도/경계도는 floor 위에 곱만 한다.
+      u.maxHp = Math.max(u.maxHp, Math.round(BOSS_FLOOR.hp * bscale.hp));
+      u.hp = u.maxHp;
+      u.atk = Math.max(u.atk, Math.round(BOSS_FLOOR.atk * bscale.atk));
       if (fury.stage > 0) u.bossFury = fury.stage;
       if (ready.level > 0) u.bossReadiness = ready.level; // HUD/라벨 읽힘용
       if (menace.active) {
-        // 위압 메타를 보스에 부여 — battle.js가 받는 피해 감소/행동 atk 램프에 사용.
         u.menace = { dr: menace.dr, atkStepPct: menace.atkStepPct, atkMaxStacks: menace.atkMaxStacks };
-        u.menaceBaseAtk = u.atk; // 램프 기준 = 스케일 적용된 보스 atk
+        u.menaceBaseAtk = u.atk; // 램프 기준 = floor 적용된 보스 atk
         u.menaceStacks = 0;
       }
     });
@@ -202,24 +203,23 @@ export function createRouteEnemies(routeType, run) {
   }
 
   if (routeType === "elite") {
-    // 정예 본체(번갈아: 올빼미 → 사슴 …)는 role에 따라 전열중앙(ecf)/후열중앙(ecb)에 "주인공"으로 선다.
-    //   호위 소형이 전열/후열로 둘러싸 보호 진형이 읽힌다 — 정예 오른쪽 끝 밀림 해결.
+    // Forest Director 01 — 정예 최소 품질선: "정예 1 + 소형 최소 3"(낮은 심도/경계도라도 빈약하지 않게).
+    //   호위 수는 eliteEscortCount(floor), 역할 구성은 directorRoles(경계도 조직화)로 채운다.
     const eliteSpec = ELITE_POOL[(run.bossKeys || 0) % ELITE_POOL.length][0];
-    const escort = eliteEscort(alertness);
+    const escCount = eliteEscortCount(depth, alertness);
+    const rolePool = directorRoles("normal", depth, alertness);
+    const escort = [];
+    for (let i = 0; escort.length < escCount; i++) escort.push(rolePool[i % rolePool.length] || (escort.length % 2 ? "ranged" : "melee"));
     const specs = [eliteSpec, ...escort.map((r) => ROLE_ACTOR[r])];
-    // Elite Escort Overlap Fix 01 — 호위 소형이 정예 본체 뒤에 묻히지 않게 본체 박스를 피한 슬롯 배치.
     const coreFront = specIsFront(eliteSpec);
     const escortSlots = assignEliteEscortSlots(escort.map((r) => FRONT_ROLES.has(r)), coreFront);
     const slots = [coreFront ? "ecf" : "ecb", ...escortSlots];
     return buildEnemies(specs, prefix, { scale, slots });
   }
 
-  // normal / danger — 경계도 진형 + 소량 강화(읽힘용).
-  //   Beginner Flow Playtest Support 01 — danger도 "현재 경계도" 진형으로 싸운다(과거: alertness+1로 미래 경계도를
-  //   선택 즉시 맞닥뜨려 대응이 어려웠음). 경계도 상승은 클리어 후 영입/합체 보상에서 반영된다.
-  //   danger의 "위험" 정체성은 아래 stat 프리미엄(+12% HP / +1 atk)으로 유지된다.
-  const formAlert = alertness;
-  const roles = normalFormation(formAlert);
+  // normal / danger / ally / bond — 마찰 전투. 적 수=directorCount(밴드), 조합=directorRoles(경계도), 스탯=directorScale.
+  //   danger의 "위험" 정체성은 적 수 +1(directorCount) + stat 프리미엄(+12% HP / +1 atk)으로 유지.
+  const roles = directorRoles(routeType, depth, alertness);
   const specs = roles.map((r) => ROLE_ACTOR[r]);
   const slots = assignSlotsByFront(roles.map((r) => FRONT_ROLES.has(r)));
   const dscale = routeType === "danger" ? { hp: scale.hp * 1.12, atk: scale.atk } : scale;

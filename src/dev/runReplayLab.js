@@ -181,6 +181,7 @@ function playRunDetailed(policy, profile, runIndex) {
       const depth = gameState.run.depth, size = jobs.length, hp0 = partyHpStats();
       if (rec.fusionCreatedEmptySlot && size < 4) rec.battlesWhileUnder4AfterFusion += 1; // Route Grammar 02
       const alertNow = gameState.run.alertness || 0, effNow = effectiveAlertness(gameState.run), p4 = !!gameState.run.party4Reached;
+      const enemyCount = gameState.enemies.length; // Forest Director 01 — 전투 시작 적 수(전투 중 사망 전)
       rec.battleCount += 1; rec.path.push(ROUTE_TOKEN[pendingRoute] || "B");
       const ok = runHeadlessBattle();
       if (!ok) { rec.result = "incomplete"; rec.path.push("TIMEOUT"); break; }
@@ -191,7 +192,7 @@ function playRunDetailed(policy, profile, runIndex) {
       if ((gameState.run.bossKeys || 0) > prevBossKeys) { prevBossKeys = gameState.run.bossKeys; keyGain = true; if (!rec.firstEliteKillDepth) rec.firstEliteKillDepth = depth; if (!rec.firstBossKeyDepth) { rec.firstBossKeyDepth = depth; rec.bossKeyBattleIdx = rec.battleCount; } }
       let bossHp = null;
       if (pendingRoute === "boss") { const boss = gameState.enemies[0]; if (boss) { const ratio = boss.maxHp ? Math.max(0, boss.hp) / boss.maxHp : 0; bossHp = ratio; if (res === "wipe") { rec.bossHpRemaining = ratio; if (ratio <= 0.5) { rec.bossHalfHpSeen = true; rec.bossHalfHpSeenDepth = depth; } } } }
-      push({ kind: "battle", token: ROUTE_TOKEN[pendingRoute] || "B", route: pendingRoute, depth, size, jobs, axes: axesOf(new Set(jobs)), avgHp: hp0.avg, minHp: after.min, faints: deadNow, result: res, keyGain, bossHp,
+      push({ kind: "battle", token: ROUTE_TOKEN[pendingRoute] || "B", route: pendingRoute, depth, size, jobs, axes: axesOf(new Set(jobs)), avgHp: hp0.avg, minHp: after.min, faints: deadNow, result: res, keyGain, bossHp, enemyCount,
         // Route Grammar 02 — per-row 문법 컨텍스트.
         alertness: alertNow, effectiveAlertness: effNow, latentAlertness: p4 ? 0 : alertNow - effNow, preParty4: !p4, afterParty4: p4, afterFusion: sinceFusion != null, fusedEmptySlot: rec.fusionCreatedEmptySlot });
       sinceFusion = sinceFusion == null ? null : sinceFusion + 1;
@@ -495,7 +496,7 @@ function renderTimeline(r) {
       const tcls = e.token === "BOSS" ? "boss" : e.token === "E" ? "elite" : e.token === "D" ? "danger" : "normal";
       const rcls = e.result === "wipe" ? "wipe" : e.result === "clear" ? "clear" : "";
       const danger = e.minHp <= 0.2 || e.faints > 0;
-      return `<tr class="${rcls ? "row-" + rcls : ""} ${danger ? "row-danger" : ""}"><td>${e.depth}</td><td><span class="rl-tok ${tcls}">${e.token}</span></td><td class="txt">${routeName(e.route)}</td><td>${e.size}</td><td class="txt">${e.jobs.map(jobName).join("·")}</td><td class="txt">${axesMini(e.axes)}</td><td>${fmtPct(e.avgHp)}</td><td class="${e.minHp <= 0.2 ? "lowhp" : ""}">${fmtPct(e.minHp)}</td><td>${e.faints || ""}</td><td class="${rcls}">${e.result}${e.keyGain ? " 🔑" : ""}${e.bossHp != null ? ` (보스 ${fmtPct(e.bossHp)})` : ""}</td><td class="txt">${marks}${grammarMk}${dangerMk}${tags}</td></tr>`;
+      return `<tr class="${rcls ? "row-" + rcls : ""} ${danger ? "row-danger" : ""}"><td>${e.depth}</td><td><span class="rl-tok ${tcls}">${e.token}</span></td><td class="txt">${routeName(e.route)}${e.enemyCount != null ? ` <span class="rl-meta">적${e.enemyCount}</span>` : ""}</td><td>${e.size}</td><td class="txt">${e.jobs.map(jobName).join("·")}</td><td class="txt">${axesMini(e.axes)}</td><td>${fmtPct(e.avgHp)}</td><td class="${e.minHp <= 0.2 ? "lowhp" : ""}">${fmtPct(e.minHp)}</td><td>${e.faints || ""}</td><td class="${rcls}">${e.result}${e.keyGain ? " 🔑" : ""}${e.bossHp != null ? ` (보스 ${fmtPct(e.bossHp)})` : ""}</td><td class="txt">${marks}${grammarMk}${dangerMk}${tags}</td></tr>`;
     }
     const icon = e.kind === "reward" ? `보상: ${esc(e.name)}` : e.kind === "fusion" ? `합체: ${esc(e.materials.join("+"))}→${esc(e.result)}` : e.kind === "recruit" ? `영입: ${esc(e.job)}` : e.kind === "rest" ? "쉼터(회복)" : e.token === "CLEAR" ? "CLEAR" : e.token === "WIPE" ? "WIPE" : esc(e.token || e.kind);
     const cls = e.kind === "fusion" ? "row-fus" : e.kind === "recruit" ? "row-rec" : e.kind === "rest" ? "row-rest" : e.token === "WIPE" ? "row-wipe" : e.token === "CLEAR" ? "row-clear" : "";
