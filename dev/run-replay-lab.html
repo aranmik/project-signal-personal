@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Run Replay Lab — Seed Path Replay / Run Autopsy · Signal Personal (Dev)</title>
+  <!--
+    Run Replay Lab 01 — Dev 전용 "런 부검실"(독립 엔트리, 본게임/AR/Balance Lab과 분리).
+    특정 seed/policy/profile/run을 골라 그 런이 어떤 선택을 거쳐 어떻게 죽거나 클리어했는지 심도별로 뜯어본다.
+    실제 전투 엔진을 헤드리스로 구동(렌더/FX/발자취/localStorage 미발생, gameState 복구). 본게임 데이터/수치 무변경.
+  -->
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0b0f14; color: #dfe9f2; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 13px; line-height: 1.5; }
+    #rl-app { max-width: 1140px; margin: 0 auto; padding: 16px 12px 60px; }
+    header h1 { font-size: 18px; margin: 0 0 4px; }
+    header .tag { display: inline-block; font-size: 10px; font-weight: 800; color: #c79bff; border: 1px solid #4a3a6e; background: rgba(150,110,220,.1); border-radius: 999px; padding: 2px 8px; }
+    header p { color: #9fb3c4; font-size: 11px; margin: 8px 0 0; }
+    h3 { font-size: 13px; color: #cdbcec; border-left: 3px solid #7b5fc0; padding-left: 8px; margin: 20px 0 8px; }
+    .rl-meta { font-size: 10px; color: #6f8497; font-weight: 400; }
+    #rl-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #11161d; border: 1px solid #2c3a46; border-radius: 12px; padding: 12px; margin-top: 14px; }
+    #rl-controls label { font-size: 11px; color: #8aa0b2; margin-right: 3px; }
+    #rl-controls select, #rl-controls input { background: #1b232c; color: #e7f0f7; border: 1px solid #34434f; border-radius: 8px; padding: 6px 8px; font-size: 13px; }
+    #rl-controls input { width: 90px; }
+    .rl-btn { border: 1px solid #5a3a76; border-radius: 8px; background: #3a2a5b; color: #eee6fb; padding: 8px 12px; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .rl-btn.ghost { background: #1b232c; color: #cfe0ee; border-color: #34434f; }
+    .rl-btn:active { transform: translateY(1px); }
+    #rl-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+    #rl-presets button { font-size: 11px; padding: 6px 9px; border: 1px dashed #5a3a76; border-radius: 8px; background: rgba(150,110,220,.08); color: #cdbcec; cursor: pointer; }
+    .rl-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+    .rl-card { background: #11161d; border: 1px solid #243039; border-radius: 9px; padding: 7px 10px; }
+    .rl-card .k { font-size: 10px; color: #8aa0b2; }
+    .rl-card .v { font-size: 14px; font-weight: 800; color: #eef6ff; }
+    .rl-card .v.clear { color: #7fd1a8; } .rl-card .v.wipe { color: #f0a0a0; }
+    .rl-row { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0 8px; }
+    .rl-line { font-size: 12px; color: #cfe0ee; margin: 6px 0; } .rl-line code { background: #161e26; color: #9fc4dd; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+    .rl-line b { color: #bfa6e6; }
+    .rl-r { font-size: 11px; font-weight: 800; border-radius: 6px; padding: 1px 8px; }
+    .rl-r.clear { color: #0c1a12; background: #6fd19a; } .rl-r.wipe { color: #2a0f12; background: #f0a0a0; } .rl-r.inc { color: #1c1606; background: #e6c578; }
+    .rl-ax { font-size: 10px; border-radius: 4px; padding: 0 5px; margin-right: 2px; }
+    .rl-ax.on { color: #0c1a12; background: #7fd1a8; } .rl-ax.off { color: #6f8497; background: #1b232c; border: 1px solid #2c3a46; }
+    .rl-tag { display: inline-block; font-size: 9px; border-radius: 4px; padding: 0 5px; margin: 1px 2px 0 0; background: #21303d; color: #9fc4dd; border: 1px solid #2c4150; white-space: nowrap; }
+    .rl-tag.warn { background: #3a2a1a; color: #e6c578; border-color: #5a4326; }
+    .rl-mk { display: inline-block; font-size: 9px; border-radius: 4px; padding: 0 5px; margin: 1px 2px 0 0; background: #1b3326; color: #7fd1a8; border: 1px solid #2f5e47; white-space: nowrap; }
+    .rl-tablewrap { overflow-x: auto; border: 1px solid #243039; border-radius: 10px; margin-bottom: 6px; }
+    table { border-collapse: collapse; width: 100%; font-size: 11.5px; white-space: nowrap; }
+    th, td { padding: 5px 8px; border-bottom: 1px solid #1f2832; text-align: right; }
+    th.txt, td.txt { text-align: left; }
+    thead th { position: sticky; top: 0; background: #1a232c; color: #9fb8cc; font-weight: 700; }
+    tbody tr:nth-child(odd) { background: rgba(255,255,255,.015); }
+    .rl-tok { display: inline-block; font-size: 10px; font-weight: 800; border-radius: 5px; padding: 1px 7px; min-width: 38px; text-align: center; }
+    .rl-tok.normal { background: #23415b; color: #cfe0ee; } .rl-tok.danger { background: #5b3a23; color: #f0c89a; }
+    .rl-tok.elite { background: #5b2348; color: #f0a0d8; } .rl-tok.boss { background: #5b2330; color: #f0a0a0; } .rl-tok.evt { background: #2a2438; color: #c0aee0; }
+    td.lowhp, td .lowhp { color: #f0a0a0; font-weight: 700; }
+    td.clear { color: #7fd1a8; } td.wipe { color: #f0a0a0; }
+    tr.row-wipe td, tr.row-danger td { background: rgba(240,120,120,.07); }
+    tr.row-clear td { background: rgba(110,200,150,.08); }
+    tr.row-fus td { background: rgba(150,110,220,.07); } tr.row-rec td { background: rgba(80,150,200,.06); } tr.row-rest td { background: rgba(120,200,160,.05); }
+    .rl-empty { color: #7990a2; font-size: 12px; padding: 14px; text-align: center; }
+    .rl-foot { font-size: 10px; color: #6f8497; margin-top: 18px; }
+  </style>
+</head>
+<body>
+  <div id="rl-app">
+    <header>
+      <h1>🔬 Run Replay Lab <span class="tag">Seed Path Replay / Run Autopsy · Dev</span></h1>
+      <p>특정 seed/policy/profile/run을 골라 그 런이 어떤 선택을 거쳐 어떻게 죽거나 클리어했는지 심도별 타임라인으로 부검합니다.
+        AR04(숲 전체 관측소)·Balance Lab(전투 현미경) 다음의 "런 부검실". 본게임 진행/저장/발자취에 영향을 주지 않습니다.</p>
+    </header>
+
+    <div id="rl-controls">
+      <span><label>정책</label><select id="rl-policy"></select></span>
+      <span><label>프로필</label><select id="rl-profile"></select></span>
+      <span><label>seed</label><input id="rl-seed" type="number" value="405" /></span>
+      <span><label>runs</label><input id="rl-runs" type="number" value="50" /></span>
+      <span><label>대상</label><select id="rl-target">
+        <option value="firstWipe">first wipe run</option>
+        <option value="deepestWipe">deepest wipe run</option>
+        <option value="firstClear">first clear run</option>
+        <option value="bossAttempt">boss attempt run</option>
+        <option value="ndWipe">N&gt;D&gt;WIPE run</option>
+        <option value="postFusion">post fusion wipe</option>
+        <option value="eliteGreed">elite greed wipe</option>
+        <option value="noHealer">no healer wipe</option>
+        <option value="custom">custom run index</option>
+      </select></span>
+      <span><label>index</label><input id="rl-index" type="number" value="0" /></span>
+      <button type="button" id="rl-run" class="rl-btn">부검 실행 ▶</button>
+      <button type="button" id="rl-compare-btn" class="rl-btn ghost">vs Soft Ramp (same seed)</button>
+      <button type="button" id="rl-export" class="rl-btn ghost">JSON 복사</button>
+    </div>
+
+    <div id="rl-presets"></div>
+
+    <section id="rl-autopsy"><div class="rl-empty">정책/프로필/seed/대상을 고르고 “부검 실행”을 누르거나, 위 프리셋을 클릭하세요.</div></section>
+    <section id="rl-timeline"></section>
+    <section id="rl-compare"></section>
+
+    <p class="rl-foot">결과는 새로고침 전까지만 유지(저장 안 함). 같은 seed면 결정론적으로 동일 런이 재현됩니다.
+      마커=초록(마일스톤), 태그=노랑(추정 실패 지점). 위험/전멸/저HP row가 붉게 강조됩니다. HP는 전투 시작 평균 / 종료 최저.</p>
+  </div>
+
+  <script type="module">
+    import { initRunReplayLab } from "../src/dev/runReplayLab.js";
+    initRunReplayLab();
+  </script>
+</body>
+</html>
