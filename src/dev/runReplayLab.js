@@ -20,6 +20,7 @@ import {
 import { BASE_JOBS, ADVANCED_JOBS, SECOND_CLASS_JOBS, ACTIVE_FUSION_RECIPES, availableFusions, slotPreference, combatRoleOf } from "../data/jobs.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { rewardById } from "../data/rewards.js";
+import { effectiveAlertness } from "../data/routes.js"; // Route Grammar 02 — 유효 경계도(잠복) 읽기용
 
 /* ── 이름/포맷 ───────────────────────────────────────────────────── */
 const jobName = (id) => (UNIT_TEMPLATES.party[id] && UNIT_TEMPLATES.party[id].name) || id;
@@ -51,6 +52,7 @@ const SECOND_MATERIALS = new Set(ACTIVE_FUSION_RECIPES.filter((r) => isSecond(r.
 function aliveParty() { return gameState.party.filter((u) => !u.isDead); }
 function partyHpRatio() { const a = aliveParty(); return a.length ? a.reduce((s, u) => s + u.hp / u.maxHp, 0) / a.length : 1; }
 function partyHpStats() { const p = gameState.party; if (!p.length) return { avg: 0, min: 0 }; const r = p.map((u) => Math.max(0, u.hp) / u.maxHp); return { avg: r.reduce((a, b) => a + b, 0) / r.length, min: Math.min(...r) }; }
+function aliveHpStats() { const a = aliveParty(); if (!a.length) return { avg: 1, min: 1 }; const r = a.map((u) => Math.max(0, u.hp) / u.maxHp); return { avg: r.reduce((x, y) => x + y, 0) / r.length, min: Math.min(...r) }; }
 function curPartySize() { return partyJobIds().length; }
 function partyHasSecond() { return partyJobIds().some(isSecond); }
 const isDealer = (id) => ["melee", "ranged"].includes(combatRoleOf(id));
@@ -65,32 +67,39 @@ const POLICIES = {
     id: "fusion", label: "합체 우선가", startFormation: () => makeFormation([...(pick(BASE_RECIPES) || { materials: ["warrior", "archer"] }).materials]),
     pickReward: (o) => pick(o), decideFusion: (op) => { const s = op.filter((x) => isSecond(x.result)); return (s.length ? pick(s) : pick(op)).result; },
     pickRecruit: (o) => { const owned = partyJobIds(); const u = o.filter((j) => ACTIVE_FUSION_RECIPES.some((r) => r.materials.includes(j) && r.materials.some((m) => owned.includes(m)))); return pick(u.length ? u : o); },
-    pickRoute: (c) => { if (c.includes("boss")) return "boss"; return ["danger", "elite", "normal", "rest"].find((rt) => c.includes(rt)) || c[0]; },
+    pickRoute: (c) => { if (c.includes("bond")) return "bond"; if (curPartySize() < 4 && c.includes("ally")) return "ally"; if (c.includes("boss")) return "boss"; return ["danger", "elite", "normal", "rest", "ally"].find((rt) => c.includes(rt)) || c[0]; },
   },
   steady: {
     id: "steady", label: "안정 운영가", startFormation: () => { const s = pick(SURVIVAL_BASE); const o = pick(BASE_JOBS.filter((j) => j !== s)); return makeFormation([s, o]); },
     pickReward: (o) => preferIds(o, SURVIVAL_REWARDS), decideFusion: (op) => (partyHpRatio() < 0.6 ? null : pick(op).result), pickRecruit: (o) => preferIds(o, SURVIVAL_BASE),
-    pickRoute: (c) => { const hurt = partyHpRatio() < 0.55; if (hurt && c.includes("rest")) return "rest"; if (c.includes("boss") && curPartySize() >= 4 && partyHpRatio() >= 0.6) return "boss"; if (curPartySize() < 4) { if (!hurt && c.includes("danger")) return "danger"; if (c.includes("rest")) return "rest"; if (c.includes("normal")) return "normal"; } const order = hurt ? ["rest", "normal", "elite", "danger"] : ["normal", "elite", "danger", "rest"]; return order.find((rt) => c.includes(rt)) || c[0]; },
+    pickRoute: (c) => { const hurt = partyHpRatio() < 0.55, size = curPartySize(); if (hurt && c.includes("rest")) return "rest"; if (size < 4 && c.includes("ally")) return "ally"; if (c.includes("boss") && size >= 4 && partyHpRatio() >= 0.6) return "boss"; if (size >= 4 && c.includes("bond") && partyHpRatio() >= 0.6) return "bond"; const order = hurt ? ["rest", "normal", "ally"] : ["normal", "elite", "danger", "rest", "ally"]; return order.find((rt) => c.includes(rt)) || c[0]; },
   },
   steadyGrowth: {
     id: "steadyGrowth", label: "안정 성장가", startFormation: () => { const s = pick(SURVIVAL_BASE); const o = pick(BASE_JOBS.filter((j) => j !== s)); return makeFormation([s, o]); },
     pickReward: (o) => preferIds(o, BALANCED_REWARDS), decideFusion: (op) => { if (partyHpRatio() < 0.45) return null; const s = op.filter((x) => isSecond(x.result)); if (s.length) return pick(s).result; return pick(op).result; },
     pickRecruit: (o) => { if (curPartySize() < 4) { const owned = partyJobIds(); const u = o.filter((j) => ACTIVE_FUSION_RECIPES.some((r) => r.materials.includes(j) && r.materials.some((m) => owned.includes(m)))); return pick(u.length ? u : o); } return pick(o); },
-    pickRoute: (c) => { const hurt = partyHpRatio() < 0.5; if (hurt && c.includes("rest")) return "rest"; if (c.includes("boss") && curPartySize() >= 4 && partyHpRatio() >= 0.55) return "boss"; if (curPartySize() < 4) { if (!hurt && c.includes("danger")) return "danger"; if (c.includes("normal")) return "normal"; if (c.includes("rest")) return "rest"; } const order = hurt ? ["rest", "normal", "elite", "danger"] : ["elite", "danger", "normal", "rest"]; return order.find((rt) => c.includes(rt)) || c[0]; },
+    pickRoute: (c) => { const hurt = partyHpRatio() < 0.5, size = curPartySize(); if (hurt && c.includes("rest")) return "rest"; if (size < 4 && c.includes("ally")) return "ally"; if (c.includes("boss") && size >= 4 && partyHpRatio() >= 0.55) return "boss"; if (size >= 4 && c.includes("bond") && partyHpRatio() >= 0.55) return "bond"; if (size < 4) { const safe = ["ally", "rest", "normal"].find((rt) => c.includes(rt)); if (safe) return safe; } const order = hurt ? ["rest", "normal", "ally"] : ["elite", "danger", "normal", "rest"]; return order.find((rt) => c.includes(rt)) || c[0]; },
   },
   aggressive: {
     id: "aggressive", label: "공격 욕심가", startFormation: () => makeFormation(twoDistinct(ATTACK_BASE)), pickReward: (o) => preferIds(o, ATTACK_REWARDS),
     decideFusion: (op) => { const d = op.filter((x) => isDealer(x.result)); return (d.length ? pick(d) : pick(op)).result; }, pickRecruit: (o) => preferIds(o, ATTACK_BASE),
-    pickRoute: (c) => { if (partyHpRatio() < 0.25 && c.includes("rest")) return "rest"; if (c.includes("boss")) return "boss"; return ["danger", "elite", "normal", "rest"].find((rt) => c.includes(rt)) || c[0]; },
+    pickRoute: (c) => { if (partyHpRatio() < 0.25 && c.includes("rest")) return "rest"; if (c.includes("boss")) return "boss"; return ["danger", "elite", "bond", "normal", "ally", "rest"].find((rt) => c.includes(rt)) || c[0]; },
   },
   secondChaser: {
     id: "secondChaser", label: "2차 추적가", startFormation: () => makeFormation([...(pick(BASE_RECIPES) || { materials: ["warrior", "archer"] }).materials]), pickReward: (o) => preferIds(o, SURVIVAL_REWARDS),
     decideFusion: (op) => { if (partyHpRatio() < 0.4) return null; const s = op.filter((x) => isSecond(x.result)); if (s.length) return pick(s).result; const t = op.filter((x) => SECOND_MATERIALS.has(x.result)); return (t.length ? pick(t) : pick(op)).result; },
     pickRecruit: (o) => { const owned = partyJobIds(); const u = o.filter((j) => ACTIVE_FUSION_RECIPES.some((r) => r.materials.includes(j) && r.materials.some((m) => owned.includes(m)))); return pick(u.length ? u : o); },
-    pickRoute: (c) => { if (partyHpRatio() < 0.4 && c.includes("rest")) return "rest"; if (c.includes("boss") && partyHasSecond()) return "boss"; return ["danger", "elite", "normal", "rest"].find((rt) => c.includes(rt)) || c[0]; },
+    pickRoute: (c) => { if (partyHpRatio() < 0.4 && c.includes("rest")) return "rest"; if (curPartySize() < 4 && c.includes("ally")) return "ally"; if (c.includes("bond")) return "bond"; if (c.includes("boss") && partyHasSecond()) return "boss"; return ["elite", "danger", "normal", "rest", "ally"].find((rt) => c.includes(rt)) || c[0]; },
+  },
+  // Route Grammar 02 — 합체 욕심가(빈자리): 합체 후 보충 없이 3인으로 밀어붙임(빈자리 리스크 관측).
+  fusionGreedy: {
+    id: "fusionGreedy", label: "합체 욕심가(빈자리)", startFormation: () => makeFormation([...(pick(BASE_RECIPES) || { materials: ["warrior", "archer"] }).materials]), pickReward: (o) => pick(o),
+    decideFusion: (op) => { const s = op.filter((x) => isSecond(x.result)); return (s.length ? pick(s) : pick(op)).result; },
+    pickRecruit: (o) => { const owned = partyJobIds(); const u = o.filter((j) => ACTIVE_FUSION_RECIPES.some((r) => r.materials.includes(j) && r.materials.some((m) => owned.includes(m)))); return pick(u.length ? u : o); },
+    pickRoute: (c) => { const size = curPartySize(); const fused = (gameState.run.fusionCount || 0) > 0; if (c.includes("bond")) return "bond"; if (size < 4 && !fused && c.includes("ally")) return "ally"; if (c.includes("boss")) return "boss"; if (partyHpRatio() < 0.3 && c.includes("rest")) return "rest"; return ["danger", "elite", "normal", "rest", "ally"].find((rt) => c.includes(rt)) || c[0]; },
   },
 };
-const POLICY_ORDER = ["random", "fusion", "steady", "steadyGrowth", "aggressive", "secondChaser"];
+const POLICY_ORDER = ["random", "fusion", "steady", "steadyGrowth", "aggressive", "secondChaser", "fusionGreedy"];
 
 /* ── 프로필 8종(AR04 복제, headless 보정만) ───────────────────────── */
 function shieldParty(pct) { gameState.party.forEach((u) => { if (!u.isDead) u.shield = Math.max(u.shield || 0, Math.round(u.maxHp * pct)); }); }
@@ -106,8 +115,17 @@ const PROFILES = {
   softRamp: { id: "softRamp", label: "Soft Ramp 01", preBattle: (ctx) => { if (ctx.depth <= 8 && ctx.routeType !== "boss") nerfEnemies(0.85, 0.9); } },
   guided: { id: "guided", label: "Guided Beginner 01", route: (pc, c, ctx) => { if (ctx.depth <= 10 || ctx.partySize < 4) { const safe = safeWhenFragile(pc, c, ctx); if (ctx.partySize < 4) return safe; if (ctx.hpRatio < 0.6 && (pc === "elite" || pc === "danger" || pc === "boss")) return safe; } return pc; } },
   safeElite: { id: "safeElite", label: "Safe Elite Gate 01", route: (pc, c, ctx) => { if ((pc === "elite" || pc === "danger") && !(ctx.partySize >= 4 && ctx.hpRatio >= 0.6)) { if (ctx.hpRatio < 0.55 && has(c, "rest")) return "rest"; if (has(c, "normal")) return "normal"; } return pc; } },
+  // Observation Batch 01 — Soft Ramp Split(AR04 복제, headless preBattle 보정만). nerfEnemies 1.0 인자는 no-op.
+  softRampHp: { id: "softRampHp", label: "Soft Ramp HP Only 01", split: true, preBattle: (ctx) => { if (ctx.depth <= 8 && ctx.routeType !== "boss") nerfEnemies(0.85, 1.0); } },
+  softRampAtk: { id: "softRampAtk", label: "Soft Ramp ATK Only 01", split: true, preBattle: (ctx) => { if (ctx.depth <= 8 && ctx.routeType !== "boss") nerfEnemies(1.0, 0.9); } },
+  softRampEarly: { id: "softRampEarly", label: "Soft Ramp Early Only 01", split: true, preBattle: (ctx) => { if (ctx.depth <= 8 && ctx.routeType !== "boss") nerfEnemies(0.85, 0.9); } },
+  softRampDanger: { id: "softRampDanger", label: "Soft Ramp Danger Only 01", split: true, preBattle: (ctx) => { if (ctx.routeType === "danger" || ctx.routeType === "elite") nerfEnemies(0.85, 0.9); } },
+  party3Danger: { id: "party3Danger", label: "Party-3 Danger Cushion 01", split: true, preBattle: (ctx) => { if (ctx.partySize < 4 && (ctx.routeType === "danger" || ctx.routeType === "elite")) nerfEnemies(0.85, 0.9); } },
+  postFusion: { id: "postFusion", label: "Post Fusion Cushion 01", split: true, preBattle: (ctx) => { if (ctx.sinceFusion != null && ctx.sinceFusion <= 2) shieldParty(0.12); } },
 };
-const PROFILE_ORDER = ["baseline", "cushion", "cushion2", "recruitSafe", "fusionSafe", "softRamp", "guided", "safeElite"];
+const PROFILE_ORDER = ["baseline", "cushion", "cushion2", "recruitSafe", "fusionSafe", "softRamp", "guided", "safeElite",
+  "softRampHp", "softRampAtk", "softRampEarly", "softRampDanger", "party3Danger", "postFusion"];
+const isSplitProfile = (id) => !!(PROFILES[id] && PROFILES[id].split);
 
 /* ── 역할 축(AR04/BL03 명명 일치) ───────────────────────────────── */
 const ROLE_AR = { warrior: "singleDps", guardian: "tank", archer: "singleDps", priest: "healer", cleric: "shielder", trickster: "control", rogue: "singleDps", saint: "healer", warden: "debuff", watchbow: "counter", trapper: "debuff", paladin: "tank", vanguard: "aoeDps", forbidden: "tank", wall: "tank", healbow: "healer", purifier: "healer", mage: "aoeDps", bard: "support", gatekeeper: "tank", tracker: "marker", dragonspear: "pierce", sage: "aoeDps", sunlord: "support", swordsaint: "counter", redeemer: "healer", skyarcher: "marker", plaguebringer: "debuff", dancer: "support", wardkeeper: "shielder" };
@@ -122,7 +140,8 @@ function restoreState(s) { gameState.party = s.party; gameState.enemies = s.enem
 
 /* ── 상세 드라이버: 1런을 per-step 타임라인과 함께 구동 ─────────────── */
 const MAX_DECISIONS = 400, MAX_BATTLES = 60;
-const ROUTE_TOKEN = { normal: "N", danger: "D", elite: "E", boss: "BOSS" };
+// Route Grammar 02 — 새 토큰: ALLY=동료의 흔적(영입), BOND=결속의 공터(합체). 전투 루트(N/D/E)는 전투 핸들러에서 push.
+const ROUTE_TOKEN = { normal: "N", danger: "D", elite: "E", boss: "BOSS", ally: "ALLY", bond: "BOND", rest: "REST" };
 const hasFirstClass = () => partyJobIds().some((j) => ADVANCED_JOBS.includes(j));
 
 function playRunDetailed(policy, profile, runIndex) {
@@ -135,6 +154,11 @@ function playRunDetailed(policy, profile, runIndex) {
     firstRestDepth: 0, firstNearDeathDepth: 0,
     party4BattleIdx: null, fusionBattleIdx: null, secondClassBattleIdx: null, eliteEnterBattleIdx: null, bossKeyBattleIdx: null,
     bossHalfHpSeen: false, bossHalfHpSeenDepth: 0, bossHpRemaining: null, bossAttemptPartySize: null, bossAttemptHpPercent: null,
+    dangerEntries: [], dangerMarkers: [], // Observation Batch 01 — 위험/정예 진입 컨텍스트 + 추정 마커(failureTags와 별개)
+    // Route Grammar 02 — 루트 문법 관측.
+    routeCounts: { normal: 0, ally: 0, bond: 0, danger: 0, elite: 0, rest: 0, boss: 0 },
+    firstRecruitRouteDepth: 0, firstFusionRouteDepth: 0, firstDangerDepth: 0,
+    fusionCreatedEmptySlot: false, partySizeAfterFusion: null, recruitAfterFusionDepth: 0, battlesWhileUnder4AfterFusion: 0,
   };
   let pendingRoute = "normal", sinceFusion = null, prevBossKeys = 0;
   const ctx = () => ({ depth: gameState.run.depth, partySize: curPartySize(), hpRatio: partyHpRatio(), routeType: pendingRoute, sinceFusion });
@@ -155,6 +179,8 @@ function playRunDetailed(policy, profile, runIndex) {
       if (profile.preBattle) profile.preBattle(ctx());
       const jobs = partyJobIds(); jobs.forEach((j) => rec.jobsSeen.add(j));
       const depth = gameState.run.depth, size = jobs.length, hp0 = partyHpStats();
+      if (rec.fusionCreatedEmptySlot && size < 4) rec.battlesWhileUnder4AfterFusion += 1; // Route Grammar 02
+      const alertNow = gameState.run.alertness || 0, effNow = effectiveAlertness(gameState.run), p4 = !!gameState.run.party4Reached;
       rec.battleCount += 1; rec.path.push(ROUTE_TOKEN[pendingRoute] || "B");
       const ok = runHeadlessBattle();
       if (!ok) { rec.result = "incomplete"; rec.path.push("TIMEOUT"); break; }
@@ -165,25 +191,37 @@ function playRunDetailed(policy, profile, runIndex) {
       if ((gameState.run.bossKeys || 0) > prevBossKeys) { prevBossKeys = gameState.run.bossKeys; keyGain = true; if (!rec.firstEliteKillDepth) rec.firstEliteKillDepth = depth; if (!rec.firstBossKeyDepth) { rec.firstBossKeyDepth = depth; rec.bossKeyBattleIdx = rec.battleCount; } }
       let bossHp = null;
       if (pendingRoute === "boss") { const boss = gameState.enemies[0]; if (boss) { const ratio = boss.maxHp ? Math.max(0, boss.hp) / boss.maxHp : 0; bossHp = ratio; if (res === "wipe") { rec.bossHpRemaining = ratio; if (ratio <= 0.5) { rec.bossHalfHpSeen = true; rec.bossHalfHpSeenDepth = depth; } } } }
-      push({ kind: "battle", token: ROUTE_TOKEN[pendingRoute] || "B", route: pendingRoute, depth, size, jobs, axes: axesOf(new Set(jobs)), avgHp: hp0.avg, minHp: after.min, faints: deadNow, result: res, keyGain, bossHp });
+      push({ kind: "battle", token: ROUTE_TOKEN[pendingRoute] || "B", route: pendingRoute, depth, size, jobs, axes: axesOf(new Set(jobs)), avgHp: hp0.avg, minHp: after.min, faints: deadNow, result: res, keyGain, bossHp,
+        // Route Grammar 02 — per-row 문법 컨텍스트.
+        alertness: alertNow, effectiveAlertness: effNow, latentAlertness: p4 ? 0 : alertNow - effNow, preParty4: !p4, afterParty4: p4, afterFusion: sinceFusion != null, fusedEmptySlot: rec.fusionCreatedEmptySlot });
       sinceFusion = sinceFusion == null ? null : sinceFusion + 1;
     } else if (screen === "reward") {
       const offer = gameState.run.rewardOffer || []; if (!offer.length) { rec.result = "incomplete"; break; }
       const id = policy.pickReward(offer); applyReward(id); push({ kind: "reward", depth: gameState.run.depth, name: rewardName(id) });
     } else if (screen === "fusion") {
+      // Route Grammar 02 — 합체는 BOND 루트의 선택. 합체 후 자동 영입 없음 → 빈자리 생성 기록(path 토큰은 route 핸들러의 BOND).
       const options = availableFusions(partyJobIds()); const choiceId = options.length ? policy.decideFusion(options) : null;
-      if (choiceId) { rec.fusionCount += 1; if (!rec.firstFusionDepth) rec.firstFusionDepth = gameState.run.depth; if (rec.fusionBattleIdx == null) rec.fusionBattleIdx = rec.battleCount; sinceFusion = 0; rec.path.push("FUS"); const recp = ACTIVE_FUSION_RECIPES.find((r) => r.result === choiceId); push({ kind: "fusion", depth: gameState.run.depth, result: jobName(choiceId), materials: recp ? recp.materials.map(jobName) : [] }); applyFusion(choiceId); }
+      if (choiceId) { rec.fusionCount += 1; if (!rec.firstFusionDepth) rec.firstFusionDepth = gameState.run.depth; if (rec.fusionBattleIdx == null) rec.fusionBattleIdx = rec.battleCount; sinceFusion = 0; const recp = ACTIVE_FUSION_RECIPES.find((r) => r.result === choiceId); push({ kind: "fusion", depth: gameState.run.depth, result: jobName(choiceId), materials: recp ? recp.materials.map(jobName) : [] }); applyFusion(choiceId); rec.fusionCreatedEmptySlot = true; if (rec.partySizeAfterFusion == null) rec.partySizeAfterFusion = curPartySize(); }
       else skipFusion();
     } else if (screen === "fusionResult") { continueAfterFusion(); }
     else if (screen === "recruit") {
+      // Route Grammar 02 — 영입은 ALLY 루트의 선택(path 토큰은 route 핸들러의 ALLY). 합체 후 보충이면 depth 기록.
       const offer = gameState.run.recruitOffer || [];
-      if (offer.length) { const jobId = policy.pickRecruit(offer); if (jobId) { previewRecruit(jobId); rec.recruitCount += 1; if (!rec.firstRecruitDepth) rec.firstRecruitDepth = gameState.run.depth; rec.path.push("REC"); push({ kind: "recruit", depth: gameState.run.depth, job: jobName(jobId) }); } }
+      if (offer.length) { const jobId = policy.pickRecruit(offer); if (jobId) { previewRecruit(jobId); rec.recruitCount += 1; if (!rec.firstRecruitDepth) rec.firstRecruitDepth = gameState.run.depth; if (rec.fusionCreatedEmptySlot && !rec.recruitAfterFusionDepth) rec.recruitAfterFusionDepth = gameState.run.depth; push({ kind: "recruit", depth: gameState.run.depth, job: jobName(jobId) }); } }
       confirmRecruit();
     } else if (screen === "arrange") { confirmArrange(); }
     else if (screen === "route") {
       const choices = gameState.run.routeChoices || ["normal"]; let rt = policy.pickRoute(choices); if (profile.route) rt = profile.route(rt, choices, ctx());
+      rec.routeCounts[rt] = (rec.routeCounts[rt] || 0) + 1; // Route Grammar 02 — 루트 선택 카운트
+      if (rt === "ally") { rec.path.push("ALLY"); if (!rec.firstRecruitRouteDepth) rec.firstRecruitRouteDepth = gameState.run.depth; }
+      else if (rt === "bond") { rec.path.push("BOND"); if (!rec.firstFusionRouteDepth) rec.firstFusionRouteDepth = gameState.run.depth; }
+      if (rt === "danger" && !rec.firstDangerDepth) rec.firstDangerDepth = gameState.run.depth;
       if (rt === "rest" && !rec.firstRestDepth) rec.firstRestDepth = gameState.run.depth;
-      if (rt === "elite" || rt === "danger") { if (!rec.firstEliteAttemptDepth) rec.firstEliteAttemptDepth = gameState.run.depth; rec.eliteEnterBattleIdx = rec.battleCount; }
+      if (rt === "elite" || rt === "danger") {
+        if (!rec.firstEliteAttemptDepth) rec.firstEliteAttemptDepth = gameState.run.depth; rec.eliteEnterBattleIdx = rec.battleCount;
+        const ax = axesOf(new Set(partyJobIds())); const hp = aliveHpStats();
+        rec.dangerEntries.push({ routeType: rt, depth: gameState.run.depth, battleIdx: rec.battleCount, partySize: curPartySize(), hasHealer: ax.healer, hasTank: ax.tank, hasAoE: ax.aoe, afterParty4: rec.partySize4Depth > 0, afterFusion: sinceFusion != null, sinceFusion, startHpAvg: hp.avg, startHpMin: hp.min });
+      }
       if (rt === "boss") { rec.bossAttempted = true; if (!rec.bossAttemptDepth) rec.bossAttemptDepth = gameState.run.depth; rec.bossAttemptPartySize = curPartySize(); rec.bossAttemptHpPercent = partyHpRatio(); }
       pendingRoute = rt; chooseRoute(rt);
     } else if (screen === "rest") { rec.path.push("REST"); push({ kind: "rest", depth: gameState.run.depth }); continueFromRest(); }
@@ -202,7 +240,67 @@ function playRunDetailed(policy, profile, runIndex) {
   rec.preWipeChoice = rec.result === "defeat" ? (rec.path[rec.path.length - 2] || "") : "";
   rec.lastSafeMilestone = rec.bossAttemptDepth ? "boss" : rec.firstBossKeyDepth ? "bosskey" : rec.firstEliteKillDepth ? "elitekill" : rec.firstSecondClassDepth ? "second" : rec.firstFusionDepth ? "fusion" : rec.partySize4Depth ? "party4" : rec.firstRecruitDepth ? "recruit" : "start";
   rec.failureTags = computeFailureTags(rec);
+  rec.dangerMarkers = computeDangerMarkers(rec);
+  // Route Grammar 02 — run-state 기반 관측 지표.
+  const run = gameState.run, cleared = rec.result === "clear";
+  rec.party4Depth = run.party4Depth || 0; rec.party4Reached = !!run.party4Reached;
+  rec.alertnessAtParty4 = run.alertnessAtParty4 || 0; rec.effectiveAlertnessAtParty4 = run.effectiveAlertnessAtParty4 || 0; rec.latentAlertnessAtParty4 = run.alertnessAtParty4 || 0;
+  rec.preParty4Battles = run.preParty4Battles || 0; rec.preParty4GrowthCount = run.preParty4GrowthCount || 0;
+  rec.preParty4DangerCount = run.preParty4DangerCount || 0; rec.preParty4RecruitCount = run.preParty4RecruitCount || 0; rec.farmWarnShown = run.farmWarnShown || 0;
+  rec.finalAlertness = run.alertness || 0;
+  rec.skippedRecruitAfterFusion = rec.fusionCreatedEmptySlot && !rec.recruitAfterFusionDepth;
+  rec.clearWithUnder4Party = cleared && rec.finalPartySize < 4;
+  rec.highTierSmallPartyClear = cleared && rec.finalPartySize < 4 && [...rec.jobsSeen].some((j) => ADVANCED_JOBS.includes(j) || SECOND_CLASS_JOBS.includes(j));
+  rec.wipeAfterFusionWithoutRefill = rec.result === "defeat" && rec.fusionCreatedEmptySlot && rec.finalPartySize < 4;
+  rec.routeBeforeWipe = rec.result === "defeat" ? (rec.path[rec.path.length - 2] || "") : "";
+  rec.lastThreeRoutesBeforeWipe = (rec.result === "defeat" ? rec.path.slice(0, -1) : rec.path).slice(-3).join(">");
+  rec.preParty4FarmSuspect = !rec.party4Reached && rec.preParty4Battles >= 5 && rec.preParty4RecruitCount === 0 && (rec.routeCounts.ally || 0) === 0;
+  rec.routeCauseTags = computeRouteCauseTags(rec);
   return rec;
+}
+// Route Grammar 02 — Fun Wipe / Choice Ownership 추정 태그(AR04 복제). 완벽한 인과 아님 — watch 톤.
+function computeRouteCauseTags(rec) {
+  const t = [];
+  if (rec.result !== "defeat") return t;
+  const d = rec.finalDepth, before = rec.routeBeforeWipe;
+  if (!rec.party4Reached && rec.preParty4DangerCount > 0 && before === "D") t.push("wipeAfterPreParty4Danger");
+  if (rec.firstDangerDepth && d <= 8 && before === "D") t.push("wipeAfterEarlyDeepBrush");
+  if (rec.fusionCreatedEmptySlot && rec.finalPartySize < 4) { t.push("wipeAfterFusionWithoutRefill"); if (!rec.recruitAfterFusionDepth) t.push("wipeAfterSkippedRecruit"); }
+  if (rec.fusionBattleIdx != null && rec.battleCount - rec.fusionBattleIdx <= 2) t.push("wipeAfterEarlyFusion");
+  if (!rec.firstRestDepth && rec.faintCount >= 2) t.push("wipeAfterNoRestLowHp");
+  if (rec.finalPartySize < 4 && (before === "D" || before === "E")) t.push("wipeAfterUnder4Greed");
+  return t;
+}
+// Observation Batch 01 — 위험 루트 추정 마커(AR04 복제). failureTags와 별개 표시용.
+function computeDangerMarkers(rec) {
+  const m = [];
+  if (rec.result !== "defeat" || !rec.dangerEntries.length) return m;
+  const wipeBattle = rec.battleCount;
+  const near = rec.dangerEntries.filter((e) => wipeBattle - e.battleIdx <= 3 && wipeBattle - e.battleIdx >= 0);
+  if (!near.length) return m;
+  const last = near[near.length - 1];
+  m.push(last.afterParty4 ? "DANGER_POST_PARTY4_WIPE" : "DANGER_PRE_PARTY4_WIPE");
+  if (last.afterFusion && last.sinceFusion != null && last.sinceFusion <= 2) m.push("DANGER_POST_FUSION_WIPE");
+  if (!last.hasHealer) m.push("DANGER_NO_HEALER_WIPE");
+  if (!last.hasTank) m.push("DANGER_NO_TANK_WIPE");
+  if (!last.hasAoE) m.push("DANGER_NO_AOE_WIPE");
+  if (last.startHpAvg < 0.5) m.push("DANGER_LOW_HP_ENTRY");
+  if (near.length >= 2) m.push("DANGER_CHAIN_WIPE");
+  return m;
+}
+// 타겟 런의 위험 진입 컨텍스트(마지막 위험 진입 + 그 위험 전투 결과)를 요약 — autopsy/export용.
+function dangerContextOf(rec) {
+  if (!rec.dangerEntries || !rec.dangerEntries.length) return null;
+  const last = rec.dangerEntries[rec.dangerEntries.length - 1];
+  const dangerBattles = (rec.timeline || []).filter((e) => e.kind === "battle" && (e.route === "danger" || e.route === "elite"));
+  const lastBattle = dangerBattles[dangerBattles.length - 1] || null;
+  return {
+    partySize: last.partySize, hasHealer: last.hasHealer, hasTank: last.hasTank, hasAoE: last.hasAoE,
+    startHpAvg: last.startHpAvg, startHpMin: last.startHpMin,
+    afterBattleMinHp: lastBattle ? lastBattle.minHp : null, downs: lastBattle ? lastBattle.faints : null,
+    depth: last.depth, routeType: last.routeType, afterParty4: last.afterParty4, afterFusion: last.afterFusion,
+    preWipeChoice: rec.preWipeChoice, pathSignature: rec.pathSignature,
+  };
 }
 function computeFailureTags(rec) {
   const t = []; if (rec.result !== "defeat") return t; const d = rec.finalDepth;
@@ -247,6 +345,22 @@ const FINDERS = {
   postFusion: (rs) => rs.find((r) => (r.failureTags || []).includes("POST_FUSION_WIPE")),
   eliteGreed: (rs) => rs.find((r) => (r.failureTags || []).includes("ELITE_GREED_WIPE")),
   noHealer: (rs) => rs.find((r) => r.result === "defeat" && !r.hasHealer),
+  // Observation Batch 01 — 위험 루트 부검용 타겟
+  dangerWipe: (rs) => rs.find((r) => r.result === "defeat" && (r.dangerEntries || []).length > 0),
+  dangerPreParty4: (rs) => rs.find((r) => (r.dangerMarkers || []).includes("DANGER_PRE_PARTY4_WIPE")),
+  dangerPostFusion: (rs) => rs.find((r) => (r.dangerMarkers || []).includes("DANGER_POST_FUSION_WIPE")),
+  // Route Grammar 02 — 새 문법 타겟
+  recruitFirst: (rs) => rs.find((r) => r.party4Reached && (r.routeCounts.ally || 0) >= 2 && r.finalDepth >= 9) || rs.find((r) => r.party4Reached && (r.routeCounts.ally || 0) >= 1),
+  earlyDeepBrush: (rs) => rs.find((r) => (r.routeCauseTags || []).includes("wipeAfterEarlyDeepBrush")) || rs.find((r) => (r.routeCauseTags || []).includes("wipeAfterPreParty4Danger")),
+  farmSuspect: (rs) => rs.find((r) => r.preParty4FarmSuspect),
+  firstFusionAfterParty4: (rs) => rs.find((r) => r.fusionCreatedEmptySlot && r.party4Reached && (r.firstFusionRouteDepth || 0) >= (r.party4Depth || 0)),
+  fusionEmptySlotWipe: (rs) => rs.find((r) => (r.routeCauseTags || []).includes("wipeAfterFusionWithoutRefill")),
+  fusionThenRefill: (rs) => rs.find((r) => r.fusionCreatedEmptySlot && r.recruitAfterFusionDepth > 0),
+  // smallPartyBoss / clearUnder4 — 자동 정책으론 거의 미발생(3인은 일찍 전멸). 없으면 closest(가장 깊은 4인미만 런)로 대체.
+  smallPartyBoss: (rs) => rs.find((r) => r.bossAttempted && (r.bossAttemptPartySize || 4) < 4) || rs.filter((r) => r.finalPartySize < 4 && r.fusionCreatedEmptySlot).sort((a, b) => b.finalDepth - a.finalDepth)[0],
+  clearUnder4: (rs) => rs.find((r) => r.clearWithUnder4Party) || rs.filter((r) => r.finalPartySize < 4 && r.fusionCreatedEmptySlot).sort((a, b) => b.finalDepth - a.finalDepth)[0],
+  skippedRecruitWipe: (rs) => rs.find((r) => (r.routeCauseTags || []).includes("wipeAfterSkippedRecruit")),
+  longRun: (rs) => rs.slice().sort((a, b) => (b.timeline.length - a.timeline.length))[0],
 };
 
 /* ── failureTag → 타임라인 위치 추정 ───────────────────────────── */
@@ -277,6 +391,27 @@ const PRESETS = [
   { label: "Post Fusion Wipe sample", policyId: "fusion", profileId: "baseline", target: "postFusion" },
   { label: "Elite Greed Wipe sample", policyId: "steadyGrowth", profileId: "baseline", target: "eliteGreed" },
   { label: "No Healer Wipe sample", policyId: "random", profileId: "baseline", target: "noHealer" },
+  // ── Observation Batch 01 — Split / Danger Autopsy presets(seed는 harness로 찾은 의미있는 표본) ──
+  //   "saved?" 프리셋: Baseline에서 전멸한 같은 seed·index 런을 split profile로 재생 → 살았는지 Before/After 비교.
+  { label: "Split: HP only saved?", policyId: "steadyGrowth", profileId: "baseline", target: "dangerWipe", compare: "softRampHp", seed: 405, split: true, note: "seed405 run#0 N>D>WIPE@3 → HP만 완화는 @8로 지연만(완전구제 아님)" },
+  { label: "Split: ATK only saved?", policyId: "steadyGrowth", profileId: "baseline", target: "dangerWipe", compare: "softRampAtk", seed: 405, split: true, note: "seed405 run#0 N>D>WIPE@3 → 공격만 완화는 @7로 지연만" },
+  { label: "Split: Danger only saved?", policyId: "steadyGrowth", profileId: "baseline", target: "dangerWipe", compare: "softRampDanger", seed: 405, split: true, note: "seed405 run#0 N>D>WIPE@3 → 위험전투만 완화는 @8로 지연만" },
+  { label: "Split: Party-3 danger saved?", policyId: "steadyGrowth", profileId: "baseline", target: "dangerPreParty4", compare: "party3Danger", seed: 405, split: true, note: "seed405 run#0 N>D>WIPE@3 → Party-3 쿠션이 clear@14로 구제(같은 죽음 분해 표본)" },
+  { label: "Split: Post fusion saved?", policyId: "fusion", profileId: "baseline", target: "postFusion", compare: "postFusion", seed: 123, split: true, note: "seed123 fusion run#0 POST_FUSION_WIPE@6 → 합체 후 보호막이 @10으로 연장" },
+  { label: "N>D>WIPE autopsy", policyId: "steadyGrowth", profileId: "baseline", target: "ndWipe", seed: 405, note: "N>D>WIPE 단일 런 부검" },
+  { label: "Danger pre-party4 wipe", policyId: "steadyGrowth", profileId: "baseline", target: "dangerPreParty4", seed: 405, note: "4인 미완성 위험 진입 전멸" },
+  { label: "Danger post-fusion wipe", policyId: "fusion", profileId: "baseline", target: "dangerPostFusion", seed: 405, note: "합체 후 위험 진입 전멸" },
+  // ── Route Grammar 02 Phase 2 — 새 문법 presets(seed는 harness로 찾은 의미있는 표본 · 없으면 closest) ──
+  { label: "Recruit-first stable run", policyId: "steadyGrowth", profileId: "baseline", target: "recruitFirst", seed: 1, rgrammar: true, note: "동료의 흔적으로 4인 완성 후 안정 진행" },
+  { label: "Early deep brush wipe", policyId: "aggressive", profileId: "baseline", target: "earlyDeepBrush", seed: 1, rgrammar: true, note: "4인 전 깊은 수풀 진입 직후 전멸" },
+  { label: "Pre-party4 farm suspect", policyId: "aggressive", profileId: "baseline", target: "farmSuspect", seed: 1, rgrammar: true, note: "동료의 흔적 무시 + 4인 전 전투 반복" },
+  { label: "First fusion after 4-party", policyId: "steadyGrowth", profileId: "baseline", target: "firstFusionAfterParty4", seed: 1, rgrammar: true, note: "4인 완성 후 결속의 공터로 첫 합체" },
+  { label: "Fusion empty slot wipe", policyId: "fusionGreedy", profileId: "baseline", target: "fusionEmptySlotWipe", seed: 1, rgrammar: true, note: "seed1 합체욕심가 run#0 — 합체 후 빈자리(3인) 방치 → @5 전멸" },
+  { label: "Fusion then recruit refill", policyId: "steadyGrowth", profileId: "baseline", target: "fusionThenRefill", seed: 1, rgrammar: true, note: "합체 후 동료의 흔적으로 4인 복구" },
+  { label: "3-party high-tier boss attempt", policyId: "fusionGreedy", profileId: "baseline", target: "smallPartyBoss", seed: 1, rgrammar: true, note: "closest 없음 — 자동 정책으론 3인 보스 도전 미발생(3인은 위험 진입 시 일찍 전멸). deepest wipe로 대체 표시" },
+  { label: "Clear with under-4 party", policyId: "fusionGreedy", profileId: "baseline", target: "clearUnder4", seed: 1, rgrammar: true, note: "closest 없음 — 자동 정책으론 3인 클리어 미발생. 인간 신중 운영 전용 좌표" },
+  { label: "Wipe after skipped recruit", policyId: "fusionGreedy", profileId: "baseline", target: "skippedRecruitWipe", seed: 1, rgrammar: true, note: "seed1 합체욕심가 run#0 — 합체 후 보충 스킵 → 전멸" },
+  { label: "Route grammar long run", policyId: "steadyGrowth", profileId: "baseline", target: "longRun", seed: 1, rgrammar: true, note: "가장 긴 런(전체 루트 문법 관찰)" },
 ];
 
 function readControls() { return { policyId: $("rl-policy").value, profileId: $("rl-profile").value, seed: parseInt($("rl-seed").value, 10), runs: Math.max(1, Math.min(300, parseInt($("rl-runs").value, 10) || 50)), target: $("rl-target").value, customIndex: parseInt($("rl-index").value, 10) || 0 }; }
@@ -331,7 +466,12 @@ function renderAutopsy(r, meta) {
       ${mc("첫쉼터/첫위기", `${dep(r.firstRestDepth)} / ${dep(r.firstNearDeathDepth)}`)}
     </div>
     <div class="rl-line"><b>pathSignature:</b> <code>${esc(r.pathSignature)}</code></div>
-    <div class="rl-line"><b>실패 태그(추정):</b> ${(r.failureTags || []).map((t) => `<span class="rl-tag">${t}</span>`).join("") || "—"}</div>`;
+    <div class="rl-line"><b>루트 문법:</b> ${["normal", "ally", "bond", "danger", "elite", "rest", "boss"].map((rt) => `<span class="rl-tag">${ROUTE_TOKEN[rt]}:${(r.routeCounts && r.routeCounts[rt]) || 0}</span>`).join("")} <span class="rl-meta">· 최종파티 ${r.finalPartySize}/4 · 4인완성 ${r.party4Reached ? "심도 " + (r.party4Depth || "?") : "미완성"} · 경계도@4인 ${r.alertnessAtParty4 || 0}(유효 ${r.effectiveAlertnessAtParty4 || 0})</span></div>
+    <div class="rl-line"><b>합체 빈자리:</b> ${r.fusionCreatedEmptySlot ? `발생(합체후 ${r.partySizeAfterFusion}인` : "없음(합체 안 함"} · 4인미만 전투 ${r.battlesWhileUnder4AfterFusion} · 보충 ${r.recruitAfterFusionDepth ? "심도 " + r.recruitAfterFusionDepth : (r.fusionCreatedEmptySlot ? "스킵" : "—")}) · 4인전 전투 ${r.preParty4Battles}/위험 ${r.preParty4DangerCount}/영입 ${r.preParty4RecruitCount}${r.preParty4FarmSuspect ? ' <span class="rl-tag warn">FARM_SUSPECT</span>' : ""}</div>
+    <div class="rl-line"><b>전멸 루트(추정):</b> ${(r.routeCauseTags || []).map((t) => `<span class="rl-tag warn">${t}</span>`).join("") || "—"}${r.routeBeforeWipe ? ` <span class="rl-meta">· 직전루트 <code>${esc(r.routeBeforeWipe)}</code> · 최근3 <code>${esc(r.lastThreeRoutesBeforeWipe || "")}</code></span>` : ""}</div>
+    <div class="rl-line"><b>실패 태그(추정):</b> ${(r.failureTags || []).map((t) => `<span class="rl-tag">${t}</span>`).join("") || "—"}</div>
+    <div class="rl-line"><b>위험 마커(추정):</b> ${(r.dangerMarkers || []).map((t) => `<span class="rl-tag warn">${t}</span>`).join("") || "—"}</div>
+    ${(() => { const dc = dangerContextOf(r); return dc ? `<div class="rl-line"><b>위험 진입 컨텍스트(추정):</b> 심도 ${dc.depth} · ${routeName(dc.routeType)} · 파티 ${dc.partySize} · 진입HP ${fmtPct(dc.startHpAvg)}(최저 ${fmtPct(dc.startHpMin)}) · 전투후 최저HP ${fmtPct(dc.afterBattleMinHp)} · 기절 ${dc.downs == null ? "—" : dc.downs} · 힐${dc.hasHealer ? "O" : "X"}/탱${dc.hasTank ? "O" : "X"}/광${dc.hasAoE ? "O" : "X"} · 4인후 ${dc.afterParty4 ? "O" : "X"}/합체후 ${dc.afterFusion ? "O" : "X"} · preWipe <code>${esc(dc.preWipeChoice || "—")}</code></div>` : ""; })()}`;
 }
 
 const MARKERS = [
@@ -348,10 +488,13 @@ function renderTimeline(r) {
     if (e.kind === "battle") {
       const marks = (md[e.depth] || []).map((m) => `<span class="rl-mk">${m}</span>`).join("");
       const tags = (tagAt[i] || []).map((t) => `<span class="rl-tag warn">${t}</span>`).join("");
+      const dangerMk = (e.route === "danger" || e.route === "elite") ? `<span class="rl-tag warn">위험진입</span>` : "";
+      // Route Grammar 02 — per-row 문법 칩: 4인 전(잠복 경계도) / 합체 빈자리.
+      const grammarMk = `${e.preParty4 ? `<span class="rl-tag">P&lt;4·잠복${e.latentAlertness || 0}</span>` : `<span class="rl-mk">P4·경계${e.effectiveAlertness || 0}</span>`}${e.fusedEmptySlot && e.size < 4 ? `<span class="rl-tag warn">빈자리</span>` : ""}`;
       const tcls = e.token === "BOSS" ? "boss" : e.token === "E" ? "elite" : e.token === "D" ? "danger" : "normal";
       const rcls = e.result === "wipe" ? "wipe" : e.result === "clear" ? "clear" : "";
       const danger = e.minHp <= 0.2 || e.faints > 0;
-      return `<tr class="${rcls ? "row-" + rcls : ""} ${danger ? "row-danger" : ""}"><td>${e.depth}</td><td><span class="rl-tok ${tcls}">${e.token}</span></td><td class="txt">${routeName(e.route)}</td><td>${e.size}</td><td class="txt">${e.jobs.map(jobName).join("·")}</td><td class="txt">${axesMini(e.axes)}</td><td>${fmtPct(e.avgHp)}</td><td class="${e.minHp <= 0.2 ? "lowhp" : ""}">${fmtPct(e.minHp)}</td><td>${e.faints || ""}</td><td class="${rcls}">${e.result}${e.keyGain ? " 🔑" : ""}${e.bossHp != null ? ` (보스 ${fmtPct(e.bossHp)})` : ""}</td><td class="txt">${marks}${tags}</td></tr>`;
+      return `<tr class="${rcls ? "row-" + rcls : ""} ${danger ? "row-danger" : ""}"><td>${e.depth}</td><td><span class="rl-tok ${tcls}">${e.token}</span></td><td class="txt">${routeName(e.route)}</td><td>${e.size}</td><td class="txt">${e.jobs.map(jobName).join("·")}</td><td class="txt">${axesMini(e.axes)}</td><td>${fmtPct(e.avgHp)}</td><td class="${e.minHp <= 0.2 ? "lowhp" : ""}">${fmtPct(e.minHp)}</td><td>${e.faints || ""}</td><td class="${rcls}">${e.result}${e.keyGain ? " 🔑" : ""}${e.bossHp != null ? ` (보스 ${fmtPct(e.bossHp)})` : ""}</td><td class="txt">${marks}${grammarMk}${dangerMk}${tags}</td></tr>`;
     }
     const icon = e.kind === "reward" ? `보상: ${esc(e.name)}` : e.kind === "fusion" ? `합체: ${esc(e.materials.join("+"))}→${esc(e.result)}` : e.kind === "recruit" ? `영입: ${esc(e.job)}` : e.kind === "rest" ? "쉼터(회복)" : e.token === "CLEAR" ? "CLEAR" : e.token === "WIPE" ? "WIPE" : esc(e.token || e.kind);
     const cls = e.kind === "fusion" ? "row-fus" : e.kind === "recruit" ? "row-rec" : e.kind === "rest" ? "row-rest" : e.token === "WIPE" ? "row-wipe" : e.token === "CLEAR" ? "row-clear" : "";
@@ -361,7 +504,7 @@ function renderTimeline(r) {
   $("rl-timeline").innerHTML = `<h3>Run Timeline (per-step) ${runTags ? `<span class="rl-meta">· 런 전체 태그: ${runTags}</span>` : ""}</h3>
     <div class="rl-tablewrap"><table><thead><tr><th>심도</th><th>토큰</th><th class="txt">선택</th><th>파티</th><th class="txt">직업</th><th class="txt">축</th><th>평균HP</th><th>최저HP</th><th>기절</th><th>결과</th><th class="txt">마커/태그</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
-const routeName = (rt) => ({ normal: "일반 전투", danger: "깊은 수풀(위험)", elite: "현자의 가지(정예)", boss: "보스전" }[rt] || rt);
+const routeName = (rt) => ({ normal: "새싹 숲길", danger: "깊은 수풀(위험)", elite: "현자의 가지(정예)", boss: "보스전", ally: "동료의 흔적(영입)", bond: "결속의 공터(합체)", rest: "이슬 쉼터" }[rt] || rt);
 const axesMini = (ax) => `${ax.healer ? '<span class="rl-ax on">힐</span>' : ""}${ax.tank ? '<span class="rl-ax on">탱</span>' : ""}${ax.shield ? '<span class="rl-ax on">막</span>' : ""}${ax.aoe ? '<span class="rl-ax on">광</span>' : ""}${ax.second ? '<span class="rl-ax on">2</span>' : ""}` || "—";
 
 function renderCompare() {
@@ -393,10 +536,29 @@ function exportJSON() {
   if (!lastTarget) return "";
   return JSON.stringify({
     metadata: { tool: "run-replay-lab-01", theme: "beginner", policy: lastMeta.policyId, profile: lastMeta.profileId, seed: lastMeta.seed, runs: lastMeta.runs, runIndex: lastTarget.runIndex, target: lastMeta.target, generatedAt: new Date().toISOString() },
+    // Observation Batch 01 — export 확장
+    selectedProfile: lastMeta.profileId, compareProfile: (lastCompare && lastCompare.profileId) || null,
+    splitProfile: isSplitProfile(lastMeta.profileId) || (lastCompare ? isSplitProfile(lastCompare.profileId) : false),
+    dangerAutopsyMarkers: lastTarget.dangerMarkers || [],
+    dangerEntryContext: dangerContextOf(lastTarget),
+    dangerEntries: lastTarget.dangerEntries || [],
+    // Route Grammar 02 — export 확장
+    routeGrammarVersion: "route-grammar-02",
+    routeChoiceCounts: lastTarget.routeCounts || null,
+    routeTimelineTokens: lastTarget.path || [],
+    preParty4Stats: { battles: lastTarget.preParty4Battles, growth: lastTarget.preParty4GrowthCount, danger: lastTarget.preParty4DangerCount, recruit: lastTarget.preParty4RecruitCount, farmSuspect: !!lastTarget.preParty4FarmSuspect, farmWarnShown: lastTarget.farmWarnShown },
+    antiFarmMarkers: { preParty4FarmSuspect: !!lastTarget.preParty4FarmSuspect, ignoredAlly: !lastTarget.party4Reached && (lastTarget.routeCounts.ally || 0) === 0 },
+    alertnessAtParty4: lastTarget.alertnessAtParty4, effectiveAlertnessAtParty4: lastTarget.effectiveAlertnessAtParty4, latentAlertnessAtParty4: lastTarget.latentAlertnessAtParty4,
+    party4Reached: lastTarget.party4Reached, party4Depth: lastTarget.party4Depth,
+    routeBeforeWipe: lastTarget.routeBeforeWipe, lastThreeRoutesBeforeWipe: lastTarget.lastThreeRoutesBeforeWipe, routeCauseSummary: lastTarget.routeCauseTags || [],
+    fusionCreatedEmptySlot: lastTarget.fusionCreatedEmptySlot, partySizeAfterFusion: lastTarget.partySizeAfterFusion,
+    battlesWhileUnder4AfterFusion: lastTarget.battlesWhileUnder4AfterFusion, recruitAfterFusionDepth: lastTarget.recruitAfterFusionDepth,
+    skippedRecruitAfterFusion: lastTarget.skippedRecruitAfterFusion, wipeAfterFusionWithoutRefill: lastTarget.wipeAfterFusionWithoutRefill,
+    clearWithUnder4Party: lastTarget.clearWithUnder4Party, bossAttemptPartySize: lastTarget.bossAttemptPartySize, finalPartySize: lastTarget.finalPartySize, highTierSmallPartyClear: lastTarget.highTierSmallPartyClear,
     summary: { ...lastTarget, jobsSeen: [...lastTarget.jobsSeen], timeline: undefined },
     timeline: lastTarget.timeline.map((e) => ({ ...e, axes: e.axes, jobs: e.jobs })),
     failureTags: lastTarget.failureTags, failureTagLocations: tagLocations(lastTarget),
-    compare: lastCompare && lastCompare.target ? { profile: lastCompare.profileId, summary: { ...lastCompare.target, jobsSeen: [...lastCompare.target.jobsSeen], timeline: undefined } } : null,
+    compare: lastCompare && lastCompare.target ? { profile: lastCompare.profileId, splitProfile: isSplitProfile(lastCompare.profileId), summary: { ...lastCompare.target, jobsSeen: [...lastCompare.target.jobsSeen], timeline: undefined }, dangerAutopsyMarkers: lastCompare.target.dangerMarkers || [], dangerEntryContext: dangerContextOf(lastCompare.target) } : null,
   }, null, 0);
 }
 async function copyOut(text, btn, label) { const done = (ok) => { if (btn) { btn.textContent = ok ? "복사됨!" : "복사 실패"; setTimeout(() => { btn.textContent = label; }, 1200); } }; try { await navigator.clipboard.writeText(text); done(true); } catch (e) { try { const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); done(true); } catch (e2) { done(false); } } }
@@ -405,8 +567,15 @@ export function initRunReplayLab() {
   const pol = $("rl-policy"); POLICY_ORDER.forEach((id) => pol.add(new Option(POLICIES[id].label, id)));
   const prof = $("rl-profile"); PROFILE_ORDER.forEach((id) => prof.add(new Option(PROFILES[id].label, id)));
   pol.value = "steadyGrowth"; prof.value = "baseline";
-  $("rl-presets").innerHTML = PRESETS.map((p, i) => `<button type="button" data-preset="${i}">${p.label}</button>`).join("");
-  $("rl-presets").addEventListener("click", (e) => { const b = e.target.closest("[data-preset]"); if (!b) return; const p = PRESETS[Number(b.dataset.preset)]; $("rl-policy").value = p.policyId; $("rl-profile").value = p.profileId; $("rl-target").value = p.target; runReplay({ policyId: p.policyId, profileId: p.profileId, seed: parseInt($("rl-seed").value, 10), runs: Math.max(1, Math.min(300, parseInt($("rl-runs").value, 10) || 50)), target: p.target, customIndex: 0, compare: p.compare }); });
+  $("rl-presets").innerHTML = PRESETS.map((p, i) => `<button type="button" data-preset="${i}" class="${p.split ? "rl-preset-split" : ""}${p.rgrammar ? " rl-preset-rg" : ""}" title="${esc(p.note || "")}">${esc(p.label)}</button>`).join("");
+  $("rl-presets").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-preset]"); if (!b) return;
+    const p = PRESETS[Number(b.dataset.preset)];
+    $("rl-policy").value = p.policyId; $("rl-profile").value = p.profileId; $("rl-target").value = p.target;
+    if (p.seed != null) $("rl-seed").value = p.seed;
+    const seed = p.seed != null ? p.seed : parseInt($("rl-seed").value, 10);
+    runReplay({ policyId: p.policyId, profileId: p.profileId, seed, runs: Math.max(1, Math.min(300, parseInt($("rl-runs").value, 10) || 50)), target: p.target, customIndex: 0, compare: p.compare });
+  });
   $("rl-run").addEventListener("click", () => runReplay());
   $("rl-compare-btn").addEventListener("click", () => { const c = readControls(); runReplay({ ...c, compare: "softRamp" }); });
   $("rl-export").addEventListener("click", (e) => copyOut(exportJSON(), e.target, "JSON 복사"));

@@ -28,6 +28,8 @@
     .rl-btn:active { transform: translateY(1px); }
     #rl-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
     #rl-presets button { font-size: 11px; padding: 6px 9px; border: 1px dashed #5a3a76; border-radius: 8px; background: rgba(150,110,220,.08); color: #cdbcec; cursor: pointer; }
+    #rl-presets button.rl-preset-split { border-style: solid; border-color: #3a6e5a; background: rgba(110,200,150,.08); color: #9fe0c4; }
+    #rl-presets button.rl-preset-rg { border-style: solid; border-color: #3a5a8e; background: rgba(80,140,220,.10); color: #9fc4e8; }
     .rl-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
     .rl-card { background: #11161d; border: 1px solid #243039; border-radius: 9px; padding: 7px 10px; }
     .rl-card .k { font-size: 10px; color: #8aa0b2; }
@@ -83,6 +85,21 @@
         <option value="postFusion">post fusion wipe</option>
         <option value="eliteGreed">elite greed wipe</option>
         <option value="noHealer">no healer wipe</option>
+        <option value="dangerWipe">danger entry wipe</option>
+        <option value="dangerPreParty4">danger pre-party4 wipe</option>
+        <option value="dangerPostFusion">danger post-fusion wipe</option>
+        <optgroup label="Route Grammar 02">
+          <option value="recruitFirst">recruit-first stable run</option>
+          <option value="earlyDeepBrush">early deep brush wipe</option>
+          <option value="farmSuspect">pre-party4 farm suspect</option>
+          <option value="firstFusionAfterParty4">first fusion after 4-party</option>
+          <option value="fusionEmptySlotWipe">fusion empty slot wipe</option>
+          <option value="fusionThenRefill">fusion then recruit refill</option>
+          <option value="smallPartyBoss">3-party high-tier boss attempt</option>
+          <option value="clearUnder4">clear with under-4 party</option>
+          <option value="skippedRecruitWipe">wipe after skipped recruit</option>
+          <option value="longRun">route grammar long run</option>
+        </optgroup>
         <option value="custom">custom run index</option>
       </select></span>
       <span><label>index</label><input id="rl-index" type="number" value="0" /></span>

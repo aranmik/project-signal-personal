@@ -3,7 +3,7 @@ import { createInitialParty, createPreviewEnemies, createStageEnemies, createRou
 import { ACTIVE_FUSION_RECIPES, BASE_JOBS, ADVANCED_JOBS, SECOND_CLASS_JOBS, prefersFront, slotPreference, availableFusions, combatRoleOf } from "../data/jobs.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
-import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions, depthSpeedFactor, routeReward } from "../data/routes.js";
+import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions, depthSpeedFactor, routeReward, effectiveAlertness, farmWarnLevel } from "../data/routes.js";
 import { REWARDS, rewardById, REWARD_MAX_LEVEL } from "../data/rewards.js";
 import { saveFootprint } from "../data/footprints.js";
 import { renderGame, playActionFx, playStatusTickFx, playSupportFx, playStatusApplyFx, playActorFx, clearFxLayer, setFxSuppressed, setRenderSuppressed } from "../ui/render.js";
@@ -279,8 +279,18 @@ export function resetBattle() {
   gameState.run.routeChoices = null;
   gameState.run.currentRouteType = "normal"; // 첫 전투는 고정 도입(일반)
   gameState.run.rewardPicks = 0;             // Reward Pressure 01 — 보상 선택 횟수 초기화
-  gameState.run.deepForestCount = 0;         // Deep Forest Reward Rebuild 01 — 깊은 수풀 보상 단계 초기화
-  gameState.run.recruitPower = 0;            // Deep Forest Reward Rebuild 01 — 깊은 수풀 영입(경계도 가산) 초기화
+  gameState.run.deepForestCount = 0;         // (구) 깊은 수풀 보상 단계 — Route Grammar 02에서 미사용(초기화만 유지)
+  gameState.run.recruitPower = 0;            // 영입 누적(경계도 가산) — Route Grammar 02: 동료의 흔적 영입 수
+  // Route Grammar 02 — 4인 전 런웨이 / 잠복 경계도 / anti-farm 추적 상태.
+  gameState.run.party4Reached = false;       // 4인 완성 래치(한 번 켜지면 유지 — 합체로 3인이 돼도 켜진 채)
+  gameState.run.party4Depth = 0;             // 4인 최초 완성 심도
+  gameState.run.alertnessAtParty4 = 0;       // 4인 완성 시점의 누적 경계도(전환 스냅샷)
+  gameState.run.effectiveAlertnessAtParty4 = 0;
+  gameState.run.preParty4Battles = 0;        // 4인 전 치른 전투 수(anti-farm 기준)
+  gameState.run.preParty4GrowthCount = 0;    // 4인 전 성장 보상 픽 수
+  gameState.run.preParty4DangerCount = 0;    // 4인 전 깊은 수풀 진입 수
+  gameState.run.preParty4RecruitCount = 0;   // 4인 전 영입 수
+  gameState.run.farmWarnShown = 0;           // 마지막으로 보여준 파밍 경고 단계
   gameState.run.partyHp = null;              // Stage Persistence 01 — 전투 간 HP 지속 초기화(첫 전투는 풀피)
   gameState.run.combatMs = 0;                // Run Footprints 01 — 현실 전투 시간 누적 초기화(새 런)
   gameState.run.battleStartTs = null;
@@ -355,8 +365,10 @@ export function applyReward(id) {
   const lv = gameState.run.rewardLevels;
   lv[id] = (lv[id] || 0) + 1;
   gameState.logs = [`보상: ${reward.name} Lv.${lv[id]} — 다음 전투부터 적용`];
+  // Route Grammar 02 — 4인 전 성장 보상 픽 추적(anti-farm 신호: 4인 전 과도한 성장 파밍 관측).
+  if (!gameState.run.party4Reached) gameState.run.preParty4GrowthCount = (gameState.run.preParty4GrowthCount || 0) + 1;
 
-  // Reward Pressure 01 — 다회 성장 선택(정예=2회). 남은 픽이 있으면 새 3택을 굴려 보상 화면 유지.
+  // Reward Pressure 01 — 다회 성장 선택(깊은 수풀=2회). 남은 픽이 있으면 새 3택을 굴려 보상 화면 유지.
   gameState.run.rewardPicks = (gameState.run.rewardPicks || 1) - 1;
   if (gameState.run.rewardPicks > 0) {
     rollRewardOffer();
@@ -366,29 +378,9 @@ export function applyReward(id) {
   }
   gameState.run.rewardOffer = null;
 
-  // Run Reward Training 01 — 일반 전투 보상 후 라우팅은 합체만(스테이지 기반 자동 "영입"은 제거).
-  //   신규 영웅 영입은 깊은 수풀 보상(giveDeepForestReward)과 합체 후 보충(continueAfterFusion)에서만 발생한다.
-  //   Sage Branch Gate 01 — 합체 진입은 파티 4인 + 레시피 존재일 때만.
-  const ev = STAGE_CLEAR_EVENTS[gameState.run.stage];
-  const canFuse = canEnterFusion();
-
-  // 깊은 수풀(danger) 클리어 = 합체 기회 보장(후보 있을 때만 — 억지 진입/강제 합체 아님, 스킵 가능).
-  if (gameState.run.currentRouteType === "danger" && canFuse) {
-    gameState.screen = "fusion";
-    renderGame(gameState);
-    return;
-  }
-  // 기존 스테이지 합체 이벤트(S3/S8) — 빈 합체 화면 방지를 위해 후보 있을 때만.
-  if (ev && ev.type === "fusion" && canFuse) {
-    gameState.screen = "fusion";
-    renderGame(gameState);
-    return;
-  }
-  // 깊은 수풀이었지만 합체 후보가 없으면 짧은 안내 후 다음 여정으로(억지 합체 화면 X).
-  if (gameState.run.currentRouteType === "danger" && !canFuse) {
-    pushLog("깊은 수풀을 헤쳤지만 아직 합체할 조합이 없습니다.");
-  }
-
+  // Route Grammar 02 — 전투 보상 후엔 곧장 다음 여정 선택으로(합체 자동 연결 제거).
+  //   합체는 더 이상 깊은 수풀/스테이지 이벤트로 자동 진입하지 않는다 — "결속의 공터(bond)" 루트의 명시적 선택뿐.
+  //   (deepForestRewardType / STAGE_CLEAR_EVENTS 자동 합체 트리거 제거 — 영입/합체와 위험 전투의 분리.)
   proceedNextStage();
 }
 
@@ -407,16 +399,43 @@ function showRouteChoice() {
   gameState.battle.isRunning = false;
   gameState.battle.status = "ready";
   gameState.run.result = null;
+  updateParty4Latch();   // Route Grammar 02 — 영입/합체 직후 4인 완성 래치 반영
+  maybeFarmWarning();    // Route Grammar 02 — 4인 전 파밍 예고(잠복 압력)
+  // Route Grammar 02 — 의미별 루트 오퍼: 영입(ally)/합체(bond)/위험(danger)/정예(elite)/회복(rest)을 분리 제시.
   gameState.run.routeChoices = rollRouteOffer({
     depth: gameState.run.depth,
     bossKeys: gameState.run.bossKeys,
-    // Deep Forest Reward Rebuild 01 — 줄 보상(영입/합체)이 있을 때만 깊은 수풀 노출.
-    canDeepForest: deepForestRewardType() !== null,
-    // Sage Branch Gate 01 — 현자의 가지(정예)는 경계도 4 이상에서만 등장(0~3은 일반/쉼터/깊은 수풀).
-    alertness: gameState.run.alertness || 0,
+    effAlertness: effectiveAlertness(gameState.run),    // 유효 경계도(4인 전엔 잠복) — 정예 게이트 기준
+    partySize: partyJobIds().length,
+    party4Reached: !!gameState.run.party4Reached,
+    canRecruit: recruitCandidates().length > 0,          // 동료의 흔적 노출 조건(빈자리 + 미보유 기본직업)
+    canFuse: canEnterFusion(),                            // 결속의 공터 노출 조건(4인 + 레시피)
   });
   gameState.screen = "route";
   renderGame(gameState);
+}
+
+// Route Grammar 02 — 4인 완성 래치. 한 번 4인이 되면 잠복 경계도가 전면 전환되고 그 뒤로 유지된다
+//   (합체로 3인이 돼도 "여정은 이미 시작됐다"). 영입/합체/라우팅 직후 호출된다.
+function updateParty4Latch() {
+  if (gameState.run.party4Reached) return;
+  if (!partyIsFull()) return;
+  gameState.run.party4Reached = true;
+  gameState.run.party4Depth = gameState.run.depth;
+  gameState.run.alertnessAtParty4 = gameState.run.alertness || 0;
+  gameState.run.effectiveAlertnessAtParty4 = gameState.run.alertness || 0; // 4인 도달 = 잠복 전면 전환
+  pushLog("파티가 완성되었습니다 — 이제부터 숲이 본격적으로 반응합니다. 진짜 여정의 시작.");
+}
+
+// Route Grammar 02 — 4인 전 파밍 예고(즉시 처벌 아님 — 잠복 압력이 쌓이고 있음을 읽힌다).
+function maybeFarmWarning() {
+  if (gameState.run.party4Reached || partyIsFull()) return;
+  const lvl = farmWarnLevel(gameState.run.preParty4Battles || 0);
+  if (lvl > (gameState.run.farmWarnShown || 0)) {
+    gameState.run.farmWarnShown = lvl;
+    if (lvl === 1) pushLog("파티가 완성되지 않은 채 숲을 오래 헤매고 있습니다 — 숲의 시선이 모입니다.");
+    else if (lvl === 2) pushLog("동료를 모으지 않고 전투를 반복합니다 — 이후 숲의 압력이 커집니다(잠복 경계도 누설).");
+  }
 }
 
 // Run Structure 01A — 길 선택. 휴식=전투 없이 한 박자(다시 선택), 그 외=인카운터 생성 후 전투.
@@ -441,9 +460,37 @@ export function chooseRoute(routeType) {
     return;
   }
 
+  // Route Grammar 02 — 동료의 흔적: 전투 없이 영입 화면으로. 영입은 이제 ally의 명시적 선택(합체와 분리).
+  if (rt.kind === "ally") {
+    rollRecruitOffer();
+    gameState.run.recruitContext = "ally";
+    pushLog("동료의 흔적을 따라갔다 — 전투 없이 새 동료를 찾는다.");
+    enterRecruit();
+    return;
+  }
+
+  // Route Grammar 02 — 결속의 공터: 전투 없이 합체/빌드 정리. 합체해도 빈자리를 자동으로 채우지 않는다.
+  if (rt.kind === "bond") {
+    pushLog("결속의 공터에서 파티를 정비한다 — 합체로 빌드를 만든다.");
+    if (canEnterFusion()) {
+      gameState.run.recruitContext = "bond";
+      gameState.screen = "fusion";
+      renderGame(gameState);
+    } else {
+      proceedNextStage(); // 안전장치(정상적으론 bond가 canFuse일 때만 노출됨)
+    }
+    return;
+  }
+
   // 위험/정예는 위험도(읽힘용) 상승. 보스/일반은 변동 없음.
   if (routeType === "danger") gameState.run.threat += 2;
   else if (routeType === "elite") gameState.run.threat += 1;
+
+  // Route Grammar 02 — 4인 전 전투/위험 추적(anti-farm 신호 + 관측). 깊은 수풀은 별도 카운트.
+  if (!gameState.run.party4Reached) {
+    gameState.run.preParty4Battles = (gameState.run.preParty4Battles || 0) + 1;
+    if (routeType === "danger") gameState.run.preParty4DangerCount = (gameState.run.preParty4DangerCount || 0) + 1;
+  }
 
   gameState.screen = "battle";
   advanceStage(routeType);
@@ -538,22 +585,24 @@ export function applyFusion(resultId) {
   // Run Structure 01C — 경계도는 "실제 합체 횟수"로만 오른다(길 선택만으로는 안 오름). 규칙을 로그로 명확히.
   gameState.logs.push(`경계도 ${gameState.run.alertness} — 강해진 파티에 몬스터가 더 조직적으로 대비한다.`);
 
-  // Fusion Moment 01: 합체는 탄생 — 짧은 결과 확인 화면을 먼저 보여준다.
-  //   영입 후보는 지금 굴려 고정(공통 규칙: 합체 실행 = 반드시 영입으로 보충).
+  // Route Grammar 02 — 합체는 영웅 2명을 소모해 상위 영웅 1명을 얻는다. 인원이 1명 줄어드는 것은 비용이자 선택 결과다.
+  //   더 이상 자동 영입으로 빈자리를 채우지 않는다 — 빈자리를 채울지는 다음 여정(동료의 흔적)에서 유저가 정한다.
+  gameState.logs.push(`파티 인원이 ${partyJobIds().length}명으로 줄었습니다 — 빈자리는 '동료의 흔적'에서 채울 수 있습니다.`);
+
+  // Fusion Moment 01: 합체는 탄생 — 짧은 결과 확인 화면을 먼저 보여준다(자동 영입 없이 다음 여정으로).
   gameState.run.lastFusion = {
     materials: [...recipe.materials],
     result: recipe.result,
     birthLine: recipe.birthLine,
   };
-  rollRecruitOffer();
-  gameState.run.recruitContext = "fusion";
+  gameState.run.recruitContext = null; // 합체 후 자동 영입 제거 — 빈자리는 유지된다
   gameState.screen = "fusionResult";
   renderGame(gameState);
 }
 
-// 합체 결과 확인 → 동료 영입으로 이어간다(후보는 applyFusion에서 이미 확정).
+// Route Grammar 02 — 합체 결과 확인 → 곧장 다음 여정 선택으로(자동 영입 제거). 빈자리는 유지된다.
 export function continueAfterFusion() {
-  enterRecruit();
+  proceedNextStage();
 }
 
 // Recruit UX Rebuild 01 — 영입 진입: 채울 빈 슬롯(recruitSlot)을 고정하고 미리보기 상태 초기화.
@@ -651,16 +700,18 @@ export function confirmRecruit() {
   if (hasCandidates && !gameState.run.recruitPreview) return;
   if (gameState.run.recruitPreview) {
     gameState.logs.push("새 동료와 함께 — 다음 여정으로.");
-    // Deep Forest Reward Rebuild 01 — 깊은 수풀 동료 영입도 경계도 상승(강해진 만큼 숲이 대비). 기존 수치 재사용.
-    if (gameState.run.recruitContext === "deepforest") {
+    // Route Grammar 02 — 동료의 흔적(ally) 영입 = 경계도 상승(강해진 만큼 숲이 대비). 4인 전엔 잠복으로 쌓인다.
+    if (gameState.run.recruitContext === "ally") {
       gameState.run.recruitPower = (gameState.run.recruitPower || 0) + 1;
       gameState.run.alertness = alertnessFromFusions((gameState.run.fusionCount || 0) + gameState.run.recruitPower);
-      gameState.logs.push(`경계도 ${gameState.run.alertness} — 새 동료로 강해진 파티에 숲이 대비한다.`);
+      if (!gameState.run.party4Reached) gameState.run.preParty4RecruitCount = (gameState.run.preParty4RecruitCount || 0) + 1;
+      gameState.logs.push(`경계도 ${gameState.run.alertness}${gameState.run.party4Reached ? "" : " (잠복)"} — 새 동료로 강해진 파티에 숲이 대비한다.`);
     }
   }
   gameState.run.recruitOffer = null;
   gameState.run.recruitPreview = null;
   gameState.run.recruitSlot = null;
+  gameState.run.recruitContext = null;
   proceedNextStage(); // 배치 단계 건너뜀 — 한 화면에서 흐름이 이어진다
 }
 
@@ -2305,14 +2356,9 @@ function applyFinish(outcome) {
       else if (keys === 2) pushLog("두 번째 열쇠가 사자왕의 위압을 걷어냈다. 정예의 시험을 모두 넘었다.");
       else pushLog(`정예를 물리쳤다 — 보스 열쇠 +1 (보유 ${keys}).`);
     }
-    // Deep Forest Reward Rebuild 01 — 깊은 수풀(danger)은 스탯 보상 화면을 건너뛰고 동료영입/합체 보상 루트로.
-    if (gameState.run.currentRouteType === "danger") {
-      gameState.run.result = "victory";
-      pushLog(`심도 ${gameState.run.depth} 클리어! 깊은 수풀의 보상.`);
-      giveDeepForestReward(); // 화면 전환·렌더는 여기서 담당
-      return;
-    }
-    // Reward Pressure 01 — 길 프로필에 따라 성장 선택 횟수 차등(일반1 / 정예2). 보상 화면이 이 값으로 다회 선택.
+    // Route Grammar 02 — 깊은 수풀(danger)도 이제 일반 성장 보상 경로를 탄다(영입/합체 자동 보상 분리).
+    //   danger.reward.picks=2(더 큰 성장 보상)로 위험의 대가가 성장으로 돌아온다 — 영입/합체는 ally/bond의 선택.
+    // Reward Pressure 01 — 길 프로필에 따라 성장 선택 횟수 차등(일반1 / 깊은수풀2 / 정예1). 보상 화면이 이 값으로 다회 선택.
     gameState.run.rewardPicks = Math.max(1, routeReward(gameState.run.currentRouteType).picks || 1);
     gameState.run.result = "victory";
     rollRewardOffer(); // Run Reward Training 01 — 보상 진입 시 3택을 한 번 굴려 고정

@@ -1,5 +1,5 @@
 import { BEGINNER_THEME, STAGE_THEMES } from "../data/stages.js";
-import { ROUTE_TYPES, bossTimingLabel, bossFury, bossReadinessPressure, bossMenace, depthAtmosphere, routeReward, PRESSURE_HELP } from "../data/routes.js";
+import { ROUTE_TYPES, bossTimingLabel, bossFury, bossReadinessPressure, bossMenace, depthAtmosphere, routeReward, PRESSURE_HELP, effectiveAlertness, farmWarnLevel } from "../data/routes.js";
 import { availableFusions, slotPreference, combatRoleLabelOf, combatRoleOf, BASE_JOBS, ADVANCED_JOBS, SECOND_CLASS_JOBS, ACTIVE_FUSION_RECIPES } from "../data/jobs.js";
 import { jobStatusOf, IMPL_LABEL, VIS_LABEL } from "../data/jobStatus.js";
 import { REWARDS, rewardById, REWARD_MAX_LEVEL } from "../data/rewards.js";
@@ -299,9 +299,9 @@ function renderFusionResultPanel(state) {
         <span class="cast-sparkles" aria-hidden="true"></span>
       </span>
     </div>
-    <p class="flow-note">${fusion.birthLine || "두 영웅의 힘이 하나로 모였다."}<br>새로운 영웅 <b>${jobName(fusion.result)}</b> — 파티에 합류했다.</p>
-    <p class="flow-note flow-note--dim">빈자리를 채울 새 동료를 영입하세요.</p>
-    <button type="button" id="fusion-continue" data-fusion-continue>동료 영입하기</button>
+    <p class="flow-note">${fusion.birthLine || "두 영웅의 힘이 하나로 모였다."}<br>새로운 영웅 <b>${jobName(fusion.result)}</b> — 영웅 2명이 1명으로 합쳐졌다.</p>
+    <p class="flow-note flow-note--dim">합체 완료 — 파티 인원이 ${partySizeOf(state.run)}명으로 줄었습니다.<br>빈자리를 채우려면 '동료의 흔적'을, 적은 인원으로 밀어붙이려면 다른 길을 고르세요.</p>
+    <button type="button" id="fusion-continue" data-fusion-continue>여정 잇기</button>
   `;
   spawnFusionCelebration();
 }
@@ -360,14 +360,10 @@ function renderRecruitPanel(state) {
       ).join("")
     : `<p class="flow-note">영입 가능한 동료가 없습니다.</p>`;
 
-  // Deep Forest Reward Rebuild 01 — 문맥별 문구(합체 보충 / 깊은 수풀 보상 / 4인 확장).
+  // Route Grammar 02 — 영입은 동료의 흔적(ally)의 명시적 선택. 문맥 문구 정리(합체 자동 영입 제거).
   const ctx = state.run.recruitContext;
-  const heading = ctx === "fusion" ? "빈자리를 채울 동료를 선택하세요"
-    : ctx === "deepforest" ? "수풀에서 새 동료를 만났습니다"
-    : "새 동료를 영입하세요";
-  const note = ctx === "deepforest"
-    ? "깊은 수풀의 보상 — 현재 파티에 없는 동료입니다. 후보를 눌러 미리 배치해보세요."
-    : "현재 파티에 없는 동료가 찾아왔습니다. 후보를 눌러 미리 배치해보세요.";
+  const heading = ctx === "ally" ? "동료의 흔적 — 새 동료를 영입하세요" : "새 동료를 영입하세요";
+  const note = "현재 파티에 없는 동료가 찾아왔습니다. 후보를 눌러 미리 배치하고, 다음 여정으로 이어가세요.";
 
   // 후보가 있으면 선택해야 활성, 후보가 없으면(영입 불가) 바로 진행 가능.
   const canProceed = !!preview || candidates.length === 0;
@@ -480,7 +476,14 @@ function renderRoutePanel(state) {
     } else {
       // Reward Pressure 01 — 일반/위험/정예/휴식 카드에 보상·위험 성격 태그(고민하는 맛).
       const rw = routeReward(id);
-      if (rw.cardTag) extra = `<span class="route-reward-tag route-reward-tag--${rw.rewardTier}">${rw.cardTag}</span>`;
+      const tag = rw.cardTag ? `<span class="route-reward-tag route-reward-tag--${rw.rewardTier}">${rw.cardTag}</span>` : "";
+      // Route Grammar 02 — 4인 전 위험/정예 진입 경고(즉시 처벌 아님 — "큰 피해를 입을 수 있다" 예고).
+      let warn = "";
+      if ((id === "danger" || id === "elite") && !state.run.party4Reached && partySizeOf(state.run) < 4) {
+        pressureClass = " route-card--prewarn";
+        warn = `<span class="route-prewarn">파티가 아직 완성되지 않았습니다 — 지금 들어가면 큰 피해를 입을 수 있습니다.</span>`;
+      }
+      extra = tag + warn;
     }
     return `<button type="button" class="route-card route-card--${id}${pressureClass}" data-route="${id}">
       <span class="route-title">${rt.title}</span>
@@ -495,15 +498,33 @@ function renderRoutePanel(state) {
     ? `<p class="route-atmo route-atmo--${atmo.tier}">${atmo.label}</p>`
     : "";
 
+  // Route Grammar 02 — 4인 전엔 경계도가 "잠복"임을 읽힌다(즉시 처벌 아님). 4인 완성 후엔 전면 작동.
+  const psize = partySizeOf(state.run);
+  const eff = effectiveAlertness(state.run);
+  const latent = !state.run.party4Reached;
+  const alertNote = latent ? ` <span class="route-latent">(잠복 ${eff})</span>` : "";
+  // 4인 전 준비 구간 안내 / 파밍 경고(예고).
+  let runwayLine = "";
+  if (latent) {
+    const fw = farmWarnLevel(state.run.preParty4Battles || 0);
+    const msg = fw >= 2 ? "동료를 모으지 않고 헤매면 잠복 경계도가 누설됩니다 — '동료의 흔적'으로 파티를 완성하세요."
+      : fw === 1 ? "파티 미완성 — 숲의 시선이 모이고 있습니다. '동료의 흔적'을 권합니다."
+      : "파티 완성 전 — 준비 구간입니다(숲이 본격 반응하기 전). '동료의 흔적'으로 4인을 채우세요.";
+    runwayLine = `<p class="route-runway route-runway--${fw}">${msg}</p>`;
+  } else {
+    runwayLine = `<p class="route-runway route-runway--ready">파티 완성 — 숲이 본격적으로 반응합니다.</p>`;
+  }
   document.getElementById("route-body").innerHTML = `
     <div class="flow-kicker">${BEGINNER_THEME.name} · 심도 ${state.run.depth}</div>
     <h2 class="flow-heading">다음 여정을 고르세요</h2>
-    <p class="flow-note">전투는 자동이지만, 여정은 내가 고른다.</p>
+    <p class="flow-note">전투는 자동이지만, 여정은 내가 고른다. 영입·합체·위험은 각각의 선택입니다.</p>
     <div class="route-status">
       <span class="route-stat">심도 <b>${state.run.depth}</b></span>
-      <span class="route-stat">경계도 <b>${state.run.alertness}</b></span>
+      <span class="route-stat">파티 <b>${psize}</b>/4</span>
+      <span class="route-stat">경계도 <b>${state.run.alertness}</b>${alertNote}</span>
       <span class="route-stat">보스 열쇠 <b>${state.run.bossKeys}</b></span>
     </div>
+    ${runwayLine}
     ${atmoLine}
     <p class="route-help">${PRESSURE_HELP}</p>
     <div id="route-list">${cards}</div>
@@ -902,9 +923,13 @@ function renderRunStatus(state) {
   }
   // Run Structure 01C — 심도 분위기 문구(30+ 위협 / 40+ 분노). 일반 전투에서도 "숲이 거칠어졌다"가 읽힘.
   const atmo = depthAtmosphere(state.run.depth);
+  // Route Grammar 02 — 4인 전엔 경계도가 잠복임을 HUD에서도 읽힌다.
+  const latent = !state.run.party4Reached;
+  const alertTxt = latent ? `${state.run.alertness} <span class="hud-latent">(잠복 ${effectiveAlertness(state.run)})</span>` : `${state.run.alertness}`;
   el.innerHTML = [
     `<span>심도 <b>${state.run.depth}</b></span>`,
-    `<span>경계도 <b>${state.run.alertness}</b></span>`,
+    `<span>파티 <b>${partySizeOf(state.run)}</b>/4</span>`,
+    `<span>경계도 <b>${alertTxt}</b></span>`,
     `<span>열쇠 <b>${state.run.bossKeys}</b></span>`,
     `<span>${hud}</span>`,
     atmo.label ? `<span class="depth-atmo depth-atmo--${atmo.tier}">${atmo.label}</span>` : "",

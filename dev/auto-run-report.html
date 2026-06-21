@@ -53,6 +53,16 @@
     .ar-meta { font-size: 10px; color: #6f8497; font-weight: 400; }
     .ar-mini { font-size: 10px; padding: 2px 8px; margin-left: 8px; border: 1px solid #34434f; border-radius: 6px;
       background: #1b232c; color: #cfe0ee; cursor: pointer; vertical-align: middle; font-weight: 400; }
+    .ar-mini:disabled { opacity: .4; cursor: default; }
+    /* Observation Batch 01 — Soft Ramp Split / Danger Autopsy */
+    .ar-d { font-size: 10px; font-weight: 800; margin-left: 2px; }
+    .ar-d.up { color: #7fd1a8; } .ar-d.down { color: #f0a0a0; } .ar-d.zero { color: #6f8497; }
+    .ar-splitrow td { background: rgba(150,110,220,.06); }
+    .ar-routeline { font-size: 12px; color: #cfe0ee; margin: 4px 0 10px; line-height: 1.6; }
+    .ar-distchip { display: inline-block; font-size: 11px; color: #bcd0e4; margin: 0 6px 2px 0; }
+    .ar-distchip b { color: #eef6ff; }
+    .ar-splitctrl { display: inline-flex; gap: 5px; align-items: center; margin-left: 8px; vertical-align: middle; }
+    .ar-splitctrl .ar-mini { margin-left: 0; }
 
     .ar-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
     .ar-card { background: #11161d; border: 1px solid #243039; border-radius: 10px; padding: 9px 11px; }
@@ -126,6 +136,11 @@
     <section id="ar-survival"></section>
     <section id="ar-dependency"></section>
     <section id="ar-bossflow"></section>
+    <!-- Observation Batch 01 — 아래 두 섹션은 기존 섹션을 깨지 않고 추가된 관측 패널입니다 -->
+    <section id="ar-splitpanel"></section>
+    <section id="ar-danger"></section>
+    <!-- Route Grammar 02 Phase 2 — 새 루트 문법 관측 섹션 -->
+    <section id="ar-routegrammar"></section>
     <section id="ar-targets"></section>
     <section id="ar-summary"></section>
     <section id="ar-compare"></section>

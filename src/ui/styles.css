@@ -2669,6 +2669,22 @@ body {
 .route-readiness--reckless { color: #ff8a93; }
 .route-recommend { font-size: 10px; color: #8a98a8; }
 .route-card--boss-pressure { border-color: #c45a55; }
+
+/* Route Grammar 02 — 동료의 흔적(ally)/결속의 공터(bond): 전투 없는 준비 루트(청록/보라 톤). */
+.route-card--ally { border-color: #2f6a5a; }
+.route-card--ally:hover { border-color: #3f8a74; }
+.route-card--bond { border-color: #5a4a8a; }
+.route-card--bond:hover { border-color: #7a64b0; }
+/* 4인 전 위험/정예 진입 경고 — 즉시 처벌이 아니라 "큰 피해 예고". */
+.route-card--prewarn { border-color: #b07a3a; }
+.route-prewarn { display: block; font-size: 10.5px; color: #f0b860; margin-top: 3px; line-height: 1.35; }
+/* 잠복 경계도 표시(4인 전) + 4인 전 준비 구간/파밍 예고 라인. */
+.route-latent, .hud-latent { color: #c79bff; font-weight: 700; }
+.route-runway { font-size: 11px; line-height: 1.4; margin: 6px 0 2px; padding: 5px 8px; border-radius: 8px;
+  background: rgba(120, 100, 180, 0.12); border: 1px solid #3a3460; color: #c0b4e0; text-align: center; }
+.route-runway--1 { color: #f0c878; border-color: #5a4a26; background: rgba(180, 150, 80, 0.12); }
+.route-runway--2 { color: #f0a060; border-color: #6a4326; background: rgba(180, 110, 60, 0.14); }
+.route-runway--ready { color: #7fd6b0; border-color: #2f5e47; background: rgba(80, 180, 120, 0.12); }
 /* Boss Readiness Pressure 02 — Elite Key Seal: 보스 카드 위압 남음/해제 상태(열쇠 진행도).
    위압 남음 = 경고색(빨강 톤) / 위압 해제 = 안정색(청록 톤). 하드락 아님 — 상태 읽힘용. */
 .route-menace { display: block; font-size: 11px; line-height: 1.4; margin-top: 3px; }
