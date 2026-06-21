@@ -202,24 +202,73 @@ const POLICY_ORDER = ["random", "fusion", "steady", "steadyGrowth", "aggressive"
          - 다치면(평균HP<55%) 쉼터 우선(회복) / 건강하면 영입 주는 깊은 수풀로 4인 채움.
      (2) 합체 직후 다음 전투 1회에 한해 파티 전체 maxHp 12% 보호막(합체 후 인원/HP 흔들림 완화).
    둘 다 "정책/드라이버 판단 보정"이라 적/직업/스킬/보상 수치를 건드리지 않는다. */
+// Auto Run Report 04 — A/B 실험 프로필(headless 전용 보정, baseline은 보정 0).
+//   각 프로필은 본게임 데이터를 바꾸지 않고 "드라이버 판단/헤드리스 보정"만 한다:
+//     route(policyChoice, choices, ctx) → 정책 라우트 위 안전 라우팅 보정
+//     preBattle(ctx) → 전투 시작 직전 headless 보정(party.shield 부여 / 이번 전투 적 스탯 완화)
+//   둘 다 적/직업/스킬/보상 수치를 영구 변경하지 않는다(전투당 한정, 배치 종료 시 state 복구).
+function shieldParty(pct) { gameState.party.forEach((u) => { if (!u.isDead) u.shield = Math.max(u.shield || 0, Math.round(u.maxHp * pct)); }); }
+function nerfEnemies(hpMul, atkMul) { gameState.enemies.forEach((e) => { e.maxHp = Math.max(1, Math.round(e.maxHp * hpMul)); e.hp = Math.min(e.hp, e.maxHp); e.atk = Math.max(1, Math.round(e.atk * atkMul)); }); }
+const has = (choices, x) => choices.includes(x);
+function safeWhenFragile(pc, c, ctx) { // 다치면 회복 / 4인 전엔 영입(깊은수풀)·일반, 위험·정예 억제
+  if (ctx.hpRatio < 0.55 && has(c, "rest")) return "rest";
+  if (ctx.partySize < 4) { if (ctx.hpRatio >= 0.55 && has(c, "danger")) return "danger"; if (has(c, "normal")) return "normal"; if (has(c, "rest")) return "rest"; }
+  return pc;
+}
 const PROFILES = {
-  baseline: { id: "baseline", label: "Baseline", desc: "현재 본게임 규칙 그대로" },
-  cushion: { id: "cushion", label: "Early Cushion 01", desc: "4인 전 안전 라우팅 + 합체 직후 보호막(실험 전용)" },
+  baseline: { id: "baseline", label: "Baseline", desc: "현재 본게임 규칙 그대로(보정 0)" },
+  cushion: {
+    id: "cushion", label: "Early Cushion 01", desc: "4인 전 안전 라우팅 + 합체 직후 1전투 보호막(12%)",
+    route: (pc, c, ctx) => { if (ctx.hpRatio < 0.55 && has(c, "rest")) return "rest"; if (ctx.partySize < 4 && ctx.hpRatio >= 0.55 && has(c, "danger")) return "danger"; return pc; },
+    preBattle: (ctx) => { if (ctx.sinceFusion === 0) shieldParty(0.12); },
+  },
+  cushion2: {
+    id: "cushion2", label: "Early Cushion 02", desc: "초반(심도≤8)·4인 전 매 전투 보호막(15%) 강화 + 안전 라우팅 + 합체 직후 보호막",
+    route: (pc, c, ctx) => { if (ctx.hpRatio < 0.55 && has(c, "rest")) return "rest"; if (ctx.partySize < 4 && ctx.hpRatio >= 0.55 && has(c, "danger")) return "danger"; return pc; },
+    preBattle: (ctx) => { if (ctx.depth <= 8 && ctx.partySize < 4) shieldParty(0.15); else if (ctx.sinceFusion === 0) shieldParty(0.12); },
+  },
+  recruitSafe: {
+    id: "recruitSafe", label: "Recruit Safety 01", desc: "4인 미만이면 영입/안전 루트 가중·위험/정예/보스 억제(4인 후 정책 그대로)",
+    route: (pc, c, ctx) => { if (ctx.partySize < 4) return safeWhenFragile(pc, c, ctx); return pc; },
+  },
+  fusionSafe: {
+    id: "fusionSafe", label: "First Fusion Safety 01", desc: "첫 합체 후 1~2전투 보호막(12%) + 안전 경로(합체 직후 위험·정예 억제)",
+    route: (pc, c, ctx) => { if (ctx.sinceFusion != null && ctx.sinceFusion <= 1) { if (ctx.hpRatio < 0.55 && has(c, "rest")) return "rest"; if (has(c, "normal")) return "normal"; } return pc; },
+    preBattle: (ctx) => { if (ctx.sinceFusion != null && ctx.sinceFusion <= 1) shieldParty(0.12); },
+  },
+  softRamp: {
+    id: "softRamp", label: "Soft Ramp 01", desc: "심도 1~8 적 HP×0.85·공격×0.9 완화(보스 불변) — 초반 성장 곡선만 완화 시뮬",
+    preBattle: (ctx) => { if (ctx.depth <= 8 && ctx.routeType !== "boss") nerfEnemies(0.85, 0.9); },
+  },
+  guided: {
+    id: "guided", label: "Guided Beginner 01", desc: "초반(심도≤10) 영입→쉼터→일반→정예 순서 유도(4인·건강할 때만 정예/보스)",
+    route: (pc, c, ctx) => { if (ctx.depth <= 10 || ctx.partySize < 4) { const safe = safeWhenFragile(pc, c, ctx); if (ctx.partySize < 4) return safe; if (ctx.hpRatio < 0.6 && (pc === "elite" || pc === "danger" || pc === "boss")) return safe; } return pc; },
+  },
+  safeElite: {
+    id: "safeElite", label: "Safe Elite Gate 01", desc: "정예/위험은 4인·HP≥60%일 때만 진입(아니면 일반/쉼터로 대체)",
+    route: (pc, c, ctx) => { if ((pc === "elite" || pc === "danger") && !(ctx.partySize >= 4 && ctx.hpRatio >= 0.6)) { if (ctx.hpRatio < 0.55 && has(c, "rest")) return "rest"; if (has(c, "normal")) return "normal"; } return pc; },
+  },
 };
-const PROFILE_ORDER = ["baseline", "cushion"];
-const CUSHION_SHIELD_PCT = 0.12; // 합체 직후 보호막 = 파티 maxHp의 12%(10~15% 권장 내, 과하지 않게)
+const PROFILE_ORDER = ["baseline", "cushion", "cushion2", "recruitSafe", "fusionSafe", "softRamp", "guided", "safeElite"];
 
-function cushionRouteOverride(policyChoice, choices) {
-  const hurt = partyHpRatio() < 0.55;
-  if (hurt && choices.includes("rest")) return "rest";                                // 회복 우선(죽음 나선 차단)
-  if (curPartySize() < 4 && !hurt && choices.includes("danger")) return "danger";      // 건강하면 영입으로 4인 채움
-  return policyChoice;
-}
-function applyCushionShield() {
-  // 헤드리스 전용: 합체 직후 다음 전투 시작 시 파티에 1회성 보호막. 다음 전투는 createInitialParty로
-  //   파티가 재생성(shield 0)되므로 자연히 "1전투 한정"이 된다. 본게임 데이터/수치 무변경.
-  gameState.party.forEach((u) => { if (!u.isDead) u.shield = Math.max(u.shield || 0, Math.round(u.maxHp * CUSHION_SHIELD_PCT)); });
-}
+// Auto Run Report 04 — 역할군 분류(Balance Lab 03 ROLE_GROUP과 이름 일치). 의존도/축 판정용.
+const ROLE_AR = {
+  warrior: "singleDps", guardian: "tank", archer: "singleDps", priest: "healer", cleric: "shielder", trickster: "control",
+  rogue: "singleDps", saint: "healer", warden: "debuff", watchbow: "counter", trapper: "debuff", paladin: "tank",
+  vanguard: "aoeDps", forbidden: "tank", wall: "tank", healbow: "healer", purifier: "healer", mage: "aoeDps",
+  bard: "support", gatekeeper: "tank", tracker: "marker",
+  dragonspear: "pierce", sage: "aoeDps", sunlord: "support", swordsaint: "counter", redeemer: "healer",
+  skyarcher: "marker", plaguebringer: "debuff", dancer: "support", wardkeeper: "shielder",
+};
+const roleAr = (id) => ROLE_AR[id] || "support";
+const jobsHaveRole = (set, role) => [...set].some((j) => roleAr(j) === role);
+const AXES = {
+  hasHealer: (set) => jobsHaveRole(set, "healer"),
+  hasTank: (set) => jobsHaveRole(set, "tank"),
+  hasShield: (set) => jobsHaveRole(set, "shielder"),
+  hasAoE: (set) => jobsHaveRole(set, "aoeDps") || jobsHaveRole(set, "pierce"),
+  hasSecondClass: (set) => [...set].some((j) => SECOND_CLASS_JOBS.includes(j)),
+};
 
 /* ── Auto Run Report 03 — 테마 정의 / 목표 / PASS·WATCH·FAIL 판정 ──────────
    테마 검증용 대시보드 기반. 현재 본게임은 초보자 숲만 구현 → beginner만 enabled,
@@ -309,90 +358,139 @@ function validationFlags(themeId, policyId, a) {
 const MAX_DECISIONS = 400;
 const MAX_BATTLES = 60;
 
+const ROUTE_TOKEN = { normal: "N", danger: "D", elite: "E", boss: "BOSS" };
+const hasFirstClass = () => partyJobIds().some((j) => ADVANCED_JOBS.includes(j));
+
 function playOneRun(policy, profileId, themeId, runIndex) {
   const rec = {
     runIndex, policy: policy.id, profile: profileId, theme: themeId, result: null, finalDepth: 0,
     battleCount: 0, fusionCount: 0, recruitCount: 0, faintCount: 0,
     bossAttempted: false, bossKilled: false,
     finalParty: [], secondClassCount: 0, gotSecondClass: false,
-    selectedRewards: [], routeChoices: [], endReason: "",
-    jobsSeen: new Set(),
+    selectedRewards: [], routeChoices: [], endReason: "", jobsSeen: new Set(),
     // 재미 도달 지표(없으면 0)
     firstFusionDepth: 0, firstRecruitDepth: 0, partySize4Depth: 0, firstSecondClassDepth: 0,
+    firstFirstClassDepth: 0, firstEliteAttemptDepth: 0, firstEliteKillDepth: 0, firstBossKeyDepth: 0,
+    bossAttemptDepth: 0, bossKillDepth: 0, firstRestDepth: 0, firstNearDeathDepth: 0,
+    // 마일스톤 이후 생존용 battle index(없으면 null)
+    party4BattleIdx: null, fusionBattleIdx: null, secondClassBattleIdx: null, eliteEnterBattleIdx: null, bossKeyBattleIdx: null,
+    // 보스 흐름
+    bossHalfHpSeen: false, bossHalfHpSeenDepth: 0, bossHpRemaining: null, bossAttemptPartySize: null, bossAttemptHpPercent: null,
+    // 선택 경로
+    path: [],
   };
-  const cushion = profileId === "cushion";
-  let shieldPending = false; // 합체 직후 보호막 대기(cushion 전용)
+  const profile = PROFILES[profileId] || PROFILES.baseline;
+  let pendingRoute = "normal";      // 다음 전투의 길 종류(첫 전투는 도입=일반)
+  let sinceFusion = null;            // 첫 합체 이후 전투 수(null=합체 전)
+  let prevBossKeys = 0;
+  const ctx = () => ({ depth: gameState.run.depth, partySize: curPartySize(), hpRatio: partyHpRatio(), routeType: pendingRoute, sinceFusion });
 
   startRun(policy.startFormation());
 
   let decisions = 0;
   while (true) {
-    // 재미 도달 심도 기록(첫 도달 시 1회)
-    if (!rec.partySize4Depth && curPartySize() >= 4) rec.partySize4Depth = gameState.run.depth;
-    if (!rec.firstSecondClassDepth && partyHasSecond()) rec.firstSecondClassDepth = gameState.run.depth;
+    if (!rec.partySize4Depth && curPartySize() >= 4) { rec.partySize4Depth = gameState.run.depth; rec.party4BattleIdx = rec.battleCount; }
+    if (!rec.firstSecondClassDepth && partyHasSecond()) { rec.firstSecondClassDepth = gameState.run.depth; rec.secondClassBattleIdx = rec.battleCount; }
+    if (!rec.firstFirstClassDepth && hasFirstClass()) rec.firstFirstClassDepth = gameState.run.depth;
 
-    if (gameState.run.result === "clear") { rec.result = "clear"; rec.endReason = "clear"; rec.bossKilled = true; break; }
-    if (gameState.run.result === "defeat") { rec.result = "defeat"; rec.endReason = "defeat"; break; }
+    if (gameState.run.result === "clear") { rec.result = "clear"; rec.endReason = "clear"; rec.bossKilled = true; rec.bossKillDepth = gameState.run.depth; rec.bossHalfHpSeen = true; rec.bossHpRemaining = 0; rec.path.push("CLEAR"); break; }
+    if (gameState.run.result === "defeat") { rec.result = "defeat"; rec.endReason = "defeat"; rec.path.push("WIPE"); break; }
     if (++decisions > MAX_DECISIONS || rec.battleCount > MAX_BATTLES) { rec.result = "incomplete"; rec.endReason = "cap"; break; }
 
     const screen = gameState.screen;
     if (screen === "battle") {
-      if (cushion && shieldPending) { applyCushionShield(); shieldPending = false; } // 합체 직후 1전투 보호막
+      if (profile.preBattle) profile.preBattle(ctx()); // headless 보정(보호막/적완화)
       partyJobIds().forEach((j) => rec.jobsSeen.add(j));
       rec.battleCount += 1;
+      rec.path.push(ROUTE_TOKEN[pendingRoute] || "B");
       const ok = runHeadlessBattle();
       if (!ok) { rec.result = "incomplete"; rec.endReason = "battle-timeout"; break; }
-      if (gameState.run.result !== "defeat") rec.faintCount += gameState.party.filter((u) => u.isDead).length;
+      const deadNow = gameState.party.filter((u) => u.isDead).length;
+      if (gameState.run.result !== "defeat") { rec.faintCount += deadNow; if (deadNow > 0 && !rec.firstNearDeathDepth) rec.firstNearDeathDepth = gameState.run.depth; }
+      // 정예 승리 = 보스 열쇠 획득
+      if ((gameState.run.bossKeys || 0) > prevBossKeys) { prevBossKeys = gameState.run.bossKeys; if (!rec.firstEliteKillDepth) rec.firstEliteKillDepth = gameState.run.depth; if (!rec.firstBossKeyDepth) { rec.firstBossKeyDepth = gameState.run.depth; rec.bossKeyBattleIdx = rec.battleCount; } }
+      // 보스 전투 직후 보스 HP 포착
+      if (pendingRoute === "boss") {
+        const boss = gameState.enemies[0];
+        if (boss) { const ratio = boss.maxHp ? Math.max(0, boss.hp) / boss.maxHp : 0; if (gameState.run.result === "defeat") { rec.bossHpRemaining = ratio; if (ratio <= 0.5) { rec.bossHalfHpSeen = true; rec.bossHalfHpSeenDepth = gameState.run.depth; } } }
+      }
+      sinceFusion = sinceFusion == null ? null : sinceFusion + 1;
     } else if (screen === "reward") {
       const offer = gameState.run.rewardOffer || [];
       if (offer.length === 0) { rec.result = "incomplete"; rec.endReason = "reward-empty"; break; }
-      const id = policy.pickReward(offer);
-      rec.selectedRewards.push(id);
-      applyReward(id);
+      const id = policy.pickReward(offer); rec.selectedRewards.push(id); applyReward(id);
     } else if (screen === "fusion") {
       const options = availableFusions(partyJobIds());
       const choiceId = options.length ? policy.decideFusion(options) : null;
-      if (choiceId) {
-        rec.fusionCount += 1;
-        if (!rec.firstFusionDepth) rec.firstFusionDepth = gameState.run.depth;
-        if (cushion) shieldPending = true; // 다음 전투에 보호막
-        applyFusion(choiceId);
-      } else skipFusion();
+      if (choiceId) { rec.fusionCount += 1; if (!rec.firstFusionDepth) rec.firstFusionDepth = gameState.run.depth; if (rec.fusionBattleIdx == null) rec.fusionBattleIdx = rec.battleCount; sinceFusion = 0; rec.path.push("FUS"); applyFusion(choiceId); }
+      else skipFusion();
     } else if (screen === "fusionResult") {
       continueAfterFusion();
     } else if (screen === "recruit") {
       const offer = gameState.run.recruitOffer || [];
-      if (offer.length) {
-        const jobId = policy.pickRecruit(offer);
-        if (jobId) { previewRecruit(jobId); rec.recruitCount += 1; if (!rec.firstRecruitDepth) rec.firstRecruitDepth = gameState.run.depth; }
-      }
+      if (offer.length) { const jobId = policy.pickRecruit(offer); if (jobId) { previewRecruit(jobId); rec.recruitCount += 1; if (!rec.firstRecruitDepth) rec.firstRecruitDepth = gameState.run.depth; rec.path.push("REC"); } }
       confirmRecruit();
     } else if (screen === "arrange") {
       confirmArrange();
     } else if (screen === "route") {
       const choices = gameState.run.routeChoices || ["normal"];
       let rt = policy.pickRoute(choices);
-      if (cushion) rt = cushionRouteOverride(rt, choices); // 실험 프로필: 안전 라우팅 보정
+      if (profile.route) rt = profile.route(rt, choices, ctx()); // 프로필 안전 라우팅 보정
       rec.routeChoices.push(rt);
-      if (rt === "boss") rec.bossAttempted = true;
+      if (rt === "rest" && !rec.firstRestDepth) rec.firstRestDepth = gameState.run.depth;
+      if ((rt === "elite" || rt === "danger")) { if (!rec.firstEliteAttemptDepth) rec.firstEliteAttemptDepth = gameState.run.depth; rec.eliteEnterBattleIdx = rec.battleCount; }
+      if (rt === "boss") { rec.bossAttempted = true; if (!rec.bossAttemptDepth) rec.bossAttemptDepth = gameState.run.depth; rec.bossAttemptPartySize = curPartySize(); rec.bossAttemptHpPercent = partyHpRatio(); }
+      pendingRoute = rt;
       chooseRoute(rt);
     } else if (screen === "rest") {
-      continueFromRest();
+      rec.path.push("REST"); continueFromRest();
     } else {
       rec.result = "incomplete"; rec.endReason = "unknown:" + screen; break;
     }
   }
 
+  // ── 마무리: 파생 지표/실패원인/경로/역할축 ──
   rec.finalDepth = gameState.run.depth || 0;
   rec.finalParty = SLOT_ORDER.map((k) => (gameState.run.formation || {})[k]).filter(Boolean);
   rec.finalParty.forEach((j) => rec.jobsSeen.add(j));
+  rec.finalPartySize = rec.finalParty.length;
+  rec.bossKeysFinal = gameState.run.bossKeys || 0;
   rec.secondClassCount = rec.finalParty.filter(isSecond).length;
   rec.gotSecondClass = [...rec.jobsSeen].some(isSecond);
-  rec.reachedDepth9 = rec.finalDepth >= 9;
-  rec.reachedDepth17 = rec.finalDepth >= 17;
-  rec.reachedDepth25 = rec.finalDepth >= 25;
+  rec.reachedDepth9 = rec.finalDepth >= 9; rec.reachedDepth17 = rec.finalDepth >= 17; rec.reachedDepth25 = rec.finalDepth >= 25;
+  rec.hasHealer = AXES.hasHealer(rec.jobsSeen); rec.hasTank = AXES.hasTank(rec.jobsSeen); rec.hasShield = AXES.hasShield(rec.jobsSeen); rec.hasAoE = AXES.hasAoE(rec.jobsSeen); rec.hasSecondClass = AXES.hasSecondClass(rec.jobsSeen);
+  const cleared = rec.result === "clear";
+  rec.clearWithoutHealer = cleared && !rec.hasHealer; rec.clearWithoutTank = cleared && !rec.hasTank;
+  rec.clearWithoutAoE = cleared && !rec.hasAoE; rec.clearWithoutSecondClass = cleared && !rec.hasSecondClass;
+  rec.pathSignature = rec.path.join(">");
+  rec.lastChoices = rec.path.slice(-5).join(">");
+  rec.preWipeChoice = rec.result === "defeat" ? (rec.path[rec.path.length - 2] || "") : "";
+  rec.lastSafeMilestone = rec.bossAttemptDepth ? "boss" : rec.firstBossKeyDepth ? "bosskey" : rec.firstEliteKillDepth ? "elitekill" : rec.firstSecondClassDepth ? "second" : rec.firstFusionDepth ? "fusion" : rec.partySize4Depth ? "party4" : rec.firstRecruitDepth ? "recruit" : "start";
+  rec.failureTags = computeFailureTags(rec);
   if (!rec.result) { rec.result = "incomplete"; rec.endReason = rec.endReason || "incomplete"; }
   return rec;
+}
+
+// 실패 원인 자동 추정 태그(전멸런 중심 — 완벽한 인과 아님). UI엔 "추정 원인"으로 표시.
+function computeFailureTags(rec) {
+  const t = [];
+  if (rec.result !== "defeat") return t;
+  const d = rec.finalDepth;
+  t.push(d <= 8 ? "EARLY_WIPE_1_8" : d <= 16 ? "MID_WIPE_9_16" : "LATE_WIPE_17_PLUS");
+  if (rec.finalPartySize < 4) t.push("LOW_PARTY_SIZE_WIPE");
+  if (rec.party4BattleIdx != null && rec.battleCount - rec.party4BattleIdx <= 3) t.push("POST_PARTY4_WIPE");
+  if (rec.fusionBattleIdx != null && rec.battleCount - rec.fusionBattleIdx <= 3) t.push("POST_FUSION_WIPE");
+  if (rec.eliteEnterBattleIdx != null && rec.battleCount - rec.eliteEnterBattleIdx <= 2) t.push("ELITE_GREED_WIPE");
+  if (rec.faintCount >= 3) t.push("LOW_HP_CHAIN");
+  if (!rec.firstRestDepth) t.push("NO_REST_RECOVERY");
+  if (rec.bossAttempted) t.push("BOSS_ATTEMPT_FAIL");
+  else if (rec.bossKeysFinal < 2) t.push("BOSS_KEY_STARVE");
+  if (!rec.firstFusionDepth && d >= 9) t.push("NO_FUSION_PROGRESS");
+  if (!rec.gotSecondClass && d >= 12) t.push("NO_SECOND_CLASS");
+  if (!rec.hasHealer && !rec.hasShield) t.push("NO_HEAL_OR_SHIELD_AXIS");
+  if (!rec.hasTank) t.push("NO_TANK_AXIS");
+  if (!rec.hasAoE) t.push("NO_AOE_AXIS");
+  return t;
 }
 
 /* ── 상태 스냅샷/복구(본게임 state 오염 방지 — 01A State Restore) ─────────
@@ -537,6 +635,97 @@ export function aggregate(runs) {
   };
 }
 
+/* ── Auto Run Report 04 — 실패원인/경로/마일스톤/생존/의존도/보스흐름/자동진단 집계 ──── */
+const tierAr = (id) => (SECOND_CLASS_JOBS.includes(id) ? "2차" : ADVANCED_JOBS.includes(id) ? "1차" : "기본");
+export function aggregateAR04(runs, themeId, policyId, a) {
+  const N = runs.length || 1;
+  const clears = runs.filter((r) => r.result === "clear");
+  const wipes = runs.filter((r) => r.result === "defeat");
+
+  // A. 실패 원인(전멸런 태그 분포)
+  const causeMap = new Map();
+  wipes.forEach((r) => (r.failureTags || []).forEach((t) => causeMap.set(t, (causeMap.get(t) || 0) + 1)));
+  const failureCauses = [...causeMap.entries()].map(([tag, count]) => ({ tag, count, rate: count / N })).sort((x, y) => y.count - x.count);
+
+  // B. 선택 경로
+  const pathTop = (subset, key) => { const m = new Map(); subset.forEach((r) => m.set(r[key], (m.get(r[key]) || 0) + 1)); return [...m.entries()].map(([sig, count]) => ({ sig, count })).sort((x, y) => y.count - x.count).slice(0, 5); };
+  const preWipeMap = new Map(); wipes.forEach((r) => { const c = r.preWipeChoice || "?"; preWipeMap.set(c, (preWipeMap.get(c) || 0) + 1); });
+  const preWipeTop = [...preWipeMap.entries()].map(([choice, count]) => ({ choice, count })).sort((x, y) => y.count - x.count);
+
+  // C. 재미 도달 마일스톤
+  const MS = [["첫 영입", "firstRecruitDepth"], ["첫 4인", "partySize4Depth"], ["첫 합체", "firstFusionDepth"], ["첫 1차", "firstFirstClassDepth"], ["첫 2차", "firstSecondClassDepth"], ["첫 정예", "firstEliteAttemptDepth"], ["정예 처치", "firstEliteKillDepth"], ["보스 열쇠", "firstBossKeyDepth"], ["보스 도전", "bossAttemptDepth"], ["보스 처치", "bossKillDepth"], ["첫 쉼터", "firstRestDepth"]];
+  const milestones = MS.map(([name, key]) => { const reached = runs.filter((r) => r[key] > 0); return { name, key, reachRate: reached.length / N, avgDepth: reached.length ? mean(reached.map((r) => r[key])) : 0 }; });
+  const diedBefore = (key) => runs.filter((r) => r.result !== "clear" && !(r[key] > 0)).length / N;
+  const funReachLoss = { beforeParty4: diedBefore("partySize4Depth"), beforeFusion: diedBefore("firstFusionDepth"), beforeElite: diedBefore("firstEliteAttemptDepth"), beforeBossKey: diedBefore("firstBossKeyDepth"), beforeBossAttempt: diedBefore("bossAttemptDepth") };
+
+  // D. 마일스톤 이후 생존
+  const survNext = (idxKey, n) => { const reached = runs.filter((r) => r[idxKey] != null); if (!reached.length) return null; return reached.filter((r) => !(r.result === "defeat" && r.battleCount - r[idxKey] <= n)).length / reached.length; };
+  const bk = runs.filter((r) => r.bossKeyBattleIdx != null);
+  const milestoneSurvival = { party4Next3: survNext("party4BattleIdx", 3), fusionNext3: survNext("fusionBattleIdx", 3), secondClassNext3: survNext("secondClassBattleIdx", 3), eliteNext2: survNext("eliteEnterBattleIdx", 2), postBossKey: bk.length ? bk.filter((r) => r.bossAttempted || r.result !== "defeat").length / bk.length : null };
+
+  // E. 직업/역할 의존도
+  const jobIds = Object.keys(UNIT_TEMPLATES.party);
+  const clrIn = (sub, id) => (sub.length ? sub.filter((r) => r.jobsSeen.has(id)).length / sub.length : 0);
+  const jobDep = jobIds.map((id) => { const present = runs.filter((r) => r.jobsSeen.has(id)); const absent = runs.filter((r) => !r.jobsSeen.has(id)); return { id, name: jobName(id), tier: tierAr(id), appear: present.length, clearAppear: clears.filter((r) => r.jobsSeen.has(id)).length, wipeAppear: wipes.filter((r) => r.jobsSeen.has(id)).length, clearRatePresent: present.length ? present.filter((r) => r.result === "clear").length / present.length : 0, clearRateAbsent: absent.length ? absent.filter((r) => r.result === "clear").length / absent.length : 0, delta: clrIn(clears, id) - clrIn(wipes, id) }; }).filter((j) => j.appear > 0);
+  const noClear = (key) => { const w = runs.filter((r) => !r[key]); return w.length ? w.filter((r) => r.result === "clear").length / w.length : null; };
+  const withClear = (key) => { const w = runs.filter((r) => r[key]); return w.length ? w.filter((r) => r.result === "clear").length / w.length : null; };
+  const ROLES = ["tank", "healer", "shielder", "singleDps", "aoeDps", "pierce", "counter", "marker", "debuff", "control", "support"];
+  const roleDep = ROLES.map((role) => { const present = runs.filter((r) => jobsHaveRole(r.jobsSeen, role)); const absent = runs.filter((r) => !jobsHaveRole(r.jobsSeen, role)); return { role, present: present.length, clearPresent: present.length ? present.filter((r) => r.result === "clear").length / present.length : 0, clearAbsent: absent.length ? absent.filter((r) => r.result === "clear").length / absent.length : 0 }; }).filter((r) => r.present > 0 || r.role === "healer" || r.role === "tank");
+  const roleDependency = {
+    jobsTopClear: jobDep.slice().sort((x, y) => y.delta - x.delta).slice(0, 8),
+    jobsTopWipe: jobDep.slice().sort((x, y) => y.wipeAppear - x.wipeAppear).slice(0, 8),
+    roles: roleDep,
+    noHealerClearRate: noClear("hasHealer"), noTankClearRate: noClear("hasTank"), noShieldClearRate: noClear("hasShield"), noAoEClearRate: noClear("hasAoE"), noSecondClassClearRate: noClear("hasSecondClass"),
+    healerClearRate: withClear("hasHealer"), tankClearRate: withClear("hasTank"), aoeClearRate: withClear("hasAoE"), secondClassClearRate: withClear("hasSecondClass"),
+  };
+
+  // F. 보스 흐름
+  const att = runs.filter((r) => r.bossAttempted);
+  const fail = att.filter((r) => !r.bossKilled && r.bossHpRemaining != null);
+  const bossFlow = {
+    bossAttemptRate: att.length / N, bossKillRate: runs.filter((r) => r.bossKilled).length / N,
+    bossKillOnAttemptRate: att.length ? att.filter((r) => r.bossKilled).length / att.length : 0,
+    bossAttemptAvgDepth: att.length ? mean(att.map((r) => r.bossAttemptDepth)) : 0,
+    bossAttemptPartySizeAvg: att.length ? mean(att.map((r) => r.bossAttemptPartySize || 0)) : 0,
+    bossAttemptAvgHpPercent: att.length ? mean(att.map((r) => r.bossAttemptHpPercent || 0)) : 0,
+    bossAttemptWithSecondClassRate: att.length ? att.filter((r) => r.hasSecondClass).length / att.length : 0,
+    bossAttemptWithHealerRate: att.length ? att.filter((r) => r.hasHealer).length / att.length : 0,
+    bossAttemptWithTankRate: att.length ? att.filter((r) => r.hasTank).length / att.length : 0,
+    bossHalfHpSeenRate: runs.filter((r) => r.bossHalfHpSeen).length / N,
+    bossFailAvgBossHpRemaining: fail.length ? mean(fail.map((r) => r.bossHpRemaining)) : null,
+  };
+
+  const diagnosis = buildDiagnosis(a, { failureCauses, milestoneSurvival, roleDependency, bossFlow }, policyId);
+  return { failureCauses, wipePathTop: pathTop(wipes, "pathSignature"), clearPathTop: pathTop(clears, "pathSignature"), preWipeTop, milestones, funReachLoss, milestoneSurvival, roleDependency, bossFlow, diagnosis };
+}
+
+function buildDiagnosis(a, ar, policyId) {
+  const N = a.attempts || 1;
+  const ed = a.deaths1to8 / N;
+  let primary = "", secondary = "";
+  const watch = [];
+  if (ed >= 0.5) primary = `초반 1~8 전멸이 ${fmtPct(ed)}입니다. 첫 4인 완성 전 이탈이 주요 병목입니다.`;
+  const bf = ar.bossFlow;
+  if (bf.bossAttemptRate < 0.2 && bf.bossKillOnAttemptRate >= 0.6) { const s = `보스 도전률은 낮지만(${fmtPct(bf.bossAttemptRate)}) 도전 시 처치율은 높습니다(${fmtPct(bf.bossKillOnAttemptRate)}). 보스보다 보스 전 진행이 병목입니다.`; if (!primary) primary = s; else if (!secondary) secondary = s; }
+  if (bf.bossAttemptRate >= 0.1 && bf.bossHalfHpSeenRate < 0.05) { const s = "보스 HP 50% 이하를 거의 못 봅니다 — 보스 과강함 가능성."; if (!secondary) secondary = s; else watch.push(s); }
+  const ms = ar.milestoneSurvival;
+  if (ms.fusionNext3 != null && ms.fusionNext3 < 0.5) watch.push(`첫 합체 후 3전투 생존율 ${fmtPct(ms.fusionNext3)} — 합체 직후 파티 축소 리스크가 큽니다.`);
+  if (ms.party4Next3 != null && ms.party4Next3 < 0.5) watch.push(`4인 완성 후 3전투 생존율 ${fmtPct(ms.party4Next3)} — 4인 직후 전멸이 잦습니다.`);
+  const rd = ar.roleDependency;
+  if (rd.healerClearRate != null && rd.noHealerClearRate != null && rd.healerClearRate - rd.noHealerClearRate > 0.10) watch.push(`Healer Dependency Watch: 힐러 없는 런 클리어율(${fmtPct(rd.noHealerClearRate)}) < 포함(${fmtPct(rd.healerClearRate)}).`);
+  if (rd.tankClearRate != null && rd.noTankClearRate != null && rd.tankClearRate - rd.noTankClearRate > 0.10) watch.push("Tank Dependency Watch: 탱커 없는 런 클리어율 급락.");
+  const topJob = (rd.jobsTopClear || [])[0];
+  if (topJob && topJob.clearRatePresent - topJob.clearRateAbsent > 0.15 && topJob.appear >= 3) watch.push(`${topJob.name} Dependency Watch: 포함 런 클리어율(${fmtPct(topJob.clearRatePresent)})이 비포함(${fmtPct(topJob.clearRateAbsent)}) 대비 크게 높음.`);
+  let recommended;
+  if (ed >= 0.5) recommended = "Early Cushion 02 / Recruit Safety 01 / Soft Ramp 01로 초반 1~8 생존 완충을 A/B 비교 권장.";
+  else if (ms.fusionNext3 != null && ms.fusionNext3 < 0.5) recommended = "First Fusion Safety 01로 합체 직후 완충 A/B 비교 권장.";
+  else if (bf.bossAttemptRate < 0.2) recommended = "Guided Beginner 01 / Safe Elite Gate 01로 정예·진행 유도 A/B 비교 권장.";
+  else recommended = "프로필 A/B(Cushion/RecruitSafe/SoftRamp)로 가장 개선 폭 큰 완충안 탐색 권장.";
+  if (!primary) primary = "뚜렷한 단일 병목 없음 — 분포/경로를 확인하세요.";
+  if (!watch.length) watch.push("뚜렷한 의존도/생존 경고 없음.");
+  return { primary, secondary, recommended, watch };
+}
+
 /* ── TSV / JSON ─────────────────────────────────────────────────── */
 // Auto Run Report 03 — theme + 판정(verdict) + 목표 클리어 범위 열 추가(02 컬럼은 그대로 유지).
 const TSV_COLS = [
@@ -546,19 +735,36 @@ const TSV_COLS = [
   "firstSecondClassDepth", "reachedDepth9", "reachedDepth17", "reachedDepth25",
   "validationVerdict", "clearRateVerdict", "funReachVerdict", "bossFlowVerdict", "earlyDeathVerdict",
   "targetClearMin", "targetClearMax",
+  // AR04
+  "failureTags", "pathSignature", "lastChoices", "preWipeChoice", "lastSafeMilestone",
+  "firstFirstClassDepth", "firstEliteAttemptDepth", "firstEliteKillDepth", "firstBossKeyDepth",
+  "bossAttemptDepth", "bossHalfHpSeen", "bossHalfHpSeenDepth", "bossKillDepth", "firstRestDepth",
+  "party4SurvivalNext3", "fusionSurvivalNext3", "secondClassSurvivalNext3", "eliteAttemptSurvivalNext2",
+  "runBossAttemptHpPercent", "bossFailBossHpRemaining",
+  "hasHealer", "hasTank", "hasShield", "hasAoE", "hasSecondClass",
+  "clearWithoutHealer", "clearWithoutTank", "clearWithoutAoE", "clearWithoutSecondClass",
 ];
 export function runsToTSV(runs, extra = {}) {
   const v = extra.verdict || {}, t = extra.target || {};
+  const survFlag = (r, idxKey, n) => (r[idxKey] == null ? "" : (r.result === "defeat" && r.battleCount - r[idxKey] <= n ? 0 : 1));
+  const b = (x) => (x ? 1 : 0);
   const lines = [TSV_COLS.join("\t")];
   runs.forEach((r) => {
     lines.push([
       r.theme || "", r.policy, r.profile, r.runIndex, r.result, r.finalDepth, r.battleCount, r.fusionCount, r.recruitCount,
-      r.faintCount, r.bossAttempted ? 1 : 0, r.bossKilled ? 1 : 0, r.finalParty.map(jobName).join("+"), r.secondClassCount,
+      r.faintCount, b(r.bossAttempted), b(r.bossKilled), r.finalParty.map(jobName).join("+"), r.secondClassCount,
       r.selectedRewards.map(rewardName).join("|"), r.endReason, r.routeChoices.join(">"),
       r.result === "defeat" ? bandOf(r.finalDepth) : "", r.firstFusionDepth, r.firstRecruitDepth, r.partySize4Depth,
-      r.firstSecondClassDepth, r.reachedDepth9 ? 1 : 0, r.reachedDepth17 ? 1 : 0, r.reachedDepth25 ? 1 : 0,
+      r.firstSecondClassDepth, b(r.reachedDepth9), b(r.reachedDepth17), b(r.reachedDepth25),
       v.overall || "", v.clear || "", v.funReach || "", v.bossFlow || "", v.earlyDeath || "",
       t.clearMin != null ? t.clearMin : "", t.clearMax != null ? t.clearMax : "",
+      (r.failureTags || []).join("|"), r.pathSignature || "", r.lastChoices || "", r.preWipeChoice || "", r.lastSafeMilestone || "",
+      r.firstFirstClassDepth, r.firstEliteAttemptDepth, r.firstEliteKillDepth, r.firstBossKeyDepth,
+      r.bossAttemptDepth, b(r.bossHalfHpSeen), r.bossHalfHpSeenDepth, r.bossKillDepth, r.firstRestDepth,
+      survFlag(r, "party4BattleIdx", 3), survFlag(r, "fusionBattleIdx", 3), survFlag(r, "secondClassBattleIdx", 3), survFlag(r, "eliteEnterBattleIdx", 2),
+      r.bossAttemptHpPercent != null ? Math.round(r.bossAttemptHpPercent * 1000) / 10 : "", r.bossHpRemaining != null ? Math.round(r.bossHpRemaining * 1000) / 10 : "",
+      b(r.hasHealer), b(r.hasTank), b(r.hasShield), b(r.hasAoE), b(r.hasSecondClass),
+      b(r.clearWithoutHealer), b(r.clearWithoutTank), b(r.clearWithoutAoE), b(r.clearWithoutSecondClass),
     ].join("\t"));
   });
   return lines.join("\n");
@@ -568,6 +774,16 @@ export function runsToJSON(runs, extra = {}) {
     theme: extra.themeId || (runs[0] && runs[0].theme) || null,
     policy: extra.policyId || null, profile: extra.profileId || null,
     verdict: extra.verdict || null, target: extra.target || null,
+    aggregate: extra.aggregate || null,
+    failureCauses: extra.ar04 ? extra.ar04.failureCauses : null,
+    pathSummary: extra.ar04 ? { wipePathTop: extra.ar04.wipePathTop, clearPathTop: extra.ar04.clearPathTop, preWipeTop: extra.ar04.preWipeTop } : null,
+    milestones: extra.ar04 ? extra.ar04.milestones : null,
+    funReachLoss: extra.ar04 ? extra.ar04.funReachLoss : null,
+    milestoneSurvival: extra.ar04 ? extra.ar04.milestoneSurvival : null,
+    roleDependency: extra.ar04 ? extra.ar04.roleDependency : null,
+    bossFlow: extra.ar04 ? extra.ar04.bossFlow : null,
+    diagnosis: extra.ar04 ? extra.ar04.diagnosis : null,
+    profileComparison: extra.profileComparison || null,
     runs: runs.map((r) => ({ ...r, jobsSeen: [...r.jobsSeen] })),
   }, null, 0);
 }
@@ -673,40 +889,88 @@ function renderFlags(themeId, policyId, a) {
   $("ar-flags").innerHTML = `<h3>검증 플래그 (자동 해석)</h3><ul class="ar-flags">${flags.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>`;
 }
 
-/* ── 테마 검증 히스토리 비교표(배치 누적) ─────────────────────────────── */
+/* ── Auto Run Report 04 — 분석 섹션 렌더 ─────────────────────────────── */
+function renderDiagnosis(ar) {
+  const d = ar.diagnosis;
+  $("ar-diagnosis").innerHTML = `<h3>자동 진단 (병목 요약)</h3>
+    <div class="ar-diag"><div><b>주 병목:</b> ${esc(d.primary)}</div>${d.secondary ? `<div><b>부 병목:</b> ${esc(d.secondary)}</div>` : ""}<div><b>추천 실험:</b> ${esc(d.recommended)}</div></div>
+    <h4>Watch List</h4><ul class="ar-flags">${d.watch.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>`;
+}
+function renderFailureCause(ar) {
+  $("ar-failcause").innerHTML = `<h3>실패 원인 (추정) TOP <span class="ar-meta">— 자동 추정(완벽한 인과 아님)</span></h3>` + (ar.failureCauses.length
+    ? `<div class="ar-tablewrap"><table><thead><tr><th class="txt">원인 태그</th><th>건수</th><th>전체 비율</th></tr></thead><tbody>${ar.failureCauses.slice(0, 12).map((c) => `<tr><td class="txt">${c.tag}</td><td>${c.count}</td><td>${fmtPct(c.rate)}</td></tr>`).join("")}</tbody></table></div>`
+    : `<div class="ar-empty">전멸 기록이 없습니다.</div>`);
+}
+function renderPaths(ar) {
+  const col = (title, list, codeKey) => `<div class="ar-rewardcol"><h4>${title}</h4>${list.length ? `<ol>${list.map((p) => `<li><code>${esc(codeKey ? p[codeKey] : p.sig)}</code> <b>${p.count}</b></li>`).join("")}</ol>` : `<div class="ar-empty">없음</div>`}</div>`;
+  $("ar-paths").innerHTML = `<h3>선택 경로 분석 <span class="ar-meta">(N=일반·D=위험·E=정예·BOSS / REC=영입·FUS=합체·REST=쉼터)</span></h3>
+    <div class="ar-rewards">${col("전멸 경로 TOP5", ar.wipePathTop)}${col("클리어 경로 TOP5", ar.clearPathTop)}${col("전멸 직전 선택 TOP", ar.preWipeTop, "choice")}</div>`;
+}
+function renderMilestones(ar) {
+  const cards = ar.milestones.map((m) => card(m.name, fmtPct(m.reachRate), `평균심도 ${fmt1(m.avgDepth)}`)).join("");
+  const L = ar.funReachLoss;
+  const loss = [card("4인 전 사망", fmtPct(L.beforeParty4)), card("첫합체 전 사망", fmtPct(L.beforeFusion)), card("첫정예 전 사망", fmtPct(L.beforeElite)), card("첫보스키 전 사망", fmtPct(L.beforeBossKey)), card("보스도전 전 사망", fmtPct(L.beforeBossAttempt))].join("");
+  $("ar-milestones").innerHTML = `<h3>재미 도달 마일스톤 (도달률 / 평균심도)</h3><div class="ar-cards">${cards}</div>
+    <h4>재미 도달 전 이탈 비율</h4><div class="ar-cards">${loss}</div>`;
+}
+function renderMilestoneSurvival(ar) {
+  const ms = ar.milestoneSurvival; const c = (k, v) => card(k, v == null ? "—" : fmtPct(v));
+  $("ar-survival").innerHTML = `<h3>마일스톤 이후 생존율 (다음 N전투 내 전멸 안 함)</h3><div class="ar-cards">${c("4인 후 3전투", ms.party4Next3)}${c("합체 후 3전투", ms.fusionNext3)}${c("2차 후 3전투", ms.secondClassNext3)}${c("정예 진입 후 2전투", ms.eliteNext2)}${c("보스키 후→도전 도달", ms.postBossKey)}</div>`;
+}
+function renderRoleDependency(ar) {
+  const rd = ar.roleDependency; const c = (k, v) => card(k, v == null ? "—" : fmtPct(v));
+  const roleRows = rd.roles.map((r) => `<tr><td class="txt">${r.role}</td><td>${r.present}</td><td>${fmtPct(r.clearPresent)}</td><td>${fmtPct(r.clearAbsent)}</td></tr>`).join("");
+  const jobRows = rd.jobsTopClear.map((j) => `<tr><td class="txt">${esc(j.name)} <span class="ar-meta">${j.tier}</span></td><td>${j.appear}</td><td>${j.clearAppear}</td><td>${j.wipeAppear}</td><td>${fmtPct(j.clearRatePresent)}</td><td>${fmtPct(j.clearRateAbsent)}</td><td>${(j.delta >= 0 ? "+" : "") + fmtPct(j.delta)}</td></tr>`).join("");
+  $("ar-dependency").innerHTML = `<h3>직업 / 역할군 의존도</h3>
+    <div class="ar-cards">${c("힐러 없음 클리어율", rd.noHealerClearRate)}${c("탱커 없음 클리어율", rd.noTankClearRate)}${c("보호막 없음 클리어율", rd.noShieldClearRate)}${c("광역 없음 클리어율", rd.noAoEClearRate)}${c("2차 없음 클리어율", rd.noSecondClassClearRate)}</div>
+    <h4>역할군 있음/없음 클리어율</h4><div class="ar-tablewrap"><table><thead><tr><th class="txt">역할군</th><th>등장런</th><th>있을때</th><th>없을때</th></tr></thead><tbody>${roleRows}</tbody></table></div>
+    <h4>클리어 기여 직업 TOP (delta = 클리어 등장률 − 전멸 등장률)</h4><div class="ar-tablewrap"><table><thead><tr><th class="txt">직업</th><th>등장</th><th>클리어포함</th><th>전멸포함</th><th>있을때</th><th>없을때</th><th>delta</th></tr></thead><tbody>${jobRows}</tbody></table></div>`;
+}
+function renderBossFlow(ar) {
+  const bf = ar.bossFlow;
+  $("ar-bossflow").innerHTML = `<h3>보스 흐름 분석</h3><div class="ar-cards">
+    ${card("보스 도전률", fmtPct(bf.bossAttemptRate))}${card("도전 시 처치율", fmtPct(bf.bossKillOnAttemptRate))}${card("보스 처치율(전체)", fmtPct(bf.bossKillRate))}${card("보스 HP50% 도달률", fmtPct(bf.bossHalfHpSeenRate))}
+    ${card("도전 평균 심도", fmt1(bf.bossAttemptAvgDepth))}${card("도전 평균 파티수", fmt1(bf.bossAttemptPartySizeAvg))}${card("도전 평균 HP%", fmtPct(bf.bossAttemptAvgHpPercent))}
+    ${card("도전 시 2차 보유율", fmtPct(bf.bossAttemptWithSecondClassRate))}${card("도전 시 힐러 보유율", fmtPct(bf.bossAttemptWithHealerRate))}${card("실패 시 보스 잔여HP%", bf.bossFailAvgBossHpRemaining == null ? "—" : fmtPct(bf.bossFailAvgBossHpRemaining))}
+  </div>`;
+}
+
+/* ── A/B 프로필 비교 히스토리(배치 누적) ─────────────────────────────── */
 const comparisons = []; // 각 배치 완료 시 1행 누적
-function pushComparison(a, meta, verdict) {
+function pushComparison(a, meta, verdict, ar) {
   comparisons.push({
     theme: themeLabel(meta.themeId), policy: policyLabel(meta.policyId), profile: (PROFILES[meta.profileId] || {}).label || meta.profileId,
-    runs: a.attempts, clearRate: a.clearRate, target: rangeText(verdict.target), verdict: verdict.overall,
-    avgDepth: a.avgDepth, deaths1to8: a.deaths1to8, reached9: a.reached9, reached17: a.reached17, reached25: a.reached25,
-    bossAttempt: a.bossAttemptRate, secondRuns: a.secondRuns,
+    runs: a.attempts, clearRate: a.clearRate, verdict: verdict.overall, deaths1to8: a.deaths1to8,
+    firstParty4: a.firstParty4Rate, firstFusion: a.firstFusionRate, bossAttempt: a.bossAttemptRate, bossKill: a.bossKillOnAttemptRate,
+    secondRuns: a.secondRuns, reached9: a.reached9Rate, failTop: (ar.failureCauses[0] || {}).tag || "—",
   });
 }
 function renderComparison() {
-  const head = `<h3>테마 검증 히스토리 <button type="button" id="ar-clear-compare" class="ar-mini">초기화</button></h3>`;
-  if (!comparisons.length) { $("ar-compare").innerHTML = head + `<div class="ar-empty">배치를 실행하면 한 줄씩 누적됩니다(테마/정책/프로필/판정 비교용).</div>`; wireClearCompare(); return; }
+  const head = `<h3>A/B 프로필 비교 히스토리 <button type="button" id="ar-clear-compare" class="ar-mini">초기화</button></h3>`;
+  if (!comparisons.length) { $("ar-compare").innerHTML = head + `<div class="ar-empty">배치를 실행하면 한 줄씩 누적됩니다(정책×프로필 A/B 비교용).</div>`; wireClearCompare(); return; }
   const rows = comparisons.map((c) =>
-    `<tr><td class="txt">${esc(c.theme)}</td><td class="txt">${esc(c.policy)}</td><td class="txt">${esc(c.profile)}</td><td>${c.runs}</td><td>${fmtPct(c.clearRate)}</td><td>${c.target}</td><td>${badge(c.verdict)}</td><td>${fmt1(c.avgDepth)}</td><td>${c.deaths1to8}</td><td>${c.reached9}</td><td>${c.reached17}</td><td>${c.reached25}</td><td>${fmtPct(c.bossAttempt)}</td><td>${c.secondRuns}</td></tr>`).join("");
+    `<tr><td class="txt">${esc(c.policy)}</td><td class="txt">${esc(c.profile)}</td><td>${c.runs}</td><td>${fmtPct(c.clearRate)}</td><td>${badge(c.verdict)}</td><td>${c.deaths1to8}</td><td>${fmtPct(c.firstParty4)}</td><td>${fmtPct(c.firstFusion)}</td><td>${fmtPct(c.bossAttempt)}</td><td>${fmtPct(c.bossKill)}</td><td>${fmtPct(c.reached9)}</td><td>${c.secondRuns}</td><td class="txt">${c.failTop}</td></tr>`).join("");
   $("ar-compare").innerHTML = head +
-    `<div class="ar-tablewrap"><table><thead><tr><th class="txt">테마</th><th class="txt">정책</th><th class="txt">프로필</th><th>runs</th><th>클리어율</th><th>목표</th><th>판정</th><th>평균심도</th><th>1-8전멸</th><th>9+</th><th>17+</th><th>25+</th><th>보스도전</th><th>2차런</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    `<div class="ar-tablewrap"><table><thead><tr><th class="txt">정책</th><th class="txt">프로필</th><th>runs</th><th>클리어율</th><th>판정</th><th>1-8전멸</th><th>첫4인</th><th>첫합체</th><th>보스도전</th><th>보스처치</th><th>9+도달</th><th>2차런</th><th class="txt">실패TOP</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   wireClearCompare();
 }
 function wireClearCompare() { const b = $("ar-clear-compare"); if (b) b.addEventListener("click", () => { comparisons.length = 0; renderComparison(); }); }
 
 /* ── 컨트롤/엔트리 ───────────────────────────────────────────────── */
-let lastRuns = null, lastMeta = null, lastVerdict = null;
+let lastRuns = null, lastMeta = null, lastVerdict = null, lastAgg = null, lastAr04 = null;
 function setProgress(done, total) { const pct = total ? (done / total) * 100 : 0; $("ar-progress-fill").style.width = pct + "%"; $("ar-progress-text").textContent = `${done} / ${total}`; }
 
 function renderAll(runs, meta) {
   lastRuns = runs; lastMeta = meta;
-  if (!runs.length) { $("ar-summary").innerHTML = `<div class="ar-empty">실행 결과가 없습니다.</div>`; lastVerdict = null; return; }
+  if (!runs.length) { $("ar-summary").innerHTML = `<div class="ar-empty">실행 결과가 없습니다.</div>`; lastVerdict = lastAr04 = lastAgg = null; return; }
   const a = aggregate(runs);
   const verdict = evaluateTheme(meta.themeId, meta.policyId, a);
-  lastVerdict = verdict;
+  const ar = aggregateAR04(runs, meta.themeId, meta.policyId, a);
+  lastVerdict = verdict; lastAgg = a; lastAr04 = ar;
   renderValidation(a, meta, verdict); renderTargets(meta.themeId); renderFlags(meta.themeId, meta.policyId, a);
+  renderDiagnosis(ar); renderFailureCause(ar); renderPaths(ar); renderMilestones(ar); renderMilestoneSurvival(ar); renderRoleDependency(ar); renderBossFlow(ar);
   renderSummary(a, meta); renderDeathBand(a); renderParties(a); renderJobs(a); renderSecond(a); renderRewards(a);
-  if (!meta.canceled) { pushComparison(a, meta, verdict); renderComparison(); }
+  if (!meta.canceled) { pushComparison(a, meta, verdict, ar); renderComparison(); }
   $("ar-exports").hidden = false;
 }
 
@@ -756,5 +1020,5 @@ export function initAutoRunReport() {
   $("ar-run-btns").addEventListener("click", (e) => { const b = e.target.closest("[data-count]"); if (b) run(Number(b.dataset.count)); });
   $("ar-cancel").addEventListener("click", cancelBatch);
   $("ar-copy-tsv").addEventListener("click", (e) => { if (lastRuns) copy(runsToTSV(lastRuns, { verdict: lastVerdict, target: lastVerdict && lastVerdict.target }), e.target, "복사됨!"); });
-  $("ar-copy-json").addEventListener("click", (e) => { if (lastRuns) copy(runsToJSON(lastRuns, { themeId: lastMeta && lastMeta.themeId, policyId: lastMeta && lastMeta.policyId, profileId: lastMeta && lastMeta.profileId, verdict: lastVerdict, target: lastVerdict && lastVerdict.target }), e.target, "복사됨!"); });
+  $("ar-copy-json").addEventListener("click", (e) => { if (lastRuns) copy(runsToJSON(lastRuns, { themeId: lastMeta && lastMeta.themeId, policyId: lastMeta && lastMeta.policyId, profileId: lastMeta && lastMeta.profileId, verdict: lastVerdict, target: lastVerdict && lastVerdict.target, aggregate: lastAgg, ar04: lastAr04, profileComparison: comparisons }), e.target, "복사됨!"); });
 }
