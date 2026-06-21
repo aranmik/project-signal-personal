@@ -213,8 +213,9 @@ function playRunDetailed(policy, profile, runIndex) {
     else if (screen === "route") {
       const choices = gameState.run.routeChoices || ["normal"]; let rt = policy.pickRoute(choices); if (profile.route) rt = profile.route(rt, choices, ctx());
       rec.routeCounts[rt] = (rec.routeCounts[rt] || 0) + 1; // Route Grammar 02 — 루트 선택 카운트
-      if (rt === "ally") { rec.path.push("ALLY"); if (!rec.firstRecruitRouteDepth) rec.firstRecruitRouteDepth = gameState.run.depth; }
-      else if (rt === "bond") { rec.path.push("BOND"); if (!rec.firstFusionRouteDepth) rec.firstFusionRouteDepth = gameState.run.depth; }
+      // Route Grammar 02B — ally/bond도 전투 루트 → 토큰(ALLY/BOND)은 전투 핸들러가 push. 여기선 선택 심도만 기록.
+      if (rt === "ally" && !rec.firstRecruitRouteDepth) rec.firstRecruitRouteDepth = gameState.run.depth;
+      if (rt === "bond" && !rec.firstFusionRouteDepth) rec.firstFusionRouteDepth = gameState.run.depth;
       if (rt === "danger" && !rec.firstDangerDepth) rec.firstDangerDepth = gameState.run.depth;
       if (rt === "rest" && !rec.firstRestDepth) rec.firstRestDepth = gameState.run.depth;
       if (rt === "elite" || rt === "danger") {

@@ -3,7 +3,7 @@ import { createInitialParty, createPreviewEnemies, createStageEnemies, createRou
 import { ACTIVE_FUSION_RECIPES, BASE_JOBS, ADVANCED_JOBS, SECOND_CLASS_JOBS, prefersFront, slotPreference, availableFusions, combatRoleOf } from "../data/jobs.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
-import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions, depthSpeedFactor, routeReward, effectiveAlertness, farmWarnLevel } from "../data/routes.js";
+import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions, depthSpeedFactor, routeReward, farmWarnLevel } from "../data/routes.js";
 import { REWARDS, rewardById, REWARD_MAX_LEVEL } from "../data/rewards.js";
 import { saveFootprint } from "../data/footprints.js";
 import { renderGame, playActionFx, playStatusTickFx, playSupportFx, playStatusApplyFx, playActorFx, clearFxLayer, setFxSuppressed, setRenderSuppressed } from "../ui/render.js";
@@ -401,15 +401,13 @@ function showRouteChoice() {
   gameState.run.result = null;
   updateParty4Latch();   // Route Grammar 02 — 영입/합체 직후 4인 완성 래치 반영
   maybeFarmWarning();    // Route Grammar 02 — 4인 전 파밍 예고(잠복 압력)
-  // Route Grammar 02 — 의미별 루트 오퍼: 영입(ally)/합체(bond)/위험(danger)/정예(elite)/회복(rest)을 분리 제시.
+  // Route Grammar 02B — 의미별 전투 루트 오퍼(2~3개 랜덤): ally는 4인 미만 영입가능 시, bond는 3인+ 합체가능 시.
   gameState.run.routeChoices = rollRouteOffer({
     depth: gameState.run.depth,
     bossKeys: gameState.run.bossKeys,
-    effAlertness: effectiveAlertness(gameState.run),    // 유효 경계도(4인 전엔 잠복) — 정예 게이트 기준
     partySize: partyJobIds().length,
-    party4Reached: !!gameState.run.party4Reached,
     canRecruit: recruitCandidates().length > 0,          // 동료의 흔적 노출 조건(빈자리 + 미보유 기본직업)
-    canFuse: canEnterFusion(),                            // 결속의 공터 노출 조건(4인 + 레시피)
+    canFuse: availableFusions(partyJobIds()).length > 0, // 결속의 공터 노출 조건(실제 합체 조합 — 인원 게이트는 rollRouteOffer가 3인+로 적용)
   });
   gameState.screen = "route";
   renderGame(gameState);
@@ -460,29 +458,9 @@ export function chooseRoute(routeType) {
     return;
   }
 
-  // Route Grammar 02 — 동료의 흔적: 전투 없이 영입 화면으로. 영입은 이제 ally의 명시적 선택(합체와 분리).
-  if (rt.kind === "ally") {
-    rollRecruitOffer();
-    gameState.run.recruitContext = "ally";
-    pushLog("동료의 흔적을 따라갔다 — 전투 없이 새 동료를 찾는다.");
-    enterRecruit();
-    return;
-  }
-
-  // Route Grammar 02 — 결속의 공터: 전투 없이 합체/빌드 정리. 합체해도 빈자리를 자동으로 채우지 않는다.
-  if (rt.kind === "bond") {
-    pushLog("결속의 공터에서 파티를 정비한다 — 합체로 빌드를 만든다.");
-    if (canEnterFusion()) {
-      gameState.run.recruitContext = "bond";
-      gameState.screen = "fusion";
-      renderGame(gameState);
-    } else {
-      proceedNextStage(); // 안전장치(정상적으론 bond가 canFuse일 때만 노출됨)
-    }
-    return;
-  }
-
-  // 위험/정예는 위험도(읽힘용) 상승. 보스/일반은 변동 없음.
+  // Route Grammar 02B — 동료의 흔적(ally)/결속의 공터(bond)도 "전투 루트"다. 여기선 전투로 진입만 하고,
+  //   영입/합체는 전투 승리 후 applyFinish에서 연결한다(패배 시 영입/합체 없음). 합체 후 자동 영입은 여전히 금지.
+  // 위험/정예는 위험도(읽힘용) 상승. 보스/일반/영입/결속은 변동 없음(영입·결속 전투는 일반 난도).
   if (routeType === "danger") gameState.run.threat += 2;
   else if (routeType === "elite") gameState.run.threat += 1;
 
@@ -2356,10 +2334,28 @@ function applyFinish(outcome) {
       else if (keys === 2) pushLog("두 번째 열쇠가 사자왕의 위압을 걷어냈다. 정예의 시험을 모두 넘었다.");
       else pushLog(`정예를 물리쳤다 — 보스 열쇠 +1 (보유 ${keys}).`);
     }
-    // Route Grammar 02 — 깊은 수풀(danger)도 이제 일반 성장 보상 경로를 탄다(영입/합체 자동 보상 분리).
-    //   danger.reward.picks=2(더 큰 성장 보상)로 위험의 대가가 성장으로 돌아온다 — 영입/합체는 ally/bond의 선택.
-    // Reward Pressure 01 — 길 프로필에 따라 성장 선택 횟수 차등(일반1 / 깊은수풀2 / 정예1). 보상 화면이 이 값으로 다회 선택.
-    gameState.run.rewardPicks = Math.max(1, routeReward(gameState.run.currentRouteType).picks || 1);
+    // Route Grammar 02B — 승리 후 보상은 길마다 다르다(전부 전투 후). 영입/합체는 "전투에서 이긴 뒤" 연결한다.
+    const rt = gameState.run.currentRouteType;
+    if (rt === "ally") {
+      // 동료의 흔적 승리 → 영입 화면(빈자리 채움). 패배 시엔 여기 안 옴 = 영입 없음. 자동 영입 아님(ally 선택의 결과).
+      gameState.run.result = "victory";
+      rollRecruitOffer();
+      gameState.run.recruitContext = "ally";
+      pushLog(`심도 ${gameState.run.depth} 클리어! 동료의 흔적 — 전투에서 이겨 새 동료를 영입한다.`);
+      enterRecruit();
+      return;
+    }
+    if (rt === "bond" && partyJobIds().length >= 3 && availableFusions(partyJobIds()).length > 0) {
+      // 결속의 공터 승리 → 합체 화면. 합체 후 자동 영입 없음(빈자리 유지). 패배 시엔 여기 안 옴 = 합체 없음.
+      gameState.run.result = "victory";
+      gameState.run.recruitContext = "bond";
+      pushLog(`심도 ${gameState.run.depth} 클리어! 결속의 공터 — 전투에서 이겨 합체로 빌드를 정리한다.`);
+      gameState.screen = "fusion";
+      renderGame(gameState);
+      return;
+    }
+    // Reward Pressure 01 — 그 외(새싹 숲길1 / 깊은 수풀2 / 정예1)는 성장 보상. 보스 열쇠는 위 elite 분기에서 이미 처리.
+    gameState.run.rewardPicks = Math.max(1, routeReward(rt).picks || 1);
     gameState.run.result = "victory";
     rollRewardOffer(); // Run Reward Training 01 — 보상 진입 시 3택을 한 번 굴려 고정
     gameState.screen = "reward"; // Game Flow 01: 클리어 → 보상 선택 화면

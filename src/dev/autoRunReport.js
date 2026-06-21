@@ -508,9 +508,9 @@ function playOneRun(policy, profileId, themeId, runIndex) {
       if (profile.route) rt = profile.route(rt, choices, ctx()); // 프로필 안전 라우팅 보정
       rec.routeChoices.push(rt);
       rec.routeCounts[rt] = (rec.routeCounts[rt] || 0) + 1; // Route Grammar 02 — 루트 선택 카운트
-      // 전투 없는 루트(ally/bond)는 여기서 토큰 push(전투 핸들러를 안 거치므로). rest는 rest 핸들러에서.
-      if (rt === "ally") { rec.path.push("ALLY"); if (!rec.firstRecruitRouteDepth) rec.firstRecruitRouteDepth = gameState.run.depth; }
-      else if (rt === "bond") { rec.path.push("BOND"); if (!rec.firstFusionRouteDepth) rec.firstFusionRouteDepth = gameState.run.depth; }
+      // Route Grammar 02B — ally/bond도 전투 루트 → 토큰(ALLY/BOND)은 전투 핸들러가 push. 여기선 선택 심도만 기록.
+      if (rt === "ally" && !rec.firstRecruitRouteDepth) rec.firstRecruitRouteDepth = gameState.run.depth;
+      if (rt === "bond" && !rec.firstFusionRouteDepth) rec.firstFusionRouteDepth = gameState.run.depth;
       if (rt === "danger" && !rec.firstDangerDepth) rec.firstDangerDepth = gameState.run.depth;
       if (rt === "rest" && !rec.firstRestDepth) rec.firstRestDepth = gameState.run.depth;
       if ((rt === "elite" || rt === "danger")) {

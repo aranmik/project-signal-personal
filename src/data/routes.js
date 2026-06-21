@@ -23,21 +23,25 @@ import { BEGINNER_THEME } from "./stages.js";
 //     결속의 공터(bond) = 합체·빌드 정리(전투 없음) / 깊은 수풀(danger) = 순수 위험 도박(영입/합체 분리) /
 //     현자의 가지(elite) = 정예·보스키 / 이슬 쉼터(rest) = 회복 / 보스(boss) = 최종 도전.
 //   합체는 더 이상 자동으로 빈자리를 채우지 않는다(합체 후 자동 영입 제거 — battle.js). 영입은 ally의 명시적 선택.
+// Route Grammar 02B — 정정: 동료 획득·합체·성장은 "전투를 이긴 뒤 얻는 보상"이다.
+//   동료의 흔적(ally)/결속의 공터(bond)는 비전투 이벤트가 아니라 "보상 타입이 다른 전투 루트"다.
+//   전투 없이 파티 강화는 없다(런의 긴장·선택 책임·전멸 납득감 보존). 합체 후 자동 영입은 여전히 금지.
+//   kind="battle"(rest만 비전투). 승리 후 보상 종류는 battle.js applyFinish가 currentRouteType로 분기한다:
+//     normal=성장1픽 / danger=성장2픽 / ally=영입1(승리시) / bond=합체화면(승리시) / elite=보스키+성장1 / boss=클리어.
 export const ROUTE_TYPES = {
-  normal: { id: "normal", title: "새싹 숲길",  sub: "안전한 전투 · 파티 성장",  hud: "일반 전투", kind: "battle",
-    reward: { picks: 1, riskTier: "stable",   rewardTier: "low",  cardTag: "안전 · 보상 낮음",            resultLabel: "일반 전투 보상" } },
-  ally:   { id: "ally",   title: "동료의 흔적", sub: "전투를 피하고 동료를 찾는다", hud: "동료 찾기", kind: "ally",
-    reward: { picks: 0, riskTier: "safe",     rewardTier: "none", cardTag: "영입 · 전투 없음 · 파티 완성", resultLabel: "동료의 흔적" } },
-  bond:   { id: "bond",   title: "결속의 공터", sub: "합체와 재배치 · 빌드 정리",  hud: "결속",     kind: "bond",
-    reward: { picks: 0, riskTier: "safe",     rewardTier: "none", cardTag: "합체 · 전투 없음 · 빌드 정리", resultLabel: "결속의 공터" } },
-  // Route Grammar 02 — 깊은 수풀은 이제 "순수 위험 도박"이다. 더 이상 기본 영입/합체 필수 루트가 아니다.
-  //   위험 전투(stat 프리미엄 유지) + 더 큰 성장 보상(2픽). 영입/합체와 분리됐다(deepForest 제거).
+  normal: { id: "normal", title: "새싹 숲길",  sub: "전투 · 승리 후 성장",      hud: "일반 전투", kind: "battle",
+    reward: { picks: 1, riskTier: "stable",   rewardTier: "low",  cardTag: "전투 · 승리 후 성장 1회",       resultLabel: "일반 전투 보상" } },
+  ally:   { id: "ally",   title: "동료의 흔적", sub: "전투 · 승리 후 동료 영입",  hud: "동료 찾기", kind: "battle",
+    reward: { picks: 0, riskTier: "stable",   rewardTier: "ally", cardTag: "전투 · 승리 후 영입(패배 시 없음)", resultLabel: "동료의 흔적 — 영입", recruit: true } },
+  bond:   { id: "bond",   title: "결속의 공터", sub: "전투 · 승리 후 합체/정리",  hud: "결속 전투", kind: "battle",
+    reward: { picks: 0, riskTier: "stable",   rewardTier: "bond", cardTag: "전투 · 승리 후 합체(패배 시 없음)", resultLabel: "결속의 공터 — 합체", fusion: true } },
+  // 깊은 수풀 = 순수 위험 도박(영입/합체와 분리). 위험 전투(stat 프리미엄) + 더 큰 성장 보상(2픽).
   danger: { id: "danger", title: "깊은 수풀",  sub: "위험한 전투 · 더 큰 보상",  hud: "위험 전투", kind: "battle",
-    reward: { picks: 2, riskTier: "risky",    rewardTier: "high", cardTag: "위험 · 더 큰 성장 보상",      resultLabel: "깊은 수풀 보상" } },
-  elite:  { id: "elite",  title: "현자의 가지", sub: "정예의 기척 · 보스 열쇠",  hud: "정예 전투", kind: "battle",
-    reward: { picks: 1, riskTier: "veryRisky", rewardTier: "high", cardTag: "매우 위험 · 열쇠 + 보상",   resultLabel: "정예 보상", key: true } },
+    reward: { picks: 2, riskTier: "risky",    rewardTier: "high", cardTag: "위험 전투 · 승리 후 성장 2회",   resultLabel: "깊은 수풀 보상" } },
+  elite:  { id: "elite",  title: "현자의 가지", sub: "정예 전투 · 보스 열쇠",    hud: "정예 전투", kind: "battle",
+    reward: { picks: 1, riskTier: "veryRisky", rewardTier: "high", cardTag: "정예 전투 · 승리 후 열쇠 + 보상", resultLabel: "정예 보상", key: true } },
   rest:   { id: "rest",   title: "이슬 쉼터",  sub: "전원 회복 · 전투 없음",     hud: "휴식",     kind: "rest",
-    reward: { picks: 0, riskTier: "safe",     rewardTier: "none", cardTag: "회복 · 보상 없음",             resultLabel: "휴식으로 회복", heal: true } },
+    reward: { picks: 0, riskTier: "safe",     rewardTier: "none", cardTag: "회복 · 전투 없음",             resultLabel: "휴식으로 회복", heal: true } },
   boss:   { id: "boss",   title: "새싹 왕의 문", sub: "사자왕에게 도전",        hud: "보스전",   kind: "boss",
     reward: { picks: 0, riskTier: "boss",     rewardTier: "clear", cardTag: "",                            resultLabel: "" } },
 };
@@ -56,33 +60,28 @@ export const BOSS_ENCOUNTER = byTier("boss")[0] || ["lion:boss"]; // 사자왕
 // 여정 선택지 오퍼 — "읽히는 반고정" 선택지(복잡한 랜덤 생성 아님).
 //   항상 안정 옵션(일반) + depth 리듬에 따른 둘째 옵션(정예/위험/휴식). 보스 열쇠가 있으면 보스문 추가.
 //   카드 2~3개. 정예가 주기적으로 떠 열쇠를 모을 수 있고, 열쇠를 얻으면 "지금 갈지/더 돌지"를 고른다.
-// Sage Branch Gate 01 — 현자의 가지(elite)는 경계도(유효 경계도) 4 이상에서 최초 등장한다.
-export const SAGE_BRANCH_MIN_ALERTNESS = 4;
-
-// Route Grammar 02 — 여정 선택 오퍼 재정리. 의미별 루트를 명시적으로 제시한다.
-//   - 항상 새싹 숲길(normal: 안전 전투+성장).
-//   - 동료의 흔적(ally): 4인 미만 + 영입 가능하면 "높은 우선순위"로 항상 제시(파티 완성 유도).
-//   - 결속의 공터(bond): 합체 가능(4인 + 레시피)할 때 제시 — 합체는 이제 ally와 분리된 명시적 선택.
-//   - 깊은 수풀(danger)/현자의 가지(elite)/이슬 쉼터(rest): depth 리듬으로 둘째 위험/회복 옵션.
-//     현자의 가지는 "4인 완성 + 유효 경계도 4+"부터(4인 전엔 본격 정예 미등장 — 준비 구간 보호).
-//   - 보스: 열쇠 2개부터.
-//   effAlertness = effectiveAlertness(run)(4인 전엔 잠복으로 낮음) — 정예 게이트가 이 값을 본다.
-export function rollRouteOffer({ depth, bossKeys, effAlertness = 0, partySize = 4, party4Reached = false, canRecruit = false, canFuse = false }) {
-  const choices = ["normal"];
-  // 영입 우선: 4인 미만이면 동료의 흔적을 항상 제시(파티 완성 유도 — 위험을 미루고 인원을 채우는 선택).
-  if (partySize < 4 && canRecruit) choices.push("ally");
-  // 결속의 공터: 4인 + 실행 가능한 합체 레시피가 있을 때만(합체 후 자동 영입 없음 — 다음 선택은 유저 몫).
-  if (canFuse) choices.push("bond");
-  // depth 리듬으로 둘째 위험/회복 옵션.
-  const r = depth % 3;
-  if (r === 2) {
-    if (party4Reached && effAlertness >= SAGE_BRANCH_MIN_ALERTNESS) choices.push("elite");
-    else choices.push("danger");
-  } else if (r === 0) choices.push("rest");
-  else choices.push("danger");
-  if (bossKeys >= BOSS_MENACE.keysToSeal) choices.push("boss");
-  // 중복 제거(순서 유지).
-  return [...new Set(choices)];
+// Route Grammar 02B — 여정 선택 오퍼: 매 여정 2~3개를 "조건 필터링된 후보군에서 랜덤"으로 구성한다.
+//   기본 후보군(전부 전투, rest만 비전투): 새싹 숲길 / 깊은 수풀 / 현자의 가지 / 이슬 쉼터.
+//     · 현자의 가지(elite): 경계도 4 제한 제거 — 기본 후보군에 포함(보스엔 열쇠 2개 필요 + 모든 강화에 전투 비용이 있어 초반 러쉬 완충이 이미 있음).
+//   조건부 후보:
+//     · 동료의 흔적(ally): 파티 4명 미만 + 영입 가능(빈자리)일 때만. 4명이면 노출 안 함.
+//     · 결속의 공터(bond): 파티 3명 이상 + 실제 합체 조합이 있을 때만. 2명 이하면 노출 안 함(2→1 단독 파티 방지). 4인 전용 아님 — 3인에서도 조건 맞으면 등장.
+//     · 보스: 열쇠 2개 이상.
+//   "노출 = 유저에게 허용"이므로 불가능/무의미한 선택지는 후보에서 제외한다.
+export function rollRouteOffer({ depth, bossKeys, partySize = 4, canRecruit = false, canFuse = false, rng = Math.random }) {
+  const shuffleR = (a) => { const r = a.slice(); for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; } return r; };
+  // 새싹 숲길은 항상 안전한 기반 선택지로 포함(빈 오퍼 방지). 나머지는 조건 필터 후 랜덤.
+  const offer = ["normal"];
+  const priority = []; // 파티 상태에 따라 "지금 의미 있는" 조건부 루트 — 우선 노출.
+  if (partySize < 4 && canRecruit) priority.push("ally"); // 4인 전 영입 전투
+  if (partySize >= 3 && canFuse) priority.push("bond");   // 3인+ & 합체 가능 시 합체 전투
+  shuffleR(priority).forEach((rt) => { if (offer.length < 3) offer.push(rt); });
+  // 남는 자리를 기본 후보군에서 랜덤으로 채워 2~3개 구성.
+  const base = shuffleR(["danger", "elite", "rest"].filter((rt) => !offer.includes(rt)));
+  while (offer.length < 3 && base.length) offer.push(base.shift());
+  if (offer.length < 2 && base.length) offer.push(base.shift()); // 최소 2 보장(이론상 항상 충족)
+  if (bossKeys >= BOSS_MENACE.keysToSeal) offer.push("boss");    // 보스는 별도(2~3개 + 보스문)
+  return [...new Set(offer)];
 }
 
 // 보스 도전 타이밍 감각(초보자 테마 기준) — "지금 갈지/더 돌지" 읽힘용.
@@ -263,8 +262,10 @@ export function alertnessFromFusions(fusionCount) {
    전환되고, 그 뒤로는 줄어들지 않는다(합체로 3인이 돼도 "여정은 이미 시작됐다").
    3인 무한 안전 파밍 방지: 4인 전 전투를 오래 반복하면 잠복 경계도가 단계적으로 누설된다(예고 + 일부 활성).
    ========================================================= */
-export const FARM_GRACE = 3; // 4인 전 이 횟수까지의 전투는 잠복(예고만 — 즉시 처벌 아님)
-export const FARM_STEP = 2;  // 이후 N전투마다 잠복 경계도가 1씩 누설(실제 경계도까지만)
+// Route Grammar 02B — 영입/합체가 이제 전투 비용을 가지므로(무료 영입/합체 아님) 파밍 예고를 느슨하게.
+//   4인 완성에 보통 영입 전투 2~3회가 드므로 그보다 넉넉히 잡아 정상 파티 빌드는 경고하지 않는다.
+export const FARM_GRACE = 6; // 4인 전 이 횟수까지의 전투는 잠복(예고만 — 즉시 처벌 아님)
+export const FARM_STEP = 3;  // 이후 N전투마다 잠복 경계도가 1씩 누설(실제 경계도까지만)
 
 // 유효 경계도: 인카운터 진형/정예 게이트가 보는 "실제로 켜진 경계도". 4인 완성 후엔 전면 전환,
 //   4인 전엔 잠복(파밍을 오래 하면 grace 초과분만큼 일부 누설). 실제 누적 alertness를 넘지 않는다.
