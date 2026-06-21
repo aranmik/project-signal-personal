@@ -506,13 +506,25 @@ function playOneRun(policy, profileId, themeId, runIndex) {
       const choices = gameState.run.routeChoices || ["normal"];
       let rt = policy.pickRoute(choices);
       if (profile.route) rt = profile.route(rt, choices, ctx()); // 프로필 안전 라우팅 보정
+      // Rest Grove 01 — 쉼터(정비) 관측: 제시/선택/저HP스킵/팔로업.
+      const restOffered = choices.includes("rest");
+      if (restOffered) rec.restOfferedCount = (rec.restOfferedCount || 0) + 1;
       rec.routeChoices.push(rt);
       rec.routeCounts[rt] = (rec.routeCounts[rt] || 0) + 1; // Route Grammar 02 — 루트 선택 카운트
       // Route Grammar 02B — ally/bond도 전투 루트 → 토큰(ALLY/BOND)은 전투 핸들러가 push. 여기선 선택 심도만 기록.
       if (rt === "ally" && !rec.firstRecruitRouteDepth) rec.firstRecruitRouteDepth = gameState.run.depth;
       if (rt === "bond" && !rec.firstFusionRouteDepth) rec.firstFusionRouteDepth = gameState.run.depth;
       if (rt === "danger" && !rec.firstDangerDepth) rec.firstDangerDepth = gameState.run.depth;
-      if (rt === "rest" && !rec.firstRestDepth) rec.firstRestDepth = gameState.run.depth;
+      if (rt === "rest") {
+        if (!rec.firstRestDepth) rec.firstRestDepth = gameState.run.depth;
+        rec.restTakenCount = (rec.restTakenCount || 0) + 1;
+        if (sinceFusion != null && sinceFusion <= 2) rec.restAfterFusionCount = (rec.restAfterFusionCount || 0) + 1;
+        if ((gameState.run.bossKeys || 0) >= 2) rec.restBeforeBossCount = (rec.restBeforeBossCount || 0) + 1;
+        rec._pendingRestFollowup = true;
+      } else {
+        if (restOffered && partyHpRatio() < 0.5) rec.restSkippedLowHpCount = (rec.restSkippedLowHpCount || 0) + 1;
+        if (rec._pendingRestFollowup) { (rec.restFollowups = rec.restFollowups || []).push(rt); if (rt === "ally" || rt === "bond") rec.restEnabledRecruitOrBond = (rec.restEnabledRecruitOrBond || 0) + 1; rec._pendingRestFollowup = false; }
+      }
       if ((rt === "elite" || rt === "danger")) {
         if (!rec.firstEliteAttemptDepth) rec.firstEliteAttemptDepth = gameState.run.depth; rec.eliteEnterBattleIdx = rec.battleCount;
         // 위험/정예 진입 컨텍스트 포착(진입 직전 = 이 전투 직전). battleIdx = 진입 전 완료 전투 수.
@@ -566,6 +578,15 @@ function playOneRun(policy, profileId, themeId, runIndex) {
   rec.preParty4RecruitCount = run.preParty4RecruitCount || 0;
   rec.farmWarnShown = run.farmWarnShown || 0;
   rec.finalAlertness = run.alertness || 0;
+  // Rest Grove 01 — 쉼터(정비) 파생 지표 + 4인 완성 경험 없는 보스 도전/클리어.
+  rec.restOfferedCount = rec.restOfferedCount || 0; rec.restTakenCount = rec.restTakenCount || 0; rec.restSkippedLowHpCount = rec.restSkippedLowHpCount || 0;
+  rec.restAfterFusionCount = rec.restAfterFusionCount || 0; rec.restBeforeBossCount = rec.restBeforeBossCount || 0; rec.restEnabledRecruitOrBond = rec.restEnabledRecruitOrBond || 0;
+  rec.neverRested = !rec.firstRestDepth;
+  rec.noRestDeath = rec.result === "defeat" && !rec.firstRestDepth;
+  rec.lowHpChainDeath = rec.result === "defeat" && (rec.failureTags || []).includes("LOW_HP_CHAIN");
+  rec.postRestSurvivalDepth = run.lastRestDepth ? Math.max(0, rec.finalDepth - run.lastRestDepth) : null;
+  rec.bossAttemptWithoutFullParty = rec.bossAttempted && !rec.party4Reached;
+  rec.bossClearWithoutFullParty = rec.result === "clear" && !rec.party4Reached;
   // 합체 빈자리 / 보충 / 작은 파티 결과.
   rec.skippedRecruitAfterFusion = rec.fusionCreatedEmptySlot && !rec.recruitAfterFusionDepth;
   rec.clearWithUnder4Party = cleared && rec.finalPartySize < 4;

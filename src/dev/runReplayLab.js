@@ -213,12 +213,24 @@ function playRunDetailed(policy, profile, runIndex) {
     } else if (screen === "arrange") { confirmArrange(); }
     else if (screen === "route") {
       const choices = gameState.run.routeChoices || ["normal"]; let rt = policy.pickRoute(choices); if (profile.route) rt = profile.route(rt, choices, ctx());
+      // Rest Grove 01 — 쉼터(정비) 관측.
+      const restOffered = choices.includes("rest");
+      if (restOffered) rec.restOfferedCount = (rec.restOfferedCount || 0) + 1;
       rec.routeCounts[rt] = (rec.routeCounts[rt] || 0) + 1; // Route Grammar 02 — 루트 선택 카운트
       // Route Grammar 02B — ally/bond도 전투 루트 → 토큰(ALLY/BOND)은 전투 핸들러가 push. 여기선 선택 심도만 기록.
       if (rt === "ally" && !rec.firstRecruitRouteDepth) rec.firstRecruitRouteDepth = gameState.run.depth;
       if (rt === "bond" && !rec.firstFusionRouteDepth) rec.firstFusionRouteDepth = gameState.run.depth;
       if (rt === "danger" && !rec.firstDangerDepth) rec.firstDangerDepth = gameState.run.depth;
-      if (rt === "rest" && !rec.firstRestDepth) rec.firstRestDepth = gameState.run.depth;
+      if (rt === "rest") {
+        if (!rec.firstRestDepth) rec.firstRestDepth = gameState.run.depth;
+        rec.restTakenCount = (rec.restTakenCount || 0) + 1;
+        if (sinceFusion != null && sinceFusion <= 2) rec.restAfterFusionCount = (rec.restAfterFusionCount || 0) + 1;
+        if ((gameState.run.bossKeys || 0) >= 2) rec.restBeforeBossCount = (rec.restBeforeBossCount || 0) + 1;
+        rec._pendingRestFollowup = true;
+      } else {
+        if (restOffered && partyHpRatio() < 0.5) rec.restSkippedLowHpCount = (rec.restSkippedLowHpCount || 0) + 1;
+        if (rec._pendingRestFollowup) { (rec.restFollowups = rec.restFollowups || []).push(rt); if (rt === "ally" || rt === "bond") rec.restEnabledRecruitOrBond = (rec.restEnabledRecruitOrBond || 0) + 1; rec._pendingRestFollowup = false; }
+      }
       if (rt === "elite" || rt === "danger") {
         if (!rec.firstEliteAttemptDepth) rec.firstEliteAttemptDepth = gameState.run.depth; rec.eliteEnterBattleIdx = rec.battleCount;
         const ax = axesOf(new Set(partyJobIds())); const hp = aliveHpStats();
@@ -258,6 +270,15 @@ function playRunDetailed(policy, profile, runIndex) {
   rec.lastThreeRoutesBeforeWipe = (rec.result === "defeat" ? rec.path.slice(0, -1) : rec.path).slice(-3).join(">");
   rec.preParty4FarmSuspect = !rec.party4Reached && rec.preParty4Battles >= 5 && rec.preParty4RecruitCount === 0 && (rec.routeCounts.ally || 0) === 0;
   rec.routeCauseTags = computeRouteCauseTags(rec);
+  // Rest Grove 01 — 쉼터(정비) 파생 + 4인 완성 경험 없는 보스 도전/클리어.
+  rec.restOfferedCount = rec.restOfferedCount || 0; rec.restTakenCount = rec.restTakenCount || 0; rec.restSkippedLowHpCount = rec.restSkippedLowHpCount || 0;
+  rec.restAfterFusionCount = rec.restAfterFusionCount || 0; rec.restBeforeBossCount = rec.restBeforeBossCount || 0; rec.restEnabledRecruitOrBond = rec.restEnabledRecruitOrBond || 0;
+  rec.neverRested = !rec.firstRestDepth;
+  rec.noRestDeath = rec.result === "defeat" && !rec.firstRestDepth;
+  rec.lowHpChainDeath = rec.result === "defeat" && (rec.failureTags || []).includes("LOW_HP_CHAIN");
+  rec.postRestSurvivalDepth = run.lastRestDepth ? Math.max(0, rec.finalDepth - run.lastRestDepth) : null;
+  rec.bossAttemptWithoutFullParty = rec.bossAttempted && !rec.party4Reached;
+  rec.bossClearWithoutFullParty = cleared && !rec.party4Reached;
   return rec;
 }
 // Route Grammar 02 — Fun Wipe / Choice Ownership 추정 태그(AR04 복제). 완벽한 인과 아님 — watch 톤.
@@ -471,6 +492,7 @@ function renderAutopsy(r, meta) {
     <div class="rl-line"><b>루트 문법:</b> ${["normal", "ally", "bond", "danger", "elite", "rest", "boss"].map((rt) => `<span class="rl-tag">${ROUTE_TOKEN[rt]}:${(r.routeCounts && r.routeCounts[rt]) || 0}</span>`).join("")} <span class="rl-meta">· 최종파티 ${r.finalPartySize}/4 · 4인완성 ${r.party4Reached ? "심도 " + (r.party4Depth || "?") : "미완성"} · 경계도@4인 ${r.alertnessAtParty4 || 0}(유효 ${r.effectiveAlertnessAtParty4 || 0})</span></div>
     <div class="rl-line"><b>합체 빈자리:</b> ${r.fusionCreatedEmptySlot ? `발생(합체후 ${r.partySizeAfterFusion}인` : "없음(합체 안 함"} · 4인미만 전투 ${r.battlesWhileUnder4AfterFusion} · 보충 ${r.recruitAfterFusionDepth ? "심도 " + r.recruitAfterFusionDepth : (r.fusionCreatedEmptySlot ? "스킵" : "—")}) · 4인전 전투 ${r.preParty4Battles}/위험 ${r.preParty4DangerCount}/영입 ${r.preParty4RecruitCount}${r.preParty4FarmSuspect ? ' <span class="rl-tag warn">FARM_SUSPECT</span>' : ""}</div>
     <div class="rl-line"><b>전멸 루트(추정):</b> ${(r.routeCauseTags || []).map((t) => `<span class="rl-tag warn">${t}</span>`).join("") || "—"}${r.routeBeforeWipe ? ` <span class="rl-meta">· 직전루트 <code>${esc(r.routeBeforeWipe)}</code> · 최근3 <code>${esc(r.lastThreeRoutesBeforeWipe || "")}</code></span>` : ""}</div>
+    <div class="rl-line"><b>쉼터(정비):</b> 제시 ${r.restOfferedCount || 0}회 · 선택 ${r.restTakenCount || 0}회 · 저HP스킵 ${r.restSkippedLowHpCount || 0} · 합체후정비 ${r.restAfterFusionCount || 0} · 정비후빌드(영입/합체) ${r.restEnabledRecruitOrBond || 0}${r.restFollowups && r.restFollowups.length ? ` · 정비 다음선택 <code>${esc(r.restFollowups.map((x) => ROUTE_TOKEN[x] || x).join(","))}</code>` : ""}${r.postRestSurvivalDepth != null ? ` · 정비후 +${r.postRestSurvivalDepth}심도 생존` : ""}</div>
     <div class="rl-line"><b>실패 태그(추정):</b> ${(r.failureTags || []).map((t) => `<span class="rl-tag">${t}</span>`).join("") || "—"}</div>
     <div class="rl-line"><b>위험 마커(추정):</b> ${(r.dangerMarkers || []).map((t) => `<span class="rl-tag warn">${t}</span>`).join("") || "—"}</div>
     ${(() => { const dc = dangerContextOf(r); return dc ? `<div class="rl-line"><b>위험 진입 컨텍스트(추정):</b> 심도 ${dc.depth} · ${routeName(dc.routeType)} · 파티 ${dc.partySize} · 진입HP ${fmtPct(dc.startHpAvg)}(최저 ${fmtPct(dc.startHpMin)}) · 전투후 최저HP ${fmtPct(dc.afterBattleMinHp)} · 기절 ${dc.downs == null ? "—" : dc.downs} · 힐${dc.hasHealer ? "O" : "X"}/탱${dc.hasTank ? "O" : "X"}/광${dc.hasAoE ? "O" : "X"} · 4인후 ${dc.afterParty4 ? "O" : "X"}/합체후 ${dc.afterFusion ? "O" : "X"} · preWipe <code>${esc(dc.preWipeChoice || "—")}</code></div>` : ""; })()}`;

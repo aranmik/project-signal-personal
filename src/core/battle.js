@@ -291,6 +291,8 @@ export function resetBattle() {
   gameState.run.preParty4DangerCount = 0;    // 4인 전 깊은 수풀 진입 수
   gameState.run.preParty4RecruitCount = 0;   // 4인 전 영입 수
   gameState.run.farmWarnShown = 0;           // 마지막으로 보여준 파밍 경고 단계
+  gameState.run.restJustTaken = false;       // Rest Grove 01 — 직전에 쉼터(정비)를 골랐는가(다음 오퍼 보정용)
+  gameState.run.lastRestDepth = 0;           // Rest Grove 01 — 마지막 정비 심도
   gameState.run.partyHp = null;              // Stage Persistence 01 — 전투 간 HP 지속 초기화(첫 전투는 풀피)
   gameState.run.combatMs = 0;                // Run Footprints 01 — 현실 전투 시간 누적 초기화(새 런)
   gameState.run.battleStartTs = null;
@@ -402,13 +404,19 @@ function showRouteChoice() {
   updateParty4Latch();   // Route Grammar 02 — 영입/합체 직후 4인 완성 래치 반영
   maybeFarmWarning();    // Route Grammar 02 — 4인 전 파밍 예고(잠복 압력)
   // Route Grammar 02B — 의미별 전투 루트 오퍼(2~3개 랜덤): ally는 4인 미만 영입가능 시, bond는 3인+ 합체가능 시.
+  // Rest Grove 01 — 다친 파티는 정비(쉼터) 선택지 보장 + 쉼터 직후엔 연속 쉼터 방지하고 빌드 우선.
+  const av = aliveParty();
+  const hpRatio = av.length ? av.reduce((s, u) => s + Math.max(0, u.hp) / u.maxHp, 0) / av.length : 1;
+  const restJustTaken = !!gameState.run.restJustTaken;
   gameState.run.routeChoices = rollRouteOffer({
     depth: gameState.run.depth,
     bossKeys: gameState.run.bossKeys,
     partySize: partyJobIds().length,
     canRecruit: recruitCandidates().length > 0,          // 동료의 흔적 노출 조건(빈자리 + 미보유 기본직업)
     canFuse: availableFusions(partyJobIds()).length > 0, // 결속의 공터 노출 조건(실제 합체 조합 — 인원 게이트는 rollRouteOffer가 3인+로 적용)
+    hpRatio, restJustTaken,
   });
+  gameState.run.restJustTaken = false; // 오퍼에 반영했으니 소비
   gameState.screen = "route";
   renderGame(gameState);
 }
@@ -450,9 +458,11 @@ export function chooseRoute(routeType) {
   if (rt.kind === "rest") {
     restParty();
     gameState.run.threat = Math.max(0, gameState.run.threat - 1);
-    // Reward Pressure 01 — 휴식은 회복만, 성장/합체 보상 없음(안정 선택). 고른 길의 성격을 로그로 남긴다.
-    pushLog("이슬 쉼터에서 한 박자 정비했다 — 휴식으로 회복(보상 없음).");
-    // Rest Route Polish 01 — 곧장 넘어가지 않고 짧은 휴식 장면을 보여준 뒤 여정으로 잇는다.
+    // Rest Grove 01 — 쉼터 = "정비". 전원 회복 + 다음 여정 오퍼가 빌드(영입/합체)를 보장하도록 플래그(연속 쉼터 방지 포함).
+    gameState.run.restJustTaken = true;
+    gameState.run.lastRestDepth = gameState.run.depth;
+    pushLog("이슬 쉼터에서 숨을 고르고 진형을 정비했다 — 전원 회복. 다음 여정에서 빌드 기회가 이어진다.");
+    // Rest Route Polish 01 — 곧장 넘어가지 않고 짧은 정비 장면(진형 정리)을 보여준 뒤 여정으로 잇는다.
     gameState.screen = "rest";
     renderGame(gameState);
     return;

@@ -267,9 +267,19 @@ document.getElementById("route-panel").addEventListener("click", (e) => {
   if (b) chooseRoute(b.dataset.route);
 });
 
-// Rest Route Polish 01: 이슬 쉼터 휴식 장면 → "여정을 잇는다"로 복귀
-document.getElementById("rest-panel").addEventListener("click", (e) => {
-  if (e.target.closest("[data-rest-continue]")) continueFromRest();
+// Rest Route Polish 01 → Rest Grove 01: 이슬 쉼터 = 정비 장면. "정비 완료"로 복귀 + 슬롯 탭으로 진형 정비(교체).
+const restPanel = document.getElementById("rest-panel");
+restPanel.addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if ("restContinue" in b.dataset) { restPanel.dataset.picked = ""; continueFromRest(); return; }
+  // 진형 정비: 슬롯 집기 → 다른 슬롯 탭이면 교체, 같은 슬롯 재탭이면 해제(recruit 패턴과 동일).
+  const slot = b.dataset.pfSlot;
+  if (!slot) return;
+  const picked = restPanel.dataset.picked || "";
+  if (!picked) { restPanel.dataset.picked = slot; b.classList.add("picked"); }
+  else if (picked === slot) { restPanel.dataset.picked = ""; b.classList.remove("picked"); }
+  else { restPanel.dataset.picked = ""; swapFormationSlots(picked, slot); }
 });
 
 // 결과 오버레이 → 다시 시작 (시작 배치 유지로 새 런)

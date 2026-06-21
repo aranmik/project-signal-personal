@@ -427,8 +427,10 @@ function renderRestPanel(state) {
     .join("");
   const body = document.getElementById("rest-body");
   if (!body) return;
+  // Rest Grove 01 — 쉼터 = "정비": 전원 회복 + 진형 정리(슬롯 탭 교체) + 다음 빌드 기회 안내(빌드 포기 아님).
+  const picked = (document.getElementById("rest-panel").dataset.picked) || null;
   body.innerHTML = `
-    <h2 class="flow-heading">이슬 쉼터</h2>
+    <h2 class="flow-heading">이슬 쉼터 — 정비</h2>
     <div class="rest-scene">
       <div class="rest-heroes">${heroes}</div>
       <div class="rest-campfire" aria-hidden="true">
@@ -438,8 +440,10 @@ function renderRestPanel(state) {
         <span class="rest-logs"></span>
       </div>
     </div>
-    <p class="flow-note">이슬 쉼터에서 잠시 숨을 고릅니다.<br>파티가 완전히 회복했습니다.</p>
-    <button type="button" class="route-card rest-continue" data-rest-continue>여정을 잇는다</button>
+    <p class="flow-note">숨을 고르고 진형을 정비합니다 — 전원 회복.<br>이번 기회를 날린 게 아닙니다. 다음 여정에서 빌드(영입·합체) 기회가 이어집니다.</p>
+    <div class="flow-kicker">진형 정비 — 슬롯을 눌러 위치를 바꿔 다음 전투를 준비하세요</div>
+    <div class="party-preview-grid">${partyPreviewGridHTML(f, picked)}</div>
+    <button type="button" class="route-card rest-continue" data-rest-continue>정비 완료 — 여정을 잇는다</button>
   `;
 }
 

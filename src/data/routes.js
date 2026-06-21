@@ -40,8 +40,8 @@ export const ROUTE_TYPES = {
     reward: { picks: 2, riskTier: "risky",    rewardTier: "high", cardTag: "위험 전투 · 승리 후 성장 2회",   resultLabel: "깊은 수풀 보상" } },
   elite:  { id: "elite",  title: "현자의 가지", sub: "정예 전투 · 보스 열쇠",    hud: "정예 전투", kind: "battle",
     reward: { picks: 1, riskTier: "veryRisky", rewardTier: "high", cardTag: "정예 전투 · 승리 후 열쇠 + 보상", resultLabel: "정예 보상", key: true } },
-  rest:   { id: "rest",   title: "이슬 쉼터",  sub: "전원 회복 · 전투 없음",     hud: "휴식",     kind: "rest",
-    reward: { picks: 0, riskTier: "safe",     rewardTier: "none", cardTag: "회복 · 전투 없음",             resultLabel: "휴식으로 회복", heal: true } },
+  rest:   { id: "rest",   title: "이슬 쉼터",  sub: "전원 회복 · 진형 정비",     hud: "정비",     kind: "rest",
+    reward: { picks: 0, riskTier: "safe",     rewardTier: "none", cardTag: "정비 · 전원 회복 · 다음 빌드 준비", resultLabel: "이슬 쉼터 — 정비", heal: true } },
   boss:   { id: "boss",   title: "새싹 왕의 문", sub: "사자왕에게 도전",        hud: "보스전",   kind: "boss",
     reward: { picks: 0, riskTier: "boss",     rewardTier: "clear", cardTag: "",                            resultLabel: "" } },
 };
@@ -68,16 +68,22 @@ export const BOSS_ENCOUNTER = byTier("boss")[0] || ["lion:boss"]; // 사자왕
 //     · 결속의 공터(bond): 파티 3명 이상 + 실제 합체 조합이 있을 때만. 2명 이하면 노출 안 함(2→1 단독 파티 방지). 4인 전용 아님 — 3인에서도 조건 맞으면 등장.
 //     · 보스: 열쇠 2개 이상.
 //   "노출 = 유저에게 허용"이므로 불가능/무의미한 선택지는 후보에서 제외한다.
-export function rollRouteOffer({ depth, bossKeys, partySize = 4, canRecruit = false, canFuse = false, rng = Math.random }) {
+// Rest Grove 01 — hpRatio/restJustTaken 추가. 다친 파티는 "정비(이슬 쉼터)"를 항상 선택지로 보장하고,
+//   쉼터 직후엔 연속 쉼터를 막아 "정비 → 다음 빌드/전투"로 이어지게 한다(쉼터 = 빌드 포기가 아니라 다음 빌드 준비).
+export function rollRouteOffer({ depth, bossKeys, partySize = 4, canRecruit = false, canFuse = false, hpRatio = 1, restJustTaken = false, rng = Math.random }) {
   const shuffleR = (a) => { const r = a.slice(); for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; } return r; };
   // 새싹 숲길은 항상 안전한 기반 선택지로 포함(빈 오퍼 방지). 나머지는 조건 필터 후 랜덤.
   const offer = ["normal"];
-  const priority = []; // 파티 상태에 따라 "지금 의미 있는" 조건부 루트 — 우선 노출.
-  if (partySize < 4 && canRecruit) priority.push("ally"); // 4인 전 영입 전투
-  if (partySize >= 3 && canFuse) priority.push("bond");   // 3인+ & 합체 가능 시 합체 전투
-  shuffleR(priority).forEach((rt) => { if (offer.length < 3) offer.push(rt); });
-  // 남는 자리를 기본 후보군에서 랜덤으로 채워 2~3개 구성.
-  const base = shuffleR(["danger", "elite", "rest"].filter((rt) => !offer.includes(rt)));
+  const priority = []; // 지금 상태에서 "의미 있는" 우선 노출 루트.
+  // Rest Grove 01 — 다칠 때(hp<55%)는 정비(쉼터)를 우선 보장. 쉼터 직후엔 제외(연속 쉼터 방지).
+  if (hpRatio < 0.55 && !restJustTaken) priority.push("rest");
+  const build = [];
+  if (partySize < 4 && canRecruit) build.push("ally"); // 4인 전 영입 전투
+  if (partySize >= 3 && canFuse) build.push("bond");   // 3인+ & 합체 가능 시 합체 전투
+  shuffleR(build).forEach((rt) => priority.push(rt));  // 정비(다칠 때) 다음에 빌드 루트
+  priority.forEach((rt) => { if (offer.length < 3) offer.push(rt); });
+  // 남는 자리를 기본 후보군에서 랜덤으로(쉼터 직후엔 rest 제외 = 연속 쉼터 방지).
+  const base = shuffleR(["danger", "elite", "rest"].filter((rt) => !offer.includes(rt) && !(restJustTaken && rt === "rest")));
   while (offer.length < 3 && base.length) offer.push(base.shift());
   if (offer.length < 2 && base.length) offer.push(base.shift()); // 최소 2 보장(이론상 항상 충족)
   if (bossKeys >= BOSS_MENACE.keysToSeal) offer.push("boss");    // 보스는 별도(2~3개 + 보스문)
