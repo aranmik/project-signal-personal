@@ -387,8 +387,10 @@ function renderRecruitPanel(state) {
     ? candidates.map((id) => {
         const role = combatRoleLabelOf(id);
         const hints = recruitFusionHint(id, baseJobs);
+        // Recruit Fusion Hint 03 — 후보 1명이 현재 파티원(최대 3명)과 가질 수 있는 합체 조합을 모두 노출(최대 3개).
+        //   recruitFusionHint가 유효 레시피를 전부 수집하므로, 표시 cap만 2→3으로 올린다(영입 시 파티 ≤3 → 최대 3개).
         const hintHtml = hints.length
-          ? `<span class="recruit-hints"><span class="recruit-hint-label">합체 가능</span>${hints.slice(0, 2).map((h) => `<span class="recruit-hint-line">${h.formula}${h.role ? ` <span class="recruit-hint-role">· ${h.role}</span>` : ""}</span>`).join("")}</span>`
+          ? `<span class="recruit-hints"><span class="recruit-hint-label">합체 가능</span>${hints.slice(0, 3).map((h) => `<span class="recruit-hint-line">${h.formula}${h.role ? ` <span class="recruit-hint-role">· ${h.role}</span>` : ""}</span>`).join("")}</span>`
           : `<span class="recruit-hints recruit-hints--none">새 조합 탐색</span>`;
         return `<button type="button" class="recruit-card recruit-card--row${preview === id ? " selected" : ""}" data-recruit="${id}" aria-label="${jobName(id)}">
           <span class="recruit-ava">${jobAvatarHTML(id, "av-fit--card")}</span>
@@ -2131,16 +2133,17 @@ function spawnAoeSpread(casterInstanceId, enemyIds) {
     : (enemyCenter(enemyIds, fieldRect) || fieldEnemyAnchor(fieldRect));
   const pts = (enemyIds || []).map((id) => unitPoint(id, { fx: 0.5, fy: 0.5 }, fieldRect)).filter(Boolean);
   const maxR = pts.length ? Math.max(80, ...pts.map((p) => Math.hypot(p.x - c.x, p.y - c.y))) + 50 : 170;
-  // Combat Feedback Polish 02 — "팡!" 밝은 보라 폭죽 코어(그 자리에서 터짐) + 충격파 원 2겹(점점 커지며 적 전체로).
+  // Combat Feedback Polish 02 → Mage/Sage AoE Shockwave Polish 01 — "팡!" 코어 + 바깥으로 밀려나가는 충격파 원 3겹
+  //   (1차 강한 파동 + 약한 잔향). 코어 플래시만 보이지 않게, 원이 "바깥으로 확장"하며 적 전체로 퍼지는 게 읽히게 한다.
   const core = document.createElement("span");
   core.className = "fx-blast-core fx-var--special";
   core.style.left = `${c.x}px`;
   core.style.top = `${c.y}px`;
   core.addEventListener("animationend", () => core.remove());
   layer.appendChild(core);
-  [0, 110].forEach((delay) => {
+  [0, 120, 240].forEach((delay, i) => {
     const ring = document.createElement("span");
-    ring.className = "fx-aoe-spread fx-var--special";
+    ring.className = "fx-aoe-spread fx-var--special" + (i === 2 ? " fx-aoe-spread--echo" : ""); // 마지막은 약한 잔향
     ring.style.left = `${c.x}px`;
     ring.style.top = `${c.y}px`;
     ring.style.setProperty("--aoe-r", `${maxR}px`);
