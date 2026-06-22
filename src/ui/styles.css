@@ -2545,6 +2545,19 @@ body {
 .pf-ava { display: block; width: 76px; height: 82px; }
 .pf-empty-mark { font-size: 26px; color: #4a5d75; line-height: 1; }
 .pf-empty-label { font-size: 10px; color: #6a7d92; }
+/* Rest Grove Visual Hotfix 01 — 쉼터 "현재 파티" 슬롯: 전열/후열 + 아바타 + 직업명 + HP바. recruit 그리드와 같은 문법 + 정보 보강. */
+.party-preview-grid--rest { max-width: 290px; }
+.pf-slot--rest { min-height: 126px; justify-content: flex-start; gap: 3px; padding: 6px 4px; }
+.pf-slot--rest .pf-row { font-size: 9px; color: #7f93a8; letter-spacing: .04em; }
+.pf-slot--rest .pf-name { font-size: 10.5px; color: #cfe0ee; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-slot--rest .pf-hpbar { width: 86%; height: 6px; background: #0e1a2a; border: 1px solid #243a52; border-radius: 4px; overflow: hidden; margin-top: 1px; }
+.pf-slot--rest .pf-hpfill { display: block; height: 100%; background: #4fbf6a; }
+.pf-slot--rest.empty { min-height: 126px; }
+/* Recipe Hint Preview 01 — 영입 후보 카드의 합체 가능성 힌트 / 결속의 공터·합체 결과 역할 태그. */
+.recruit-hint { display: block; font-size: 9.5px; line-height: 1.35; color: #9fd0b4; margin-top: 3px; word-break: keep-all; }
+.recruit-hint--none { color: #8295a8; }
+.recruit-hint-role { color: #7fb3d6; }
+.fusion-role { font-size: 11px; color: #7fb3d6; font-weight: 700; }
 /* 후보 3개를 한 줄(왼쪽/가운데/오른쪽)로 — 아바타 위 / 이름 아래 */
 #recruit-list { flex-direction: row; gap: 8px; }
 .recruit-card {

@@ -202,7 +202,7 @@ function playRunDetailed(policy, profile, runIndex) {
     } else if (screen === "fusion") {
       // Route Grammar 02 — 합체는 BOND 루트의 선택. 합체 후 자동 영입 없음 → 빈자리 생성 기록(path 토큰은 route 핸들러의 BOND).
       const options = availableFusions(partyJobIds()); const choiceId = options.length ? policy.decideFusion(options) : null;
-      if (choiceId) { rec.fusionCount += 1; if (!rec.firstFusionDepth) rec.firstFusionDepth = gameState.run.depth; if (rec.fusionBattleIdx == null) rec.fusionBattleIdx = rec.battleCount; sinceFusion = 0; const recp = ACTIVE_FUSION_RECIPES.find((r) => r.result === choiceId); push({ kind: "fusion", depth: gameState.run.depth, result: jobName(choiceId), materials: recp ? recp.materials.map(jobName) : [] }); applyFusion(choiceId); rec.fusionCreatedEmptySlot = true; if (rec.partySizeAfterFusion == null) rec.partySizeAfterFusion = curPartySize(); }
+      if (choiceId) { rec.fusionCount += 1; if (!rec.firstFusionDepth) rec.firstFusionDepth = gameState.run.depth; if (rec.fusionBattleIdx == null) rec.fusionBattleIdx = rec.battleCount; sinceFusion = 0; const recp = ACTIVE_FUSION_RECIPES.find((r) => r.result === choiceId); push({ kind: "fusion", depth: gameState.run.depth, result: jobName(choiceId), materials: recp ? recp.materials.map(jobName) : [] }); applyFusion(choiceId); rec.fusionCreatedEmptySlot = true; if (rec.partySizeAfterFusion == null) rec.partySizeAfterFusion = curPartySize(); if (rec.hpAfterFirstFusion == null) rec.hpAfterFirstFusion = partyHpRatio(); /* Fusion Autopsy 01 */ }
       else skipFusion();
     } else if (screen === "fusionResult") { continueAfterFusion(); }
     else if (screen === "recruit") {
@@ -216,6 +216,11 @@ function playRunDetailed(policy, profile, runIndex) {
       // Rest Grove 01 — 쉼터(정비) 관측.
       const restOffered = choices.includes("rest");
       if (restOffered) rec.restOfferedCount = (rec.restOfferedCount || 0) + 1;
+      // Fusion Autopsy 01 — 합체 빈자리(파티<4)에서 동료의 흔적 제시/위험선택 관측.
+      if (rec.fusionCreatedEmptySlot && curPartySize() < 4) {
+        if (choices.includes("ally")) rec.allyOfferedAfterFusionCount = (rec.allyOfferedAfterFusionCount || 0) + 1;
+        if (rt === "danger" || rt === "elite") rec.dangerAfterFusionUnder4 = (rec.dangerAfterFusionUnder4 || 0) + 1;
+      }
       rec.routeCounts[rt] = (rec.routeCounts[rt] || 0) + 1; // Route Grammar 02 — 루트 선택 카운트
       // Route Grammar 02B — ally/bond도 전투 루트 → 토큰(ALLY/BOND)은 전투 핸들러가 push. 여기선 선택 심도만 기록.
       if (rt === "ally" && !rec.firstRecruitRouteDepth) rec.firstRecruitRouteDepth = gameState.run.depth;
@@ -288,11 +293,23 @@ function computeRouteCauseTags(rec) {
   const d = rec.finalDepth, before = rec.routeBeforeWipe;
   if (!rec.party4Reached && rec.preParty4DangerCount > 0 && before === "D") t.push("wipeAfterPreParty4Danger");
   if (rec.firstDangerDepth && d <= 8 && before === "D") t.push("wipeAfterEarlyDeepBrush");
-  if (rec.fusionCreatedEmptySlot && rec.finalPartySize < 4) { t.push("wipeAfterFusionWithoutRefill"); if (!rec.recruitAfterFusionDepth) t.push("wipeAfterSkippedRecruit"); }
+  if (rec.fusionCreatedEmptySlot && rec.finalPartySize < 4) { t.push("wipeAfterFusionWithoutRefill"); rec.fwrClass = classifyFwr(rec); t.push("fwr:" + rec.fwrClass); if (!rec.recruitAfterFusionDepth) t.push("wipeAfterSkippedRecruit"); }
   if (rec.fusionBattleIdx != null && rec.battleCount - rec.fusionBattleIdx <= 2) t.push("wipeAfterEarlyFusion");
   if (!rec.firstRestDepth && rec.faintCount >= 2) t.push("wipeAfterNoRestLowHp");
   if (rec.finalPartySize < 4 && (before === "D" || before === "E")) t.push("wipeAfterUnder4Greed");
   return t;
+}
+// Fusion Without Refill Autopsy 01 — FWR 전멸 세부 분류(AR04 복제). cycleAttrition(정상)·fairGreedWipe(욕심)·genuineSkip·unclearPunishWipe.
+function classifyFwr(rec) {
+  const lowHp = rec.hpAfterFirstFusion != null && rec.hpAfterFirstFusion < 0.5;
+  const allyOffered = (rec.allyOfferedAfterFusionCount || 0) > 0;
+  const refilled = (rec.recruitAfterFusionDepth || 0) > 0;
+  const dangerGreed = (rec.dangerAfterFusionUnder4 || 0) > 0;
+  if (dangerGreed) return "fairGreedWipe";
+  if (refilled) return "cycleAttrition";
+  if (allyOffered) return "genuineSkip";
+  if (lowHp) return "unclearPunishWipe";
+  return "cycleAttrition";
 }
 // Observation Batch 01 — 위험 루트 추정 마커(AR04 복제). failureTags와 별개 표시용.
 function computeDangerMarkers(rec) {

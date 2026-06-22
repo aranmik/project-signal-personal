@@ -491,7 +491,7 @@ function playOneRun(policy, profileId, themeId, runIndex) {
       // Route Grammar 02 — 합체는 결속의 공터(bond)의 명시적 선택. 합체 후 자동 영입 없음 — 빈자리가 생긴다.
       const options = availableFusions(partyJobIds());
       const choiceId = options.length ? policy.decideFusion(options) : null;
-      if (choiceId) { rec.fusionCount += 1; if (!rec.firstFusionDepth) rec.firstFusionDepth = gameState.run.depth; if (rec.fusionBattleIdx == null) rec.fusionBattleIdx = rec.battleCount; sinceFusion = 0; applyFusion(choiceId); rec.fusionCreatedEmptySlot = true; if (rec.partySizeAfterFusion == null) rec.partySizeAfterFusion = curPartySize(); }
+      if (choiceId) { rec.fusionCount += 1; if (!rec.firstFusionDepth) rec.firstFusionDepth = gameState.run.depth; if (rec.fusionBattleIdx == null) rec.fusionBattleIdx = rec.battleCount; sinceFusion = 0; applyFusion(choiceId); rec.fusionCreatedEmptySlot = true; if (rec.partySizeAfterFusion == null) rec.partySizeAfterFusion = curPartySize(); if (rec.hpAfterFirstFusion == null) rec.hpAfterFirstFusion = partyHpRatio(); /* Fusion Autopsy 01 — 합체 직후 HP */ }
       else skipFusion();
     } else if (screen === "fusionResult") {
       continueAfterFusion();
@@ -509,6 +509,11 @@ function playOneRun(policy, profileId, themeId, runIndex) {
       // Rest Grove 01 — 쉼터(정비) 관측: 제시/선택/저HP스킵/팔로업.
       const restOffered = choices.includes("rest");
       if (restOffered) rec.restOfferedCount = (rec.restOfferedCount || 0) + 1;
+      // Fusion Autopsy 01 — 합체 빈자리(파티<4) 상태에서 동료의 흔적 제시/위험선택 관측.
+      if (rec.fusionCreatedEmptySlot && curPartySize() < 4) {
+        if (choices.includes("ally")) rec.allyOfferedAfterFusionCount = (rec.allyOfferedAfterFusionCount || 0) + 1;
+        if (rt === "danger" || rt === "elite") rec.dangerAfterFusionUnder4 = (rec.dangerAfterFusionUnder4 || 0) + 1;
+      }
       rec.routeChoices.push(rt);
       rec.routeCounts[rt] = (rec.routeCounts[rt] || 0) + 1; // Route Grammar 02 — 루트 선택 카운트
       // Route Grammar 02B — ally/bond도 전투 루트 → 토큰(ALLY/BOND)은 전투 핸들러가 push. 여기선 선택 심도만 기록.
@@ -610,13 +615,31 @@ function computeRouteCauseTags(rec) {
   if (!rec.party4Reached && rec.preParty4DangerCount > 0 && before === "D") t.push("wipeAfterPreParty4Danger");
   if (rec.firstDangerDepth && d <= 8 && before === "D") t.push("wipeAfterEarlyDeepBrush");
   if (rec.fusionCreatedEmptySlot && rec.finalPartySize < 4) {
-    t.push("wipeAfterFusionWithoutRefill");
-    if (!rec.recruitAfterFusionDepth) t.push("wipeAfterSkippedRecruit");
+    t.push("wipeAfterFusionWithoutRefill"); // 원자료 유지(export/TSV 호환)
+    // Fusion Without Refill Autopsy 01 — "빈자리 방치 처벌"이 아니라 실제 현상으로 세부 재분류.
+    rec.fwrClass = classifyFwr(rec);
+    t.push("fwr:" + rec.fwrClass);
+    if (!rec.recruitAfterFusionDepth) t.push("wipeAfterSkippedRecruit"); // 원자료 유지
   }
   if (rec.fusionBattleIdx != null && rec.battleCount - rec.fusionBattleIdx <= 2) t.push("wipeAfterEarlyFusion");
   if (!rec.firstRestDepth && rec.faintCount >= 2) t.push("wipeAfterNoRestLowHp");
   if (rec.finalPartySize < 4 && (before === "D" || before === "E")) t.push("wipeAfterUnder4Greed");
   return t;
+}
+
+// Fusion Without Refill Autopsy 01 — FWR 전멸 세부 분류(autopsy 필드 기반). 대부분 정상 진행(cycleAttrition)·좋은 욕심(fairGreedWipe).
+//   cycleAttrition: 합체↔보충 사이클 중 누적 소모(정상 압력) / fairGreedWipe: 3·2인 위험/정예 다이브(좋은 욕심) /
+//   genuineSkip: 동료의 흔적 제시됐는데 안감·보충 전투 패배 / unclearPunishWipe: 합체 직후 저HP·보충 미제시(억울 후보, 현재 거의 0).
+function classifyFwr(rec) {
+  const lowHp = rec.hpAfterFirstFusion != null && rec.hpAfterFirstFusion < 0.5;
+  const allyOffered = (rec.allyOfferedAfterFusionCount || 0) > 0;
+  const refilled = (rec.recruitAfterFusionDepth || 0) > 0;
+  const dangerGreed = (rec.dangerAfterFusionUnder4 || 0) > 0;
+  if (dangerGreed) return "fairGreedWipe";
+  if (refilled) return "cycleAttrition";
+  if (allyOffered) return "genuineSkip";
+  if (lowHp) return "unclearPunishWipe";
+  return "cycleAttrition";
 }
 
 // Observation Batch 01 — 위험 루트 추정 마커. 전멸 직전 근접(3전투 이내) 위험 진입을 "치명적 진입"으로 보고
@@ -1360,8 +1383,17 @@ function renderRouteGrammar(rg) {
       ${card("경고1 발생률", fmtPct(af.warningLevel1Rate))}${card("경고2 발생률", fmtPct(af.warningLevel2Rate))}${card("잠복누설 근접", af.latentAlertLeakCount)}
     </div>
     <div class="ar-cards">${card("4인전 전투수 분포", distHtml(af.preParty4BattleDist))}</div>`;
-  const D = `<h4>D. Fun Wipe / Choice Ownership Watch <span class="ar-meta">— 추정(완벽한 인과 아님 · "내 선택의 결과"로 읽히는 전멸)</span></h4>` + (fw.routeCauseSummary.length
-    ? `<div class="ar-tablewrap"><table><thead><tr><th class="txt">전멸 원인(추정)</th><th>건수</th><th>전체비율</th></tr></thead><tbody>${fw.routeCauseSummary.map((c) => `<tr><td class="txt">${c.tag}</td><td>${c.count}</td><td>${fmtPct(c.rate)}</td></tr>`).join("")}</tbody></table></div>`
+  // Fusion Without Refill Autopsy 01 — FWR은 "빈자리 방치 처벌"이 아님. 세부 클래스 라벨로 정확히 읽히게.
+  const causeLabel = (tag) => ({
+    "wipeAfterFusionWithoutRefill": "합체 후 3인 전멸(아래 fwr:* 세부 참고 — 방치 처벌 아님)",
+    "fwr:cycleAttrition": "fwr · 사이클 누적 소모(정상 진행)", "fwr:fairGreedWipe": "fwr · 좋은 욕심(3·2인 위험 다이브)",
+    "fwr:genuineSkip": "fwr · 보충 안감/보충 전투 패배", "fwr:unclearPunishWipe": "fwr · 억울 후보(저HP·보충 미제시)",
+    "wipeAfterSkippedRecruit": "보충 미완(원자료)", "wipeAfterUnder4Greed": "3·2인 욕심 진입", "wipeAfterNoRestLowHp": "무휴식 소모전",
+    "wipeAfterEarlyFusion": "합체 직후 전멸", "wipeAfterPreParty4Danger": "4인 전 위험 진입", "wipeAfterEarlyDeepBrush": "초반 깊은 수풀",
+  }[tag] || tag);
+  const D = `<h4>D. Fun Wipe / Choice Ownership Watch <span class="ar-meta">— 추정(완벽한 인과 아님 · "내 선택의 결과"로 읽히는 전멸)</span></h4>
+    <p class="ar-meta">※ "합체 후 3인 전멸(FusionWithoutRefill)"은 빈자리 방치 처벌이 아니라 대부분 <b>사이클 누적 소모(cycleAttrition)</b> 또는 <b>좋은 욕심(fairGreedWipe)</b>입니다. 억울 후보(unclearPunishWipe)는 현재 거의 0이 정상.</p>` + (fw.routeCauseSummary.length
+    ? `<div class="ar-tablewrap"><table><thead><tr><th class="txt">전멸 원인(추정)</th><th>건수</th><th>전체비율</th></tr></thead><tbody>${fw.routeCauseSummary.map((c) => `<tr><td class="txt">${esc(causeLabel(c.tag))} <span class="ar-meta">${c.tag}</span></td><td>${c.count}</td><td>${fmtPct(c.rate)}</td></tr>`).join("")}</tbody></table></div>`
     : `<div class="ar-empty">전멸 원인 표본 없음.</div>`);
   $("ar-routegrammar").innerHTML = `<h3>Route Grammar 02 <span class="ar-meta">— 새 루트 문법 관측(관측 신호 / candidate / watch)</span></h3>${A}${B}${C}${D}`;
 }

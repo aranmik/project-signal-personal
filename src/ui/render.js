@@ -247,22 +247,25 @@ function renderFusionPanel(state) {
   const jobs = SLOT_ORDER.map((k) => f[k]).filter(Boolean);
   const fusions = availableFusions(jobs);
 
+  // Recipe Hint Preview 01 — 결과 직업의 역할 태그를 함께 표시(예: 용창 · 후열 공격). 현재 가능한 레시피만.
   const rows = fusions.length
-    ? fusions.map((r) =>
-        `<div class="fusion-row">
-          <span class="fusion-formula">${jobName(r.materials[0])} + ${jobName(r.materials[1])} <span class="fusion-arrow">→</span> <b>${jobName(r.result)} 탄생</b></span>
+    ? fusions.map((r) => {
+        const role = combatRoleLabelOf(r.result);
+        return `<div class="fusion-row">
+          <span class="fusion-formula">${jobName(r.materials[0])} + ${jobName(r.materials[1])} <span class="fusion-arrow">→</span> <b>${jobName(r.result)}</b>${role ? ` <span class="fusion-role">· ${role}</span>` : ""}</span>
           <button type="button" data-fusion="${r.result}">합체한다</button>
-        </div>`
-      ).join("")
+        </div>`;
+      }).join("")
     : "";
 
+  // Route Grammar 02B — 합체 후 자동 영입 없음 반영(빈자리는 동료의 흔적에서 보충).
   const guide = fusions.length
-    ? `<p class="flow-note">두 영웅의 힘이 하나로 모입니다.<br>합체하면 빈자리를 채울 동료를 영입합니다.</p>`
-    : `<p class="flow-note">지금 파티에는 합체 가능한 조합이 없습니다.<br>이번에는 합체 없이 다음 스테이지로 진행합니다.</p>`;
+    ? `<p class="flow-note">두 영웅의 힘이 하나로 모입니다 — 영웅 2명이 1명으로 합쳐집니다.<br>합체 후 파티가 1명 줄어듭니다. 빈자리는 '동료의 흔적'에서 채울 수 있습니다.</p>`
+    : `<p class="flow-note">지금 파티에는 합체 가능한 조합이 없습니다.<br>이번에는 합체 없이 다음 여정으로 진행합니다.</p>`;
 
-  const skipLabel = fusions.length ? "이번에는 합체하지 않는다" : "다음 스테이지로";
+  const skipLabel = fusions.length ? "이번에는 합체하지 않는다" : "다음 여정으로";
   const skipNote = fusions.length
-    ? `<p class="flow-note flow-note--dim">합체하지 않으면 동료 영입은 발생하지 않습니다.</p>`
+    ? `<p class="flow-note flow-note--dim">합체하지 않으면 파티 구성은 그대로 유지됩니다.</p>`
     : "";
 
   document.getElementById("fusion-body").innerHTML = `
@@ -344,6 +347,21 @@ function partyPreviewGridHTML(formation, pickedSlot) {
 
 // Recruit UX Rebuild 01 — 동료 선택을 한 화면에서: 현재 파티(상단) + 설명(중단) + 후보 3(하단) + 다음 여정으로(최하단).
 //   후보를 누르면 현재 파티 미리보기에 즉시 반영되고, 다른 후보로 교체 가능. 별도 배치 단계 없음.
+// Recipe Hint Preview 01 — 후보(candidateJob)를 데려오면 현재 파티와 즉시 열리는 합체 목록.
+//   후보가 재료 중 하나이고 나머지 재료를 현재 파티가 이미 보유 + 결과를 아직 미보유일 때만(현재 가능한 것만).
+function recruitFusionHint(candidateJob, ownedJobs) {
+  const out = [];
+  ACTIVE_FUSION_RECIPES.forEach((r) => {
+    if (!r.materials.includes(candidateJob)) return;
+    if (ownedJobs.includes(r.result)) return; // 이미 보유한 결과는 제외
+    const others = r.materials.filter((m) => m !== candidateJob);
+    if (others.length && others.every((m) => ownedJobs.includes(m))) {
+      out.push({ formula: `${r.materials.map(jobName).join(" + ")} → ${jobName(r.result)}`, role: combatRoleLabelOf(r.result) || "" });
+    }
+  });
+  return out;
+}
+
 function renderRecruitPanel(state) {
   const f = state.run.formation || {};
   // Recruit Panel Arrange Hotfix 01 — 위치 교체용으로 선택된 슬롯(재렌더에도 유지되게 패널 dataset에 보관).
@@ -351,13 +369,20 @@ function renderRecruitPanel(state) {
   const candidates = state.run.recruitOffer || [];
   const preview = state.run.recruitPreview;
 
+  // Recipe Hint Preview 01 — 후보를 데려오면 "현재 파티와 어떤 합체가 열리는지" 카드에 1~2줄 힌트(깜깜이 선택 방지).
+  const ownedJobs = SLOT_ORDER.map((k) => f[k]).filter(Boolean);
   const cards = candidates.length
-    ? candidates.map((id) =>
-        `<button type="button" class="recruit-card${preview === id ? " selected" : ""}" data-recruit="${id}" aria-label="${jobName(id)}">
+    ? candidates.map((id) => {
+        const hints = recruitFusionHint(id, ownedJobs);
+        const hintHtml = hints.length
+          ? `<span class="recruit-hint">${hints.slice(0, 2).map((h) => `합체 가능: ${h.formula}${h.role ? ` <span class="recruit-hint-role">· ${h.role}</span>` : ""}`).join("<br>")}</span>`
+          : `<span class="recruit-hint recruit-hint--none">새 조합 탐색</span>`;
+        return `<button type="button" class="recruit-card${preview === id ? " selected" : ""}" data-recruit="${id}" aria-label="${jobName(id)}">
           <span class="recruit-ava">${jobAvatarHTML(id, "av-fit--recruit")}</span>
           <span class="recruit-name">${jobName(id)}</span>
-        </button>`
-      ).join("")
+          ${hintHtml}
+        </button>`;
+      }).join("")
     : `<p class="flow-note">영입 가능한 동료가 없습니다.</p>`;
 
   // Route Grammar 02 — 영입은 동료의 흔적(ally)의 명시적 선택. 문맥 문구 정리(합체 자동 영입 제거).
@@ -441,10 +466,34 @@ function renderRestPanel(state) {
       </div>
     </div>
     <p class="flow-note">숨을 고르고 진형을 정비합니다 — 전원 회복.<br>이번 기회를 날린 게 아닙니다. 다음 여정에서 빌드(영입·합체) 기회가 이어집니다.</p>
-    <div class="flow-kicker">진형 정비 — 슬롯을 눌러 위치를 바꿔 다음 전투를 준비하세요</div>
-    <div class="party-preview-grid">${partyPreviewGridHTML(f, picked)}</div>
+    <div class="flow-kicker">현재 파티 · 진형 정비 — 슬롯을 눌러 위치를 바꿔 다음 전투를 준비하세요</div>
+    <div class="party-preview-grid party-preview-grid--rest">${restPartyGridHTML(state, picked)}</div>
     <button type="button" class="route-card rest-continue" data-rest-continue>정비 완료 — 여정을 잇는다</button>
   `;
+}
+
+// Rest Grove Visual Hotfix 01 — 쉼터 화면 "현재 파티" 그리드: 슬롯별 아바타(티어 링 포함) + 직업명 + HP바(정비 후 전원 회복 반영)
+//   + 전열/후열 표시. 슬롯 탭 교체(data-pf-slot)는 recruit/arrange와 동일 문법. 빈 슬롯은 빈칸으로.
+function restPartyGridHTML(state, pickedSlot) {
+  const f = state.run.formation || {};
+  const hpByJob = {};
+  (state.party || []).forEach((u) => { if (u.jobId) hpByJob[u.jobId] = { hp: Math.max(0, u.hp), maxHp: u.maxHp }; });
+  return SLOT_ORDER.map((k) => {
+    const job = f[k];
+    const rowLabel = k.startsWith("f") ? "전열" : "후열";
+    const pick = k === pickedSlot ? " picked" : "";
+    if (!job) {
+      return `<button type="button" class="pf-slot pf-slot--rest pf-${k} empty${pick}" data-pf-slot="${k}" aria-label="빈자리"><span class="pf-row">${rowLabel}</span><span class="pf-empty-mark">＋</span><span class="pf-empty-label">빈자리</span></button>`;
+    }
+    const h = hpByJob[job] || { hp: 1, maxHp: 1 };
+    const pctv = h.maxHp ? Math.round((h.hp / h.maxHp) * 100) : 0;
+    return `<button type="button" class="pf-slot pf-slot--rest pf-${k} filled${pick}" data-pf-slot="${k}" aria-label="${jobName(job)}">
+      <span class="pf-row">${rowLabel}</span>
+      <span class="pf-ava">${jobAvatarHTML(job, "av-fit--card")}</span>
+      <span class="pf-name">${jobName(job)}</span>
+      <span class="pf-hpbar" aria-hidden="true"><span class="pf-hpfill" style="width:${pctv}%"></span></span>
+    </button>`;
+  }).join("");
 }
 
 function renderRoutePanel(state) {
