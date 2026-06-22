@@ -3,6 +3,8 @@ import { ROUTE_TYPES, bossTimingLabel, bossFury, bossReadinessPressure, bossMena
 import { availableFusions, slotPreference, combatRoleLabelOf, combatRoleOf, BASE_JOBS, ADVANCED_JOBS, SECOND_CLASS_JOBS, ACTIVE_FUSION_RECIPES } from "../data/jobs.js";
 import { jobStatusOf, IMPL_LABEL, VIS_LABEL } from "../data/jobStatus.js";
 import { REWARDS, rewardById, REWARD_MAX_LEVEL } from "../data/rewards.js";
+// Deep Reward Pool 01 — 심층 보상 표시(태그/문구). active만 플레이 등장(scaffold/idea는 Dev 카탈로그 전용).
+import { deepRewardById } from "../data/deepRewards.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { SLOT_ORDER, SLOT_NAMES, partySizeOf, LAYOUT_PREVIEW_CASES } from "../core/state.js";
 import { avatarSpec, avatarFigureHTML, CODEX_ENTRIES, CODEX_STATUS_LABEL } from "../data/avatars.js";
@@ -957,19 +959,34 @@ function renderRewardPanel(state) {
     `${BEGINNER_THEME.name} · 심도 ${state.run.depth} 클리어!${labelSuffix}`;
   const pickWord = remaining >= 2 ? `훈련을 ${remaining}개 선택하세요` : "훈련을 하나 선택하세요";
   const pickHint = remaining >= 2 ? ` <b class="growth-picks">남은 선택 ${remaining}</b>` : "";
-  document.getElementById("growth-subtitle").innerHTML =
-    `${pickWord}.${pickHint}<br><span class='growth-hint'>선택한 훈련은 이번 모험 동안 유지되고, 다음 전투부터 적용됩니다.</span>`;
 
-  // Run Reward Training 01 → Diversification 02 — 3택만 렌더 + 이번 선택 후 Lv 표시(현재 카운트+1, MAX 3).
-  const offer = (state.run.rewardOffer || []).map((id) => rewardById(id)).filter(Boolean);
-  const choices = offer.length ? offer : REWARDS;
+  // Run Reward Training 01 → Deep Reward Pool 01 — 보상 id를 성장(rewards) 또는 심층(deepRewards)으로 해석.
+  //   심층 보상은 Lv 대신 분류 태그(심층·임시/생존/귀환…)를 보여주고 effect 문구를 쓴다(일반 성장과 구분).
+  const resolve = (id) => {
+    const g = rewardById(id);
+    if (g) return { id: g.id, name: g.name, desc: g.description, deep: false };
+    const d = deepRewardById(id);
+    return d ? { id: d.id, name: d.name, desc: d.effect, deep: true, tag: d.tag } : null;
+  };
+  const offerIds = state.run.rewardOffer || [];
+  const choices = (offerIds.length ? offerIds.map(resolve).filter(Boolean) : REWARDS.map((r) => ({ id: r.id, name: r.name, desc: r.description, deep: false })));
+  const hasDeep = choices.some((c) => c.deep);
+  // E — Max 성장 대체로 심층 보상이 나오면 유저가 이상하게 느끼지 않게 문구 보강.
+  const deepNote = hasDeep ? "<br><span class='growth-hint'>성장이 응축되어 이번 모험을 더 깊이 돕는 선택이 나타났습니다.</span>" : "";
+  document.getElementById("growth-subtitle").innerHTML =
+    `${pickWord}.${pickHint}<br><span class='growth-hint'>선택한 훈련은 이번 모험 동안 유지되고, 다음 전투부터 적용됩니다.</span>${deepNote}`;
+
   const lvOf = (id) => Math.min(REWARD_MAX_LEVEL, ((state.run.rewardLevels || {})[id] || 0) + 1);
-  document.getElementById("growth-choices").innerHTML = choices.map(
-    (r) =>
-      `<button type="button" data-reward="${r.id}">
-        <span class="reward-name">${r.name} <b class="reward-lv">Lv.${lvOf(r.id)}/${REWARD_MAX_LEVEL}</b></span>
-        <span class="reward-desc">${r.description}</span>
-      </button>`
+  document.getElementById("growth-choices").innerHTML = choices.map((r) =>
+    r.deep
+      ? `<button type="button" data-reward="${r.id}">
+          <span class="reward-name">${r.name} <b class="reward-tag">심층·${r.tag}</b></span>
+          <span class="reward-desc">${r.desc}</span>
+        </button>`
+      : `<button type="button" data-reward="${r.id}">
+          <span class="reward-name">${r.name} <b class="reward-lv">Lv.${lvOf(r.id)}/${REWARD_MAX_LEVEL}</b></span>
+          <span class="reward-desc">${r.desc}</span>
+        </button>`
   ).join("");
 
   const summary = growthSummaryText(state);

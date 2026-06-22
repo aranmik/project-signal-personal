@@ -363,6 +363,8 @@ export const gameState = {
     rewardLevels: {}, // Reward & Growth 01: 보상별 선택 횟수(Lv 표시용 — 효과는 bonuses/training이 담당)
     training: {},     // Run Reward Training 01: 대상 필터 성장 버킷 { front/back/tank/melee/ranged/support: {atk,maxHp} }
     rewardOffer: null, // Run Reward Training 01: 현재 보상 화면 3택(reward id 배열) — 재렌더에도 고정
+    // Deep Reward Pool 01 — 심층 보상 상태/관측(startRun에서 초기화).
+    nextBattleShield: null, rewardFallbackCount: 0, deepRewardOffered: 0, deepRewardTaken: 0, rewardNoCandidateError: 0,
     // Run Structure 01A — 선택형 여정 레이어 상태(stage=이긴 전투 수와 분리).
     depth: 1,                   // 여정 깊이(전투 + 휴식 노드 수) — 보스 도전 타이밍 감각의 기준
     bossKeys: 0,                // 보스 열쇠(정예 전투 승리로 획득)

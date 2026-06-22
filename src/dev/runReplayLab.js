@@ -262,6 +262,11 @@ function playRunDetailed(policy, profile, runIndex) {
   rec.dangerMarkers = computeDangerMarkers(rec);
   // Route Grammar 02 — run-state 기반 관측 지표.
   const run = gameState.run, cleared = rec.result === "clear";
+  // Deep Reward Pool 01 — 보상 고갈/심층 보상 관측(고갈 fallback·심층 제시/선택·후보0 에러). 전투 계산 무관(읽기만).
+  rec.rewardFallbackCount = run.rewardFallbackCount || 0;
+  rec.deepRewardOffered = run.deepRewardOffered || 0;
+  rec.deepRewardTaken = run.deepRewardTaken || 0;
+  rec.rewardNoCandidateError = run.rewardNoCandidateError || 0;
   rec.party4Depth = run.party4Depth || 0; rec.party4Reached = !!run.party4Reached;
   rec.alertnessAtParty4 = run.alertnessAtParty4 || 0; rec.effectiveAlertnessAtParty4 = run.effectiveAlertnessAtParty4 || 0; rec.latentAlertnessAtParty4 = run.alertnessAtParty4 || 0;
   rec.preParty4Battles = run.preParty4Battles || 0; rec.preParty4GrowthCount = run.preParty4GrowthCount || 0;

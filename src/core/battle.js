@@ -5,6 +5,8 @@ import { UNIT_TEMPLATES } from "../data/units.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
 import { ROUTE_TYPES, rollRouteOffer, SAGE_COOLDOWN, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions, depthSpeedFactor, routeReward, farmWarnLevel } from "../data/routes.js";
 import { REWARDS, rewardById, REWARD_MAX_LEVEL } from "../data/rewards.js";
+// Deep Reward Pool 01 — 심층 탐험형 보상 + 고갈 fallback. active만 등장(scaffold/idea는 Dev 카탈로그 전용). 영구스탯/레벨업 없음.
+import { DEEP_REWARDS, deepRewardById, activeDeepRewards } from "../data/deepRewards.js";
 import { saveFootprint } from "../data/footprints.js";
 // Discovery Codex Foundation 01 — 안전한 진행도 기록 훅(headless 주회 중엔 호출 안 함). 전투 계산/수치 불변.
 import { recordRunResult, recordMonstersDefeated } from "./progression.js";
@@ -252,6 +254,12 @@ export function resetBattle() {
   gameState.run.rewardLevels = {}; // 런 성장 + 훈련 선택 횟수(MAX 3 캡) 초기화 (시작 배치 유지와 별개)
   gameState.run.training = {};      // Run Reward Training 01 — 대상 필터 성장 초기화
   gameState.run.rewardOffer = null; // Run Reward Training 01 — 보상 3택 초기화
+  // Deep Reward Pool 01 — 심층 보상 상태/관측 초기화.
+  gameState.run.nextBattleShield = null;   // 다음 전투 보호막 보상(1회 소비)
+  gameState.run.rewardFallbackCount = 0;   // 보상 고갈 fallback 발동 수(dev)
+  gameState.run.deepRewardOffered = 0;     // 심층 보상 제시 수(dev)
+  gameState.run.deepRewardTaken = 0;       // 심층 보상 선택 수(dev)
+  gameState.run.rewardNoCandidateError = 0; // 보상 후보 0개 에러(항상 0이 정상 · dev)
   gameState.screen = "battle";
 
   // Fusion Flow 01: 런 시작 배치 복원(합체/영입으로 바뀐 formation을 초기화).
@@ -352,27 +360,56 @@ function rewardEligible(reward) {
   return rewardTargetPresent(reward);
 }
 
-// Diversification 02 — 일반 전투 보상 3택을 굴려 고정(재렌더에도 유지). MAX 제외 + 중복 없이 추출.
-//   범용(공세/생존/균형/회복)이 항상 대상 적격이라, 이들이 모두 MAX되기 전엔 3개가 안정적으로 유지된다.
-//   MAX 다수로 적격이 3 미만인 극단 상황에선 가능한 만큼만 제시(보고). MAX 보상을 다시 넣는 fallback은 하지 않음.
+// Diversification 02 → Deep Reward Pool 01 + Reward Exhaustion Fallback 01 — 보상 3택을 굴려 고정(재렌더에도 유지).
+//   ① 심도별 등장 규칙(C): 1~20 성장만 / 21~29 성장 + 낮은 확률 심층 1 / 30+ 성장 고갈분을 심층 active로 보충.
+//   ② 고갈 fallback(A): 어떤 이유로든 후보가 0이면 심층 active(최소 "숨 고르기")로 보장 → 보상 화면이 절대 빈 채로
+//      진행 불가가 되지 않게 한다(rewardNoCandidateError는 항상 0이 정상). MAX 성장을 다시 넣지는 않는다(스탯 무한증가 X).
 function rollRewardOffer() {
-  const eligible = REWARDS.filter(rewardEligible);
-  gameState.run.rewardOffer = shuffle(eligible).slice(0, 3).map((r) => r.id);
+  const run = gameState.run;
+  const depth = run.depth || 1;
+  const eligibleGrowth = REWARDS.filter(rewardEligible);
+  const deepPool = activeDeepRewards().filter((r) => depth >= (r.depthMin || 0)); // 심도 조건 충족한 active 심층 보상
+  let pool = eligibleGrowth.slice();
+  if (depth >= 30) {
+    pool = eligibleGrowth.concat(deepPool); // 30+: 성장 고갈분을 심층이 자연 보충(질 위주 — active만)
+  } else if (depth >= 21 && deepPool.length && Math.random() < 0.5) {
+    pool = eligibleGrowth.concat([deepPool[Math.floor(Math.random() * deepPool.length)]]); // 21~29: 낮은 확률로 심층 1 후보
+  }
+  let offer = shuffle(pool).slice(0, 3).map((r) => r.id);
+  // A — Fallback: 후보 0(전 성장 Max 등)이면 심층 active로 보장. 심도 조건도 못 채우면 심도 무관 최소 보장.
+  if (offer.length === 0) {
+    const fb = deepPool.length ? deepPool : activeDeepRewards();
+    offer = shuffle(fb).slice(0, 3).map((r) => r.id);
+    run.rewardFallbackCount = (run.rewardFallbackCount || 0) + 1;
+  }
+  if (offer.length === 0) { offer = ["deep_breath"]; run.rewardFallbackCount = (run.rewardFallbackCount || 0) + 1; } // 최후 방어(이론상 미도달)
+  run.rewardOffer = offer;
+  // dev 관측(Run Reward 안정화): 심층 제시/고갈 에러. rewardNoCandidateError는 0이어야 정상.
+  if (offer.some((id) => deepRewardById(id))) run.deepRewardOffered = (run.deepRewardOffered || 0) + 1;
+  if (offer.length === 0) run.rewardNoCandidateError = (run.rewardNoCandidateError || 0) + 1;
 }
 
 export function applyReward(id) {
-  const reward = rewardById(id);
+  const growthReward = rewardById(id);
+  const deepReward = growthReward ? null : deepRewardById(id);
+  const reward = growthReward || deepReward;
   if (!reward) return;
   // 현재 제시된 3택에 없는 id는 무시(재렌더/중복 클릭 방어).
   if (!(gameState.run.rewardOffer || []).includes(id)) return;
 
-  applyTrainingReward(reward);
-
-  const lv = gameState.run.rewardLevels;
-  lv[id] = (lv[id] || 0) + 1;
-  gameState.logs = [`보상: ${reward.name} Lv.${lv[id]} — 다음 전투부터 적용`];
-  // Route Grammar 02 — 4인 전 성장 보상 픽 추적(anti-farm 신호: 4인 전 과도한 성장 파밍 관측).
-  if (!gameState.run.party4Reached) gameState.run.preParty4GrowthCount = (gameState.run.preParty4GrowthCount || 0) + 1;
+  if (growthReward) {
+    applyTrainingReward(growthReward);
+    const lv = gameState.run.rewardLevels;
+    lv[id] = (lv[id] || 0) + 1;
+    gameState.logs = [`보상: ${growthReward.name} Lv.${lv[id]} — 다음 전투부터 적용`];
+    // Route Grammar 02 — 4인 전 성장 보상 픽 추적(anti-farm 신호: 4인 전 과도한 성장 파밍 관측).
+    if (!gameState.run.party4Reached) gameState.run.preParty4GrowthCount = (gameState.run.preParty4GrowthCount || 0) + 1;
+  } else {
+    // Deep Reward Pool 01 — 심층 active 보상 적용(현재 HP 회복 / 다음 전투 보호막). 영구 스탯 증가 없음.
+    applyDeepReward(deepReward);
+    gameState.run.deepRewardTaken = (gameState.run.deepRewardTaken || 0) + 1;
+    gameState.logs = [`보상: ${deepReward.name} — ${deepReward.effect}`];
+  }
 
   // Reward Pressure 01 — 다회 성장 선택(깊은 수풀=2회). 남은 픽이 있으면 새 3택을 굴려 보상 화면 유지.
   gameState.run.rewardPicks = (gameState.run.rewardPicks || 1) - 1;
@@ -388,6 +425,44 @@ export function applyReward(id) {
   //   합체는 더 이상 깊은 수풀/스테이지 이벤트로 자동 진입하지 않는다 — "결속의 공터(bond)" 루트의 명시적 선택뿐.
   //   (deepForestRewardType / STAGE_CLEAR_EVENTS 자동 합체 트리거 제거 — 영입/합체와 위험 전투의 분리.)
   proceedNextStage();
+}
+
+// Deep Reward Pool 01 — 심층 active 보상 적용. heal=현재 파티HP 스냅샷 회복(다음 전투 이월) / shield=다음 전투 시작 보호막 플래그.
+//   영구 스탯/레벨업 없음 · 모두 "이번 런/다음 전투" 한정 · safe 메커니즘(기존 partyHp 이월 + u.shield)만 사용.
+function applyDeepReward(reward) {
+  const ap = reward && reward.apply;
+  if (!ap) return; // scaffold/idea는 apply 없음(애초에 offer에 안 들어오지만 방어).
+  if (ap.kind === "heal") {
+    // 숨 고르기 — capturePartyHp가 보상 직전에 호출되므로 run.partyHp가 현재 HP. 스냅샷을 소량 회복(applyPersistedHp가 maxHp 클램프).
+    const snap = gameState.run.partyHp;
+    if (snap) {
+      Object.keys(snap).forEach((job) => {
+        const s = snap[job];
+        if (s && s.ko) snap[job] = { hp: ap.amount };          // 기절 → 소량 부활
+        else if (s) s.hp = (s.hp || 0) + ap.amount;            // 생존 → 소량 회복(클램프는 복원 시)
+      });
+    }
+  } else if (ap.kind === "shield") {
+    // 응축된 성장 / 전열 다짐 — 다음 전투 시작 시 1회 보호막(누적 안 됨). advanceStage가 소비.
+    gameState.run.nextBattleShield = { scope: ap.scope, pct: ap.pct };
+  }
+}
+
+// Deep Reward Pool 01 — 다음 전투 시작 보호막 부여(1회 소비). advanceStage가 applyPersistedHp 직후 호출.
+//   scope "all"=전원 / "front"=전열만(formation 슬롯 f*). u.shield는 기존 전투 메커니즘(흡수) 재사용 — 수치 로직 불변.
+function applyNextBattleShield() {
+  const nb = gameState.run.nextBattleShield;
+  if (!nb) return;
+  gameState.run.nextBattleShield = null; // 1회 소비(다음 전투 1회 한정)
+  const f = gameState.run.formation || {};
+  gameState.party.forEach((u) => {
+    if (u.isDead) return;
+    if (nb.scope === "front") {
+      const slot = SLOT_ORDER.find((k) => f[k] === u.jobId);
+      if (!(slot && slot.startsWith("f"))) return;
+    }
+    u.shield = Math.max(u.shield || 0, Math.round(u.maxHp * nb.pct));
+  });
 }
 
 // Fusion Flow Foundation 01 — 합체/영입 Flow.
@@ -745,6 +820,7 @@ export function advanceStage(routeType = gameState.run.currentRouteType) {
   gameState.party = createInitialParty(gameState.run.bonuses, gameState.run.formation || undefined, gameState.run.training);
   // Stage Persistence 01 — 풀피 재생성 대신 직전 전투 결과 HP를 복원(기절 영웅은 HP 1). 첫 전투는 무영향.
   applyPersistedHp();
+  applyNextBattleShield(); // Deep Reward Pool 01 — 응축된 성장/전열 다짐 보상의 다음 전투 보호막(1회 소비)
   gameState.enemies = createRouteEnemies(routeType, gameState.run); // 길 선택이 인카운터를 만든다
 
   gameState.battle.tick = 0;

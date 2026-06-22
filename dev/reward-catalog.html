@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<!-- Dev Reward Catalog 01 — 개발/기획용 보상 카탈로그(일반 플레이 비노출 · 별도 dev 페이지).
+     나라가 보상 아이디어를 읽고 "이건 이렇게 바꾸자/추가하자"를 말할 수 있도록 기본 성장 + 심층 보상 + idea/scaffold를 카드로 표시. -->
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Reward Catalog — Deep Reward Lab · Signal Personal (Dev)</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; padding: 16px; background: #0c1018; color: #dbe6f0; font-family: system-ui, -apple-system, "Noto Sans KR", sans-serif; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    .sub { font-size: 12px; color: #8aa0b4; margin: 0 0 14px; line-height: 1.5; }
+    .filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+    .filters button { font: inherit; font-size: 12px; font-weight: 700; padding: 7px 12px; border-radius: 999px; cursor: pointer;
+      color: #9aa8b8; background: #161c24; border: 1px solid #2a3340; }
+    .filters button.on { color: #0e1620; background: #cdb86a; border-color: #cdb86a; }
+    h2 { font-size: 14px; margin: 18px 0 8px; color: #eef3f8; border-bottom: 1px solid #2a3340; padding-bottom: 6px; }
+    .grid { display: flex; flex-direction: column; gap: 10px; }
+    .card { border: 1px solid #303947; border-radius: 10px; background: #141a22; padding: 12px 14px; }
+    .card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+    .name { font-size: 14px; font-weight: 800; color: #eef3f8; }
+    .st { font-size: 10px; font-weight: 800; padding: 1px 7px; border-radius: 999px; }
+    .st-active { color: #0e1620; background: #7fc8a0; }
+    .st-scaffold { color: #0e1620; background: #cdb86a; }
+    .st-idea { color: #cdd9e6; background: #34405a; }
+    .cat { font-size: 11px; color: #b89fe0; font-weight: 700; }
+    .cond { font-size: 11px; color: #8aa0b4; margin-left: auto; }
+    .row { font-size: 12px; line-height: 1.5; margin: 2px 0; }
+    .row b { color: #9fb3c6; font-weight: 700; }
+    .effect { color: #d6b56a; }
+    .risk { color: #e0a0a0; }
+    .empty { color: #7e8b9c; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Reward Catalog — Deep Reward Lab</h1>
+  <p class="sub">개발/기획용 보상 카탈로그 (일반 플레이 비노출). <b>active</b>=실제 등장·적용 / <b>scaffold</b>=설계됨·연결 보류 / <b>idea</b>=시스템 미존재·컨셉만.<br>나라: "이건 이렇게 바꾸자/추가하자"를 카드 보고 말해주면 렌이 반영합니다.</p>
+  <div class="filters" id="filters"></div>
+  <div id="content"></div>
+
+  <script type="module">
+    import { REWARDS, REWARD_MAX_LEVEL } from "../src/data/rewards.js";
+    import { DEEP_REWARDS } from "../src/data/deepRewards.js";
+
+    let filter = "all";
+    const FILTERS = [
+      { id: "all", label: "전체" },
+      { id: "active", label: "적용(active)" },
+      { id: "scaffold", label: "준비(scaffold)" },
+      { id: "idea", label: "구상(idea)" },
+    ];
+    const esc = (s) => String(s == null ? "" : s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+    function deepCard(r) {
+      return `<div class="card">
+        <div class="card-head">
+          <span class="name">${esc(r.name)}</span>
+          <span class="st st-${r.status}">${r.status}</span>
+          <span class="cat">${esc(r.category)} · ${esc(r.tag)}</span>
+          <span class="cond">심도 ${r.depthMin}+</span>
+        </div>
+        <div class="row effect"><b>효과</b> ${esc(r.effect)}</div>
+        <div class="row"><b>활용 의도</b> ${esc(r.intent)}</div>
+        <div class="row"><b>기대 감정</b> "${esc(r.emotion)}"</div>
+        <div class="row risk"><b>위험/주의</b> ${esc(r.risk)}</div>
+        <div class="row"><b>후속 메모</b> ${esc(r.followup)}</div>
+      </div>`;
+    }
+    function growthCard(r) {
+      return `<div class="card">
+        <div class="card-head">
+          <span class="name">${esc(r.name)}</span>
+          <span class="st st-active">active</span>
+          <span class="cat">기본 성장 · ${esc(r.target)}/${esc(r.stat)}</span>
+          <span class="cond">전 심도 · 최대 Lv.${REWARD_MAX_LEVEL}</span>
+        </div>
+        <div class="row effect"><b>효과</b> ${esc(r.description)}</div>
+        <div class="row"><b>활용 의도</b> 역할/배치 기반 영구 성장(런 한정). Max 도달 시 후보 제외 → 심도 30+에서 심층 보상이 대체.</div>
+      </div>`;
+    }
+
+    function render() {
+      document.getElementById("filters").innerHTML = FILTERS.map((f) =>
+        `<button class="${f.id === filter ? "on" : ""}" data-f="${f.id}">${f.label}</button>`).join("");
+      const growth = (filter === "all" || filter === "active") ? REWARDS : [];
+      const deep = DEEP_REWARDS.filter((r) => filter === "all" || r.status === filter);
+      let html = "";
+      if (growth.length) html += `<h2>기본 성장 보상 (${growth.length})</h2><div class="grid">${growth.map(growthCard).join("")}</div>`;
+      const byStatus = (st) => deep.filter((r) => r.status === st);
+      [["active", "심층 보상 — 적용 중 (active)"], ["scaffold", "심층 보상 — 준비 (scaffold)"], ["idea", "심층 보상 — 구상 (idea)"]].forEach(([st, title]) => {
+        const list = byStatus(st);
+        if (list.length) html += `<h2>${title} (${list.length})</h2><div class="grid">${list.map(deepCard).join("")}</div>`;
+      });
+      if (!html) html = `<p class="empty">해당 상태의 보상이 없습니다.</p>`;
+      document.getElementById("content").innerHTML = html;
+    }
+    document.getElementById("filters").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-f]"); if (!b) return; filter = b.dataset.f; render();
+    });
+    render();
+  </script>
+</body>
+</html>
