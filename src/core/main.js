@@ -210,28 +210,15 @@ document.getElementById("fusion-result-panel").addEventListener("click", (e) => 
   if (b && "fusionContinue" in b.dataset) continueAfterFusion();
 });
 
-// Recruit UX Rebuild 01 → Arrange Hotfix 01 — 단일 화면 영입: 후보 클릭=미리배치/교체,
-//   파티 슬롯 탭=위치 교체(집기→놓기), "다음 여정으로"=확정. picked는 패널 dataset에 둬 재렌더에도 유지.
+// Route Choice & Recruit UX Rework 01 (D) — 영입 화면은 후보 미리배치/확정만 처리한다.
+//   진형 재배치(슬롯 스왑)는 제거 — 정비는 이슬 쉼터(정비소)에서. 후보는 빈 슬롯에 자동 미리보기로 들어가고,
+//   현재 파티 그리드는 정적 표시(div)라 여기서 다룰 슬롯 버튼이 없다. (swapFormationSlots는 쉼터/재배치 전용으로 유지.)
 const recruitPanel = document.getElementById("recruit-panel");
 recruitPanel.addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b) return;
-  if (b.dataset.recruit) { recruitPanel.dataset.picked = ""; previewRecruit(b.dataset.recruit); return; }
-  if ("recruitConfirm" in b.dataset) { recruitPanel.dataset.picked = ""; confirmRecruit(); return; }
-  // 파티 슬롯 위치 교체: 첫 탭=집기, 다른 슬롯 탭=교체, 같은 슬롯 재탭=해제. 빈↔빈은 변화 없음.
-  const slot = b.dataset.pfSlot;
-  if (!slot) return;
-  const picked = recruitPanel.dataset.picked || "";
-  if (!picked) {
-    recruitPanel.dataset.picked = slot;
-    b.classList.add("picked");
-  } else if (picked === slot) {
-    recruitPanel.dataset.picked = "";
-    b.classList.remove("picked");
-  } else {
-    recruitPanel.dataset.picked = "";
-    swapFormationSlots(picked, slot); // formation 교체 + 재렌더
-  }
+  if (b.dataset.recruit) { previewRecruit(b.dataset.recruit); return; }
+  if ("recruitConfirm" in b.dataset) { confirmRecruit(); return; }
 });
 
 // Party & Formation Integrity 01 보강: 재배치 화면 — 슬롯 집기 → 교환.

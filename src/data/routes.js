@@ -70,24 +70,58 @@ export const BOSS_ENCOUNTER = byTier("boss")[0] || ["lion:boss"]; // 사자왕
 //   "노출 = 유저에게 허용"이므로 불가능/무의미한 선택지는 후보에서 제외한다.
 // Rest Grove 01 — hpRatio/restJustTaken 추가. 다친 파티는 "정비(이슬 쉼터)"를 항상 선택지로 보장하고,
 //   쉼터 직후엔 연속 쉼터를 막아 "정비 → 다음 빌드/전투"로 이어지게 한다(쉼터 = 빌드 포기가 아니라 다음 빌드 준비).
+// Route Choice Cap 01 — 여정 선택지를 의도적으로 "최대 2개"로 제한한다(로그라이크식 밀당 실험).
+//   매번 영입/합체 최적해를 밟지 못하게 하고, 새싹 숲길은 "원하는 게 안 나왔을 때 심도를 지불하며
+//   지나가는 기본 진행로"가 된다("이번엔 영입이 잘 안 나왔네" 같은 운의 감각). 조건별 우선순위로
+//   선택지 없음/강제(억까)는 막는다. ※ Boss Gate/BOSS_READY.depth는 손대지 않는다 — 보스문 노출
+//   조건(열쇠 2)도 기존 그대로. 이 캡이 보스/열쇠/합체 타이밍을 얼마나 뒤로 미는지 먼저 관측한다.
 export function rollRouteOffer({ depth, bossKeys, partySize = 4, canRecruit = false, canFuse = false, hpRatio = 1, restJustTaken = false, rng = Math.random }) {
-  const shuffleR = (a) => { const r = a.slice(); for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; } return r; };
-  // 새싹 숲길은 항상 안전한 기반 선택지로 포함(빈 오퍼 방지). 나머지는 조건 필터 후 랜덤.
-  const offer = ["normal"];
-  const priority = []; // 지금 상태에서 "의미 있는" 우선 노출 루트.
-  // Rest Grove 01 — 다칠 때(hp<55%)는 정비(쉼터)를 우선 보장. 쉼터 직후엔 제외(연속 쉼터 방지).
-  if (hpRatio < 0.55 && !restJustTaken) priority.push("rest");
-  const build = [];
-  if (partySize < 4 && canRecruit) build.push("ally"); // 4인 전 영입 전투
-  if (partySize >= 3 && canFuse) build.push("bond");   // 3인+ & 합체 가능 시 합체 전투
-  shuffleR(build).forEach((rt) => priority.push(rt));  // 정비(다칠 때) 다음에 빌드 루트
-  priority.forEach((rt) => { if (offer.length < 3) offer.push(rt); });
-  // 남는 자리를 기본 후보군에서 랜덤으로(쉼터 직후엔 rest 제외 = 연속 쉼터 방지).
-  const base = shuffleR(["danger", "elite", "rest"].filter((rt) => !offer.includes(rt) && !(restJustTaken && rt === "rest")));
-  while (offer.length < 3 && base.length) offer.push(base.shift());
-  if (offer.length < 2 && base.length) offer.push(base.shift()); // 최소 2 보장(이론상 항상 충족)
-  if (bossKeys >= BOSS_MENACE.keysToSeal) offer.push("boss");    // 보스는 별도(2~3개 + 보스문)
-  return [...new Set(offer)];
+  const CAP = 2;
+  const offer = [];
+  const add = (rt) => { if (rt && !offer.includes(rt) && offer.length < CAP) offer.push(rt); };
+  const pickFrom = (arr) => { const a = arr.filter((rt) => rt && !offer.includes(rt)); return a.length ? a[Math.floor(rng() * a.length)] : null; };
+  const ret = () => [...new Set(offer.length ? offer : ["normal"])];
+
+  const bossReady = (bossKeys || 0) >= BOSS_MENACE.keysToSeal; // 열쇠 2 = 새싹 왕의 문 개방(기존 조건 유지)
+  const lowHp = hpRatio < 0.55 && !restJustTaken;
+
+  // 1) 생존 안전장치 — 다칠 때(hp<55%)는 정비(이슬 쉼터)를 항상 보장. 쉼터 직후엔 제외(연속 쉼터 방지).
+  if (lowHp) add("rest");
+
+  // 2) 4인 전 런웨이 — 동료의 흔적(영입) 우선 + 안전 진행(새싹 숲길). 4인 전엔 위험/정예 압력을 노출하지
+  //    않는다(초반 억까 방지). 영입 후보가 없으면 정비/진행으로 2개를 채운다.
+  if (partySize < 4) {
+    if (canRecruit) add("ally");
+    add("normal");
+    if (offer.length < CAP) add(!restJustTaken ? "rest" : "danger");
+    return ret();
+  }
+
+  // 3) 보스 준비 완료(열쇠 2) — 새싹 왕의 문을 강하게 포함하되 과밀하지 않게(보스 + 1개). 현자의 가지(정예)는
+  //    매번 노출하지 않는다(열쇠가 충분하니 반복 파밍 유도 X). 보스를 미루고 더 키우는 안전/빌드 선택을 함께 준다.
+  if (bossReady) {
+    add("boss");
+    const deferPool = ["normal"];                          // 보스를 미루고 진행하는 안전 선택
+    if (canFuse && partySize >= 3) deferPool.push("bond");  // 한 번 더 키우는 합체
+    if (!restJustTaken) deferPool.push("rest");             // 또는 정비
+    if (rng() < 0.3) deferPool.push("danger");              // 가끔 깊은 수풀
+    add(pickFrom(deferPool));
+    return ret();
+  }
+
+  // 4) 4인 이후(열쇠 모으는 중) — 빌드/압력 루트를 "매번 다 나오지 않게" 하나만 랜덤(밀당의 핵심).
+  //    결속의 공터(합체)는 "아예 안 나와 답답"해지지 않게 가중(×2). 현자의 가지(정예=열쇠)는 ×1로 둔다 —
+  //    가중하면 열쇠가 빨리 모여 보스문이 일찍 열리고 클리어 심도가 오히려 앞당겨진다(Route Choice Cap 01 관측).
+  const pool = [];
+  if (canFuse && partySize >= 3) { pool.push("bond"); pool.push("bond"); }
+  pool.push("elite");
+  pool.push("danger");
+  if (!restJustTaken) pool.push("rest");
+  add(pickFrom(pool));
+
+  // 5) 기본 진행로 — 새싹 숲길을 2번째로 항상 보강(원하는 게 안 나왔을 때 지나가는 길 + 빈 오퍼 방지).
+  add("normal");
+  return ret();
 }
 
 // 보스 도전 타이밍 감각(초보자 테마 기준) — "지금 갈지/더 돌지" 읽힘용.

@@ -335,13 +335,17 @@ function spawnFusionCelebration() {
 // Recruit Panel Polish/Arrange Hotfix 01 — 현재 편성 파티 2×2: "아바타와 빈자리"만(전열/후열/직업명 텍스트 X).
 //   채워진 슬롯=아바타만(직업명은 aria-label로만), 빈 슬롯=＋ + "빈자리". 각 슬롯은 탭하면 위치 교체(swap)되는 버튼.
 //   pickedSlot=교체용으로 선택된 슬롯(테두리 빛남). 내부 슬롯 키(f0/f1/b0/b1=전열/후열)는 그대로 유지.
-function partyPreviewGridHTML(formation, pickedSlot) {
+// Route Choice & Recruit UX Rework 01 (D) — 영입 화면 "현재 파티"는 상태 표시만(자유 재배치 없음).
+//   진형 정비는 이슬 쉼터에서 한다. 영입 후보는 빈 슬롯에 자동 미리보기로 들어간다(수동 슬롯 스왑 X).
+//   그래서 슬롯은 버튼이 아니라 정적 표시(div) — 전열/후열 + 아바타 + 직업명. 빈 슬롯은 빈칸.
+function partyPreviewGridHTML(formation) {
   return SLOT_ORDER.map((k) => {
     const job = formation?.[k];
-    const inner = job
-      ? `<span class="pf-ava">${jobAvatarHTML(job, "av-fit--card")}</span>`
-      : `<span class="pf-empty-mark">＋</span><span class="pf-empty-label">빈자리</span>`;
-    return `<button type="button" class="pf-slot pf-${k}${job ? " filled" : " empty"}${k === pickedSlot ? " picked" : ""}" data-pf-slot="${k}" aria-label="${job ? jobName(job) : "빈자리"}">${inner}</button>`;
+    const rowLabel = k.startsWith("f") ? "전열" : "후열";
+    if (!job) {
+      return `<div class="pf-slot pf-slot--static pf-${k} empty" aria-label="빈자리"><span class="pf-row">${rowLabel}</span><span class="pf-empty-mark">＋</span><span class="pf-empty-label">빈자리</span></div>`;
+    }
+    return `<div class="pf-slot pf-slot--static pf-${k} filled" aria-label="${jobName(job)}"><span class="pf-row">${rowLabel}</span><span class="pf-ava">${jobAvatarHTML(job, "av-fit--card")}</span><span class="pf-name">${jobName(job)}</span></div>`;
   }).join("");
 }
 
@@ -364,23 +368,29 @@ function recruitFusionHint(candidateJob, ownedJobs) {
 
 function renderRecruitPanel(state) {
   const f = state.run.formation || {};
-  // Recruit Panel Arrange Hotfix 01 — 위치 교체용으로 선택된 슬롯(재렌더에도 유지되게 패널 dataset에 보관).
-  const pickedSlot = document.getElementById("recruit-panel").dataset.picked || null;
   const candidates = state.run.recruitOffer || [];
   const preview = state.run.recruitPreview;
 
-  // Recipe Hint Preview 01 — 후보를 데려오면 "현재 파티와 어떤 합체가 열리는지" 카드에 1~2줄 힌트(깜깜이 선택 방지).
-  const ownedJobs = SLOT_ORDER.map((k) => f[k]).filter(Boolean);
+  // Recruit Hint Snapshot Fix (B) — 합체 힌트 계산 기준을 "영입 화면 진입 시 현재 파티"로 고정한다.
+  //   임시 선택(preview)된 후보는 formation 빈 슬롯에 들어가므로 기준에서 제외 → 후보 A를 골라도
+  //   후보 B/C의 힌트가 바뀌지 않는다(정보 혼선 방지). 상단 4인 미리보기는 그대로(힌트 기준과 분리).
+  const baseJobs = SLOT_ORDER.map((k) => f[k]).filter(Boolean).filter((j) => j !== preview);
+
+  // Recruit Screen Redesign 01 (C) — 세로 리스트. 후보별: 아바타 + 직업명·기본역할 + "데려오면 열리는 합체" 1~2줄.
+  //   좌/가운데/우 3열을 버리고 한 줄 카드(아바타 왼쪽 + 정보 오른쪽)로 — 합체 힌트가 줄바꿈으로 지저분해지지 않게.
   const cards = candidates.length
     ? candidates.map((id) => {
-        const hints = recruitFusionHint(id, ownedJobs);
+        const role = combatRoleLabelOf(id);
+        const hints = recruitFusionHint(id, baseJobs);
         const hintHtml = hints.length
-          ? `<span class="recruit-hint">${hints.slice(0, 2).map((h) => `합체 가능: ${h.formula}${h.role ? ` <span class="recruit-hint-role">· ${h.role}</span>` : ""}`).join("<br>")}</span>`
-          : `<span class="recruit-hint recruit-hint--none">새 조합 탐색</span>`;
-        return `<button type="button" class="recruit-card${preview === id ? " selected" : ""}" data-recruit="${id}" aria-label="${jobName(id)}">
-          <span class="recruit-ava">${jobAvatarHTML(id, "av-fit--recruit")}</span>
-          <span class="recruit-name">${jobName(id)}</span>
-          ${hintHtml}
+          ? `<span class="recruit-hints"><span class="recruit-hint-label">합체 가능</span>${hints.slice(0, 2).map((h) => `<span class="recruit-hint-line">${h.formula}${h.role ? ` <span class="recruit-hint-role">· ${h.role}</span>` : ""}</span>`).join("")}</span>`
+          : `<span class="recruit-hints recruit-hints--none">새 조합 탐색</span>`;
+        return `<button type="button" class="recruit-card recruit-card--row${preview === id ? " selected" : ""}" data-recruit="${id}" aria-label="${jobName(id)}">
+          <span class="recruit-ava">${jobAvatarHTML(id, "av-fit--card")}</span>
+          <span class="recruit-info">
+            <span class="recruit-headline"><b class="recruit-name">${jobName(id)}</b>${role ? ` <span class="recruit-role">· ${role}</span>` : ""}</span>
+            ${hintHtml}
+          </span>
         </button>`;
       }).join("")
     : `<p class="flow-note">영입 가능한 동료가 없습니다.</p>`;
@@ -395,7 +405,8 @@ function renderRecruitPanel(state) {
 
   document.getElementById("recruit-body").innerHTML = `
     <div class="flow-kicker">현재 편성된 파티</div>
-    <div class="party-preview-grid">${partyPreviewGridHTML(f, pickedSlot)}</div>
+    <div class="party-preview-grid">${partyPreviewGridHTML(f)}</div>
+    <p class="flow-note flow-note--dim recruit-arrange-note">진형 정비는 이슬 쉼터에서 할 수 있습니다.</p>
     <h2 class="flow-heading">${heading}</h2>
     <p class="flow-note">${note}</p>
     <div id="recruit-list">${cards}</div>
@@ -445,19 +456,16 @@ function readinessOf(state) {
 //   파티 아바타가 작은 모닥불 주변에서 숨을 고르는 느낌 + 회복 안내. CSS/HTML 기반의 가벼운 연출.
 //   회복은 chooseRoute(rest)에서 이미 적용됨 — 이 화면은 "쉬어간다"를 읽히게 하고 여정으로 잇는다.
 function renderRestPanel(state) {
-  const f = state.run.formation || {};
-  const jobs = SLOT_ORDER.map((k) => f[k]).filter(Boolean);
-  const heroes = jobs
-    .map((id) => `<span class="rest-hero" aria-label="${jobName(id)}">${jobAvatarHTML(id, "av-fit--card")}<span class="rest-hp">＋</span></span>`)
-    .join("");
   const body = document.getElementById("rest-body");
   if (!body) return;
   // Rest Grove 01 — 쉼터 = "정비": 전원 회복 + 진형 정리(슬롯 탭 교체) + 다음 빌드 기회 안내(빌드 포기 아님).
+  // Rest Grove Avatar Hotfix 02 — 모닥불 주변 아바타 줄(.rest-heroes)을 빼고, 아래 "현재 파티 그리드"를
+  //   유일한 파티 표시로 둔다(아바타가 둘로 중복되어 지저분해지지 않게 — 기능 그리드 가독성 우선).
+  //   아바타가 실제로 보이는 건 #rest-panel에 av-stage가 붙은 덕분(index.html). 모닥불 불꽃은 분위기로 유지.
   const picked = (document.getElementById("rest-panel").dataset.picked) || null;
   body.innerHTML = `
     <h2 class="flow-heading">이슬 쉼터 — 정비</h2>
-    <div class="rest-scene">
-      <div class="rest-heroes">${heroes}</div>
+    <div class="rest-scene rest-scene--slim">
       <div class="rest-campfire" aria-hidden="true">
         <span class="rest-flame"></span>
         <span class="rest-flame rest-flame--b"></span>

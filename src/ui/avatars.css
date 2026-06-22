@@ -592,22 +592,27 @@
   .cast-confetti, .cast-result .cast-glow { animation-duration: 0.01s; }
 }
 
-/* 동료 영입 — 좌/중/우 3열 카드(내부는 세로: 아바타 위, 텍스트 아래) */
+/* Route Choice & Recruit UX Rework 01 (C) — 동료 영입 = 세로 리스트(한 줄 카드: 아바타 좌 + 정보 우).
+   이전 "3열 그리드 / 아바타 단독(텍스트 없음)" 디자인을 대체한다 — 이제 카드에 직업명·역할·합체 힌트가
+   들어가므로 가로 폭을 충분히 써야 한다(좌/중/우 3열에선 힌트가 줄바꿈으로 지저분했음). */
 #recruit-list {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 8px;
   width: 100%;
 }
-/* Visual-First UI Cleanup 01: 영입 카드 = 아바타 단독(텍스트 없음) → 아바타가 카드를 채운다. */
 .recruit-card {
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
   min-height: 0;
-  padding: 10px 6px;
+  padding: 10px 12px;
+  text-align: left;
 }
 .recruit-card .recruit-ava {
-  width: 100%; height: 104px;
-  display: grid; place-items: center; overflow: hidden;
-  background: #0f1620; border-radius: 9px;
+  flex: 0 0 auto;
+  width: 60px; height: 72px;
+  display: grid; place-items: center; overflow: visible;
 }
