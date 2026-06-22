@@ -7,6 +7,9 @@ import { UNIT_TEMPLATES } from "../data/units.js";
 import { SLOT_ORDER, SLOT_NAMES, partySizeOf, LAYOUT_PREVIEW_CASES } from "../core/state.js";
 import { avatarSpec, avatarFigureHTML, CODEX_ENTRIES, CODEX_STATUS_LABEL } from "../data/avatars.js";
 import { loadFootprints, footprintLine, footprintTimeText, footprintsToTSV, resultLabel } from "../data/footprints.js";
+// Discovery Codex Foundation 01 — 도감(유물/몬스터/발견현황) 정적 데이터 + 플레이어 진행도(읽기 전용 표시).
+import { CODEX_STATUS, MONSTER_CODEX, MONSTER_KIND_LABEL, RELIC_CODEX, MAP_FRAGMENT_CODEX, monstersByTheme, relicsByTheme } from "../data/codex.js";
+import { loadProgress, progressSummary } from "../core/progression.js";
 
 function jobName(id) {
   return UNIT_TEMPLATES.party[id]?.name || id;
@@ -634,55 +637,181 @@ function recipeLabelFor(jobId) {
   return `합체식: ${jobName(r.materials[0])} + ${jobName(r.materials[1])}`;
 }
 
-function renderCodex() {
+// Discovery Codex Foundation 01 — 도감 = 4탭(영웅/유물/몬스터/발견 현황). 영웅 탭은 기존 직업 도감 구조 재사용.
+//   활성 탭은 #codex-screen dataset.tab(기본 heroes). 미발견 항목은 실루엣/???로 "아직 못 찾은 목표"처럼 보이게.
+const CODEX_TABS = [
+  { id: "heroes",    label: "영웅" },
+  { id: "relics",    label: "유물" },
+  { id: "monsters",  label: "몬스터" },
+  { id: "discovery", label: "발견 현황" },
+];
+
+export function renderCodex() {
   const host = document.getElementById("codex-inner");
   if (!host) return;
+  const screen = document.getElementById("codex-screen");
+  const tab = (screen && screen.dataset.tab) || "heroes";
 
-  // Codex Recipe Sync 01 — 카드: 섹션 제목이 단계를 알리므로 카드 안 반복 문구(기본/합체 직업) 제거. 합체식 + 성향 중심.
+  const tabBar = `<div class="codex-tabs" role="tablist">${CODEX_TABS.map((t) =>
+    `<button type="button" class="codex-tab${t.id === tab ? " is-active" : ""}" data-codex-tab="${t.id}" role="tab" aria-selected="${t.id === tab}">${t.label}</button>`
+  ).join("")}</div>`;
+
+  let body = "";
+  if (tab === "relics") body = codexRelicsHTML();
+  else if (tab === "monsters") body = codexMonstersHTML();
+  else if (tab === "discovery") body = codexDiscoveryHTML();
+  else body = codexHeroesHTML();
+
+  host.innerHTML = `
+    <div class="codex-header">
+      <button type="button" id="codex-back" data-codex-back>← 타이틀로</button>
+      <div class="codex-title-wrap">
+        <h2>도감</h2>
+        <p>발자취가 무엇을 열었는지 — 발견할수록 채워지는 목표판.</p>
+      </div>
+    </div>
+    ${tabBar}
+    <div class="codex-tabbody">${body}</div>
+    ${tab === "heroes" ? `<div id="codex-detail" class="codex-detail" data-open-job="" hidden></div>` : ""}
+    <button type="button" class="flow-next" data-codex-back>타이틀로 돌아가기</button>
+  `;
+}
+
+// 영웅 탭 — 기존 직업 도감 그리드 재사용 + 상태 배지(발견/해금). ※테스트 빌드에선 2차도 실제로 잠그지 않는다
+//   (상태는 표시용 — 구조만 미발견/잠김/해금/???를 표현할 수 있게). 카드 클릭 시 상세 아코디언은 기존 그대로.
+function heroCodexStatus(jobId) {
+  // 표시용 permissive 판정(실제 게임플레이 합체 가능 여부는 불변): 기본=발견 / 1·2차=해금. 미발견/잠김은 향후.
+  if (BASE_JOBS.includes(jobId)) return CODEX_STATUS.discovered;
+  return CODEX_STATUS.unlocked;
+}
+function codexHeroesHTML() {
   const cardHTML = (e) => {
     const fig = avatarFigureHTML(e.sr, e.parts, "av-fit--codex");
     const roleLabel = combatRoleLabelOf(e.job);
     const roleLine = roleLabel ? `<span class="codex-role">성향: ${roleLabel}</span>` : "";
     const recipe = recipeLabelFor(e.job);
     const recipeLine = recipe ? `<span class="codex-recipe">${recipe}</span>` : "";
+    const place = slotPreference(e.job)[0].startsWith("f") ? "전열" : "후열";
+    const st = heroCodexStatus(e.job);
     return `<button type="button" class="codex-card" data-codex-job="${e.job}" aria-label="${e.name} 상태판 열기">
+      <span class="cdx-status ${st.cls}">${st.label}</span>
       <div class="codex-stage">${fig}</div>
       <div class="codex-meta">
         <span class="codex-code">${e.code}</span>
         <span class="codex-name">${e.name}</span>
+        <span class="codex-place">추천: ${place}</span>
         ${roleLine}
         ${recipeLine}
       </div>
     </button>`;
   };
-
-  // 섹션은 직업 "단계 배열"로 나눈다(엔트리 status가 아니라 BASE/ADVANCED/SECOND_CLASS_JOBS 기준 — 단일 출처).
   const inTier = (arr) => CODEX_ENTRIES.filter((e) => arr.includes(e.job));
   const section = (title, sub, entries) => entries.length ? `
     <section class="codex-section">
       <div class="codex-section-head"><h3>${title}</h3><span class="codex-section-sub">${sub}</span></div>
       <div class="codex-grid">${entries.map(cardHTML).join("")}</div>
     </section>` : "";
-
-  host.innerHTML = `
-    <div class="codex-header">
-      <button type="button" id="codex-back" data-codex-back>← 타이틀로</button>
-      <div class="codex-title-wrap">
-        <h2>직업 도감</h2>
-        <p>현재 상태 점검용. 직업을 누르면 <b>현재 메커니즘 상태판</b>이 열립니다.</p>
-      </div>
-    </div>
+  return `
     ${section("기본 직업", "6종 · 기존 그림자", inTier(BASE_JOBS))}
     ${section("1차 합체", "15종 · 은색 발밑 링", inTier(ADVANCED_JOBS))}
     ${section("2차 합체", "9종 · 금색 발밑 링", inTier(SECOND_CLASS_JOBS))}
     <section class="codex-section codex-section--wip">
       <div class="codex-section-head"><h3>미확정 / 준비 중</h3><span class="codex-section-sub">SR-31~SR-36 · 6칸</span></div>
       <p class="codex-wip-note">남은 2차 6칸은 아직 미확정입니다(역할 빈자리). 확정되면 도감에 합류합니다.</p>
+    </section>`;
+}
+
+// 유물 탭 — "다음 테마가 공정해지는 준비 도구". 이번엔 전부 미발견(준비 중) — 실제 획득/효과 미구현.
+function codexRelicsHTML() {
+  const prog = loadProgress();
+  const discovered = new Set(prog.discoveredRelics || []);
+  const cards = RELIC_CODEX.map((r) => {
+    const found = discovered.has(r.id);
+    const st = found ? CODEX_STATUS.discovered : CODEX_STATUS.wip;
+    return `<div class="cdx-card cdx-relic ${found ? "" : "is-undiscovered"}">
+      <span class="cdx-status ${st.cls}">${st.label}</span>
+      <div class="cdx-card-body">
+        <span class="cdx-name">${found ? r.name : "???"}</span>
+        <span class="cdx-effect">${found ? r.effectDraft : "초보자 숲에서 발견되는 유물"}</span>
+        <span class="cdx-note">${found ? r.note : "중독 늪 대응 준비 도구"}</span>
+      </div>
+    </div>`;
+  }).join("");
+  return `
+    <p class="codex-tab-note">유물은 "강해져서 압살"이 아니라 <b>다음 테마(중독 늪)가 공정해지는 준비</b>입니다. (효과 수치는 표시용 초안 — 아직 전투에 적용되지 않습니다.)</p>
+    <div class="cdx-list">${cards}</div>`;
+}
+
+// 몬스터 탭 — 초보자 숲 몬스터 + 히든/변종. 상태(미발견/발견/처치)는 진행도에서. 히든은 실루엣/???.
+function codexMonstersHTML() {
+  const prog = loadProgress();
+  const seen = new Set(prog.discoveredMonsters || []);
+  const slain = new Set(prog.defeatedMonsters || []);
+  const card = (m) => {
+    const isHidden = m.kind === "hidden";
+    const found = seen.has(m.id);
+    const killed = slain.has(m.id);
+    const st = killed ? CODEX_STATUS.defeated : found ? CODEX_STATUS.discovered : CODEX_STATUS.undiscovered;
+    const reveal = found || killed; // 미발견이면 실루엣/??? (히든은 발견 전까지 항상 가림)
+    const kindBadge = `<span class="cdx-kind cdx-kind--${m.kind}">${MONSTER_KIND_LABEL[m.kind]}</span>`;
+    return `<div class="cdx-card cdx-monster ${reveal ? "" : "is-undiscovered"}">
+      <span class="cdx-status ${st.cls}">${st.label}</span>
+      ${kindBadge}
+      <div class="cdx-card-body">
+        <span class="cdx-name">${reveal ? m.name : (isHidden ? "??? (히든)" : "???")}</span>
+        <span class="cdx-note">${reveal ? `${m.role} — ${m.note}` : "아직 마주치지 못한 생물"}</span>
+      </div>
+    </div>`;
+  };
+  const group = (title, kinds) => {
+    const list = MONSTER_CODEX.filter((m) => kinds.includes(m.kind));
+    if (!list.length) return "";
+    const foundCount = list.filter((m) => seen.has(m.id)).length;
+    return `<section class="codex-section">
+      <div class="codex-section-head"><h3>${title}</h3><span class="codex-section-sub">${foundCount}/${list.length} 발견</span></div>
+      <div class="cdx-list">${list.map(card).join("")}</div>
+    </section>`;
+  };
+  return `
+    <p class="codex-tab-note">새싹 숲의 생물들. 반복 탐험으로 <b>히든·변종</b>까지 채워보세요. (히든 몬스터의 실제 출현은 아직 구현되지 않았습니다.)</p>
+    ${group("소형", ["small"])}
+    ${group("정예 · 보스", ["elite", "boss"])}
+    ${group("히든 · 변종", ["hidden"])}`;
+}
+
+// 발견 현황 탭 — 다음 목표 한눈에. 진행도 요약 + 지도 조각 + 다음 목표 안내.
+function codexDiscoveryHTML() {
+  const prog = loadProgress();
+  const s = progressSummary(prog);
+  const totalMonsters = MONSTER_CODEX.length;
+  const totalRelics = RELIC_CODEX.length;
+  const stat = (label, val) => `<div class="cdx-stat"><span class="cdx-stat-val">${val}</span><span class="cdx-stat-label">${label}</span></div>`;
+  const stats = `
+    <div class="cdx-stats">
+      ${stat("사자왕 클리어", s.kingClears)}
+      ${stat("최고 심도", s.bestDepthBeginner)}
+      ${stat("발견 몬스터", `${s.discoveredMonsters}/${totalMonsters}`)}
+      ${stat("처치 몬스터", `${s.defeatedMonsters}/${totalMonsters}`)}
+      ${stat("2차 레시피 해금", s.unlockedRecipes)}
+      ${stat("유물 발견", `${s.discoveredRelics}/${totalRelics}`)}
+    </div>`;
+  const fragments = MAP_FRAGMENT_CODEX.map((f) => {
+    const mf = (prog.mapFragments && prog.mapFragments[f.id]) || { runFound: 0, kept: 0 };
+    return `<div class="cdx-fragment">
+      <div class="cdx-fragment-head"><span class="cdx-name">${f.name}</span><span class="cdx-fragment-count">${mf.kept || 0}/${f.total}</span></div>
+      <div class="cdx-fragment-bar"><span style="width:${Math.round(((mf.kept || 0) / f.total) * 100)}%"></span></div>
+      <span class="cdx-note">${f.note}</span>
+    </div>`;
+  }).join("");
+  const hasAny = s.kingClears || s.bestDepthBeginner || s.discoveredMonsters;
+  return `
+    <p class="codex-tab-note">${hasAny ? "지금까지의 발자취가 연 것들입니다." : "아직 발견이 없습니다 — 첫 탐험을 시작해 보세요."}</p>
+    ${stats}
+    <section class="codex-section">
+      <div class="codex-section-head"><h3>지도 조각</h3><span class="codex-section-sub">다음 테마 해금</span></div>
+      <div class="cdx-fragments">${fragments}</div>
     </section>
-    <!-- Hero UX Polish 01C — 단일 상세 패널을 클릭한 카드 그리드로 이동시키는 아코디언. 기본 닫힘. -->
-    <div id="codex-detail" class="codex-detail" data-open-job="" hidden></div>
-    <button type="button" class="flow-next" data-codex-back>타이틀로 돌아가기</button>
-  `;
+    <div class="cdx-next-goal">다음 목표 — 초보자 숲을 더 탐험해 중독 늪의 단서를 찾아보세요.</div>`;
 }
 
 // Hero UX Polish 01C — 도감 상세 아코디언 토글: 클릭한 카드의 "행 끝" 뒤로 상세 패널을 옮겨 카드 바로 아래(전폭)에 펼친다.

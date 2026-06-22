@@ -1,6 +1,6 @@
 import { gameState, SLOT_ORDER } from "./state.js";
 import { slotPreference } from "../data/jobs.js";
-import { renderGame, toggleCodexDetail, closeCodexDetail, renderFootprintsList, footprintsCopyText } from "../ui/render.js";
+import { renderGame, toggleCodexDetail, closeCodexDetail, renderFootprintsList, footprintsCopyText, renderCodex } from "../ui/render.js";
 import { avatarSpec, avatarFigureHTML } from "../data/avatars.js";
 import { clearFootprints } from "../data/footprints.js";
 // Dev Balance Lab 01 — Dev(?dev=1) 전용 계측 도구(1:1 듀얼 시뮬레이터/데미지 미터). 일반 플레이엔 노출 안 됨.
@@ -109,8 +109,11 @@ document.getElementById("stage-select").addEventListener("click", (e) => {
 // 파티 준비 화면 좌상단 → 스테이지 선택으로 복귀.
 document.getElementById("to-stage-btn").addEventListener("click", showStageSelect);
 
-// Job Codex Entry Foundation: 타이틀 → 직업 도감 / 도감 → 타이틀.
-document.getElementById("title-codex").addEventListener("click", showCodex);
+// Job Codex Entry Foundation → Discovery Codex Foundation 01: 타이틀 → 도감(영웅 탭부터) / 도감 → 타이틀.
+document.getElementById("title-codex").addEventListener("click", () => {
+  document.getElementById("codex-screen").dataset.tab = "heroes"; // 열 때마다 영웅 탭부터
+  showCodex();
+});
 
 // Battlefield Preview & Layout Tune 01: 타이틀 → Dev 전장 레이아웃 프리뷰. 케이스 전환 바는 위임 처리.
 document.getElementById("title-dev-preview").addEventListener("click", showDevPreview);
@@ -122,6 +125,13 @@ document.getElementById("dev-bar").addEventListener("click", (e) => {
 });
 document.getElementById("codex-screen").addEventListener("click", (e) => {
   if (e.target.closest("[data-codex-back]")) { goTitle(); return; }
+  // Discovery Codex Foundation 01 — 탭 전환(영웅/유물/몬스터/발견 현황). dataset.tab 갱신 후 도감 재렌더.
+  const tabBtn = e.target.closest("[data-codex-tab]");
+  if (tabBtn) {
+    document.getElementById("codex-screen").dataset.tab = tabBtn.dataset.codexTab;
+    renderCodex();
+    return;
+  }
   // Hero UX Polish 01C — 상세 닫기(×) 우선 처리.
   if (e.target.closest("[data-codex-detail-close]")) { closeCodexDetail(); return; }
   // Codex Detail Status 01 → 01C — 직업 카드 클릭 시 카드 바로 아래 상세 패널 토글(아코디언). 게임 상태 변경 없음.

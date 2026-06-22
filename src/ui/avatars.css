@@ -505,6 +505,62 @@
   word-break: keep-all;
 }
 
+/* ===== Discovery Codex Foundation 01 — 4탭(영웅/유물/몬스터/발견현황) + 유물/몬스터/발견현황 카드 ===== */
+.codex-tabs { display: flex; gap: 6px; margin: 0 0 14px; }
+.codex-tab {
+  flex: 1; padding: 9px 4px; font: inherit; font-size: 12.5px; font-weight: 700;
+  color: #9aa8b8; background: #161c24; border: 1px solid #2a3340; border-radius: 8px; cursor: pointer;
+}
+.codex-tab.is-active { color: #0e1620; background: #cdb86a; border-color: #cdb86a; }
+.codex-tabbody { min-height: 40px; }
+.codex-tab-note {
+  margin: 0 2px 12px; padding: 9px 11px; font-size: 11.5px; line-height: 1.5; color: #9aa8b8;
+  background: #141a22; border: 1px solid #283041; border-radius: 8px; word-break: keep-all;
+}
+.codex-place { font-size: 10px; color: #8aa0b4; }
+
+/* 상태 배지 — 영웅 카드(절대배치 우상단) + 일반 카드 공통. 미발견/처치/해금 등 상태별 색. */
+.codex-card { position: relative; }
+.cdx-status {
+  position: absolute; top: 6px; right: 6px; z-index: 2;
+  font-size: 9px; font-weight: 800; letter-spacing: .02em;
+  padding: 1px 6px; border-radius: 999px; border: 1px solid #2f4156; color: #cdd9e6; background: #1a2230;
+}
+.cdx-st--defeated { color: #0e1620; background: #cdb86a; border-color: #cdb86a; }
+.cdx-st--discovered, .cdx-st--unlocked { color: #9fe6cf; border-color: #2f6b58; background: #122019; }
+.cdx-st--undiscovered, .cdx-st--unknown, .cdx-st--wip { color: #7e8b9c; border-color: #2a3340; background: #141a22; }
+.cdx-st--locked { color: #e0a0a0; border-color: #5a2f2f; background: #201414; }
+
+/* 유물/몬스터 = 세로 리스트(카드). 미발견은 점선 실루엣 느낌. */
+.cdx-list { display: flex; flex-direction: column; gap: 8px; }
+.cdx-card {
+  position: relative; padding: 11px 12px; border: 1px solid #303947; border-radius: 9px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent 50%), #171c24;
+}
+.cdx-card.is-undiscovered { border-style: dashed; border-color: #313b48; background: #12161d; }
+.cdx-card.is-undiscovered .cdx-name { color: #6a7889; }
+.cdx-card-body { display: flex; flex-direction: column; gap: 3px; padding: 4px 56px 0 0; }
+.cdx-name { font-size: 13px; font-weight: 800; color: #eef3f8; }
+.cdx-effect { font-size: 11.5px; color: #d6b56a; font-weight: 600; word-break: keep-all; }
+.cdx-note { font-size: 11px; color: #8aa0b4; line-height: 1.4; word-break: keep-all; }
+.cdx-kind { position: absolute; top: 7px; left: 12px; font-size: 9px; font-weight: 700; color: #9aa8b8; }
+.cdx-kind--elite { color: #c8d6e6; }
+.cdx-kind--boss { color: #e6a06a; }
+.cdx-kind--hidden { color: #b89fe0; }
+
+/* 발견 현황 — 통계 3열 그리드 + 지도 조각 진행 바 + 다음 목표 안내. */
+.cdx-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+.cdx-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; background: #161c24; border: 1px solid #2a3340; border-radius: 8px; }
+.cdx-stat-val { font-size: 18px; font-weight: 800; color: #eef3f8; }
+.cdx-stat-label { font-size: 10px; color: #8aa0b4; text-align: center; }
+.cdx-fragments { display: flex; flex-direction: column; gap: 10px; }
+.cdx-fragment { padding: 10px 12px; background: #141a22; border: 1px solid #283041; border-radius: 8px; }
+.cdx-fragment-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.cdx-fragment-count { font-size: 12px; font-weight: 800; color: #cdb86a; }
+.cdx-fragment-bar { height: 7px; background: #0e1a2a; border: 1px solid #243a52; border-radius: 5px; overflow: hidden; margin-bottom: 5px; }
+.cdx-fragment-bar > span { display: block; height: 100%; background: #cdb86a; }
+.cdx-next-goal { margin-top: 14px; padding: 11px 12px; font-size: 12px; line-height: 1.5; color: #cfe0ee; background: #16243a; border: 1px solid #2f4156; border-radius: 9px; word-break: keep-all; }
+
 /* 영입 카드 컨테이너 — 세로 스택(부모 #recruit-list가 column) + 가로 배치, 큰 터치 영역 */
 .recruit-card {
   display: flex;

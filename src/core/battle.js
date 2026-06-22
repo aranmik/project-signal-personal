@@ -6,6 +6,8 @@ import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
 import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions, depthSpeedFactor, routeReward, farmWarnLevel } from "../data/routes.js";
 import { REWARDS, rewardById, REWARD_MAX_LEVEL } from "../data/rewards.js";
 import { saveFootprint } from "../data/footprints.js";
+// Discovery Codex Foundation 01 — 안전한 진행도 기록 훅(headless 주회 중엔 호출 안 함). 전투 계산/수치 불변.
+import { recordRunResult, recordMonstersDefeated } from "./progression.js";
 import { renderGame, playActionFx, playStatusTickFx, playSupportFx, playStatusApplyFx, playActorFx, clearFxLayer, setFxSuppressed, setRenderSuppressed } from "../ui/render.js";
 import { skillOf } from "../data/skills.js";
 
@@ -2344,6 +2346,8 @@ function applyFinish(outcome) {
       else if (keys === 2) pushLog("두 번째 열쇠가 사자왕의 위압을 걷어냈다. 정예의 시험을 모두 넘었다.");
       else pushLog(`정예를 물리쳤다 — 보스 열쇠 +1 (보유 ${keys}).`);
     }
+    // Discovery Codex Foundation 01 — 방금 처치한 적을 도감에 발견+처치로 기록(headless 주회 제외). 전투 계산 불변.
+    if (!headlessRun) recordMonstersDefeated(enemyMonsterIds(gameState.enemies));
     // Route Grammar 02B — 승리 후 보상은 길마다 다르다(전부 전투 후). 영입/합체는 "전투에서 이긴 뒤" 연결한다.
     const rt = gameState.run.currentRouteType;
     if (rt === "ally") {
@@ -2372,6 +2376,7 @@ function applyFinish(outcome) {
     pushLog(`심도 ${gameState.run.depth} 클리어! 보상을 선택하세요.`);
   } else if (outcome === "clear") {
     gameState.run.result = "clear";
+    if (!headlessRun) recordMonstersDefeated(enemyMonsterIds(gameState.enemies)); // 사자왕 처치 기록(도감)
     recordFootprint("clear"); // Run Footprints 01 — 런 클리어 1건 기록
     pushLog("새싹숲 사자왕 격파 — 런 클리어! ▶ 다시 시작");
   } else if (outcome === "defeat") {
@@ -2398,6 +2403,14 @@ function recordFootprint(result) {
     combatNormMs: Math.round(gameState.run.combatNormMs || 0), // Polish 01 — x2 환산 전투시간
     ts: Date.now(),
   });
+  // Discovery Codex Foundation 01 — 진행도(사자왕 클리어/최고 심도) 안전 반영. headless는 위에서 이미 return됨.
+  //   try/catch는 progression 내부에 있음(실패해도 플레이 방해 X). 전투 계산/수치 불변.
+  recordRunResult({ result, depth: gameState.run.depth, themeId: "beginner" });
+}
+
+// Discovery Codex Foundation 01 — 전투에 등장한 적의 도감 id(=템플릿 type) 목록. id 파싱(`prefix-key-i`)은 fallback.
+function enemyMonsterIds(units) {
+  return (units || []).map((u) => u && (u.type || String(u.id || "").split("-")[1])).filter(Boolean);
 }
 
 // Run Footprints 01 — 런 포기: 진행 중 전투 시간까지 합산해 "포기" 1건 기록 후 타이틀로.
