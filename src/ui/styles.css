@@ -1548,6 +1548,44 @@ body {
   28%  { opacity: 0.95; transform: scale(1.15); }
   100% { opacity: 0;    transform: scale(1.5); }
 }
+/* Mage AoE Presence 01 — 적 진영 전체를 덮는 큰 마력 파동(dome): 두껍고 느리게 확산(광역 스케일). --aoe-r=도달 반경. */
+.fx-aoe-dome {
+  position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px;
+  border-radius: 50%; border: 5px solid currentColor;
+  background: radial-gradient(circle, transparent 0 60%, rgba(190,150,235,0.18) 72%, transparent 86%);
+  box-shadow: 0 0 30px currentColor, inset 0 0 16px currentColor;
+  opacity: 0; pointer-events: none; z-index: 3;
+  animation: fx-aoe-dome 0.9s cubic-bezier(.2,.7,.3,1) forwards;
+}
+@keyframes fx-aoe-dome {
+  0%   { opacity: 0;   transform: scale(0.6); }
+  20%  { opacity: 0.9; }
+  100% { opacity: 0;   transform: scale(calc(var(--aoe-r, 140px) / 8)); }
+}
+/* Mage AoE Presence 01 — 적별 동시 피격 펄스(광역성 가독): 각 적 위치에서 보라 잔광이 한 번 터진다. */
+.fx-aoe-hit {
+  position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(214,180,255,0.95) 0 30%, rgba(160,110,230,0.4) 55%, transparent 75%);
+  box-shadow: 0 0 16px currentColor;
+  opacity: 0; pointer-events: none; z-index: 4;
+  animation: fx-aoe-hit 0.5s ease-out forwards;
+}
+@keyframes fx-aoe-hit {
+  0%   { opacity: 0; transform: scale(0.3); }
+  35%  { opacity: 1; transform: scale(1.25); }
+  100% { opacity: 0; transform: scale(0.7); }
+}
+/* Mage AoE Presence 01 — 광역 폭발 시 전장 작은 흔들림(꽈광). 폭발 순간 한 번만(triggerFieldShake가 클래스 토글). */
+@keyframes fx-field-shake {
+  0%, 100% { transform: translate(0, 0); }
+  15% { transform: translate(-3px, 1px); }
+  30% { transform: translate(3px, -2px); }
+  45% { transform: translate(-2px, 2px); }
+  60% { transform: translate(2px, -1px); }
+  80% { transform: translate(-1px, 1px); }
+}
+#battle-field.fx-field-shake { animation: fx-field-shake 0.38s ease-in-out; }
 /* 추적자/천궁 스코프 표식(대상 몸통 조준점). */
 .fx-scope {
   position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px;
@@ -1577,7 +1615,8 @@ body {
   100% { opacity: 0; transform: scale(1.9); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .fx-gather, .fx-aoe-spread, .fx-scope, .fx-markburst, .fx-blast-core { animation-duration: 0.01s; }
+  .fx-gather, .fx-aoe-spread, .fx-scope, .fx-markburst, .fx-blast-core, .fx-aoe-dome, .fx-aoe-hit { animation-duration: 0.01s; }
+  #battle-field.fx-field-shake { animation: none; }
 }
 
 /* Combat Grammar Follow-up 01 — 성황 성역 파동: 노랑빛 원이 성황 중심에서 아군 전체로 퍼진다(방어/보호의 권위). */
@@ -2338,6 +2377,35 @@ body {
 }
 /* Rest Grove Avatar Hotfix 02 — 모닥불 아바타 줄 제거 후, 모닥불만 두는 슬림 연출(아래 기능 그리드가 파티 표시). */
 .rest-scene--slim { gap: 0; padding: 6px 0 2px; }
+/* Rest Grove Mood 01 — "밤의 숲 캠프" 분위기: 별빛 밤하늘 그라데이션 + 모닥불 따뜻한 글로우. 기능 그리드는 아래 그대로. */
+.rest-scene--night {
+  position: relative;
+  gap: 0;
+  padding: 14px 0 8px;
+  border-radius: 14px;
+  background: radial-gradient(120% 80% at 50% 120%, rgba(255,168,92,0.16), transparent 55%),
+              linear-gradient(180deg, #0b1226 0%, #121a30 60%, #16203a 100%);
+  overflow: hidden;
+}
+.rest-stars { position: absolute; inset: 0; pointer-events: none; }
+.rest-star {
+  position: absolute; width: 2px; height: 2px; border-radius: 50%;
+  background: #eaf2ff; box-shadow: 0 0 4px #cfe0ff;
+  opacity: 0.3; animation: rest-twinkle 2.8s ease-in-out infinite;
+}
+@keyframes rest-twinkle { 0%,100% { opacity: 0.2; } 50% { opacity: 0.95; } }
+/* 모닥불 글로우 — 불꽃 뒤에서 번지는 따뜻한 빛(밤 + 캠프 감성). */
+.rest-campfire .rest-glow {
+  position: absolute; left: 50%; bottom: 0; width: 96px; height: 64px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle at 50% 85%, rgba(255,196,110,0.55), rgba(255,150,80,0.18) 45%, transparent 72%);
+  filter: blur(2px); pointer-events: none;
+  animation: rest-glow-pulse 2.4s ease-in-out infinite;
+}
+@keyframes rest-glow-pulse { 0%,100% { opacity: 0.7; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .rest-star, .rest-campfire .rest-glow { animation: none; }
+}
 .rest-heroes {
   display: flex;
   justify-content: center;

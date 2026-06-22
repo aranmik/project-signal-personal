@@ -75,7 +75,14 @@ export const BOSS_ENCOUNTER = byTier("boss")[0] || ["lion:boss"]; // 사자왕
 //   지나가는 기본 진행로"가 된다("이번엔 영입이 잘 안 나왔네" 같은 운의 감각). 조건별 우선순위로
 //   선택지 없음/강제(억까)는 막는다. ※ Boss Gate/BOSS_READY.depth는 손대지 않는다 — 보스문 노출
 //   조건(열쇠 2)도 기존 그대로. 이 캡이 보스/열쇠/합체 타이밍을 얼마나 뒤로 미는지 먼저 관측한다.
-export function rollRouteOffer({ depth, bossKeys, partySize = 4, canRecruit = false, canFuse = false, hpRatio = 1, restJustTaken = false, rng = Math.random }) {
+// Route Choice Polish 02 — bond starvation guard + Sage Branch cooldown.
+//   bondMissStreak = "합체 가능한데 결속이 안 나온 연속 횟수"(showRouteChoice가 누적/리셋해 넘긴다).
+//     → BOND_STARVE_LIMIT 도달 시 결속을 강제 노출(굶김 방지). 쉼터 직후 + 합체 가능도 결속 우선(정비→빌드 약속).
+//   eliteCooldown = "정예(현자의 가지)를 방금 노출해 잠시 억제할 남은 횟수" → 연속/조기 반복 노출(정답지화) 방지.
+//   둘 다 cap=2·pre-4 보호·보스문 조건(열쇠2)은 그대로. 3인 리스크 완화/전투 수치 변경 없음.
+export const BOND_STARVE_LIMIT = 2; // 합체 가능한데 결속 미노출 2연속이면 다음 오퍼에 결속 강제
+export const SAGE_COOLDOWN = 2;     // 정예 노출 후 2회 동안 정예 풀에서 제외(연속 노출 억제)
+export function rollRouteOffer({ depth, bossKeys, partySize = 4, canRecruit = false, canFuse = false, hpRatio = 1, restJustTaken = false, bondMissStreak = 0, eliteCooldown = 0, rng = Math.random }) {
   const CAP = 2;
   const offer = [];
   const add = (rt) => { if (rt && !offer.includes(rt) && offer.length < CAP) offer.push(rt); };
@@ -84,6 +91,9 @@ export function rollRouteOffer({ depth, bossKeys, partySize = 4, canRecruit = fa
 
   const bossReady = (bossKeys || 0) >= BOSS_MENACE.keysToSeal; // 열쇠 2 = 새싹 왕의 문 개방(기존 조건 유지)
   const lowHp = hpRatio < 0.55 && !restJustTaken;
+  const canBond = canFuse && partySize >= 3;
+  // C — 결속 보장 조건: 합체 가능 + (오래 굶었거나 / 쉼터 직후 빌드 약속). 쉼터 직후엔 결속을 강하게 약속한다.
+  const bondStarved = canBond && (bondMissStreak >= BOND_STARVE_LIMIT || restJustTaken);
 
   // 1) 생존 안전장치 — 다칠 때(hp<55%)는 정비(이슬 쉼터)를 항상 보장. 쉼터 직후엔 제외(연속 쉼터 방지).
   if (lowHp) add("rest");
@@ -98,23 +108,35 @@ export function rollRouteOffer({ depth, bossKeys, partySize = 4, canRecruit = fa
   }
 
   // 3) 보스 준비 완료(열쇠 2) — 새싹 왕의 문을 강하게 포함하되 과밀하지 않게(보스 + 1개). 현자의 가지(정예)는
-  //    매번 노출하지 않는다(열쇠가 충분하니 반복 파밍 유도 X). 보스를 미루고 더 키우는 안전/빌드 선택을 함께 준다.
+  //    노출하지 않는다(열쇠 충분 — 정답지화/연속 노출 방지). 결속이 굶었으면 둘째 칸을 결속으로 보장.
   if (bossReady) {
     add("boss");
-    const deferPool = ["normal"];                          // 보스를 미루고 진행하는 안전 선택
-    if (canFuse && partySize >= 3) deferPool.push("bond");  // 한 번 더 키우는 합체
-    if (!restJustTaken) deferPool.push("rest");             // 또는 정비
-    if (rng() < 0.3) deferPool.push("danger");              // 가끔 깊은 수풀
-    add(pickFrom(deferPool));
+    if (offer.length < CAP) {
+      if (bondStarved) add("bond"); // 굶은 결속은 보스 준비 중에도 보장
+      else {
+        const deferPool = ["normal"];                 // 보스를 미루고 진행하는 안전 선택
+        if (canBond) deferPool.push("bond");           // 한 번 더 키우는 합체
+        if (!restJustTaken) deferPool.push("rest");    // 또는 정비
+        if (rng() < 0.3) deferPool.push("danger");     // 가끔 깊은 수풀
+        add(pickFrom(deferPool));
+      }
+    }
+    return ret();
+  }
+
+  // C — 보스 미개방 구간: 결속이 굶었거나 쉼터 직후면 결속 + 안전 진행(새싹 숲길)으로 "정비→빌드" 리듬 보장.
+  if (bondStarved) {
+    add("bond");
+    add("normal");
+    if (offer.length < CAP) add(!restJustTaken ? "rest" : "danger");
     return ret();
   }
 
   // 4) 4인 이후(열쇠 모으는 중) — 빌드/압력 루트를 "매번 다 나오지 않게" 하나만 랜덤(밀당의 핵심).
-  //    결속의 공터(합체)는 "아예 안 나와 답답"해지지 않게 가중(×2). 현자의 가지(정예=열쇠)는 ×1로 둔다 —
-  //    가중하면 열쇠가 빨리 모여 보스문이 일찍 열리고 클리어 심도가 오히려 앞당겨진다(Route Choice Cap 01 관측).
+  //    결속(합체)은 답답함 방지로 가중(×2). 현자의 가지(정예)는 D — 쿨다운 중이면 풀에서 제외(연속/조기 노출 억제).
   const pool = [];
-  if (canFuse && partySize >= 3) { pool.push("bond"); pool.push("bond"); }
-  pool.push("elite");
+  if (canBond) { pool.push("bond"); pool.push("bond"); }
+  if (eliteCooldown <= 0) pool.push("elite");
   pool.push("danger");
   if (!restJustTaken) pool.push("rest");
   add(pickFrom(pool));

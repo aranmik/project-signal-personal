@@ -466,17 +466,27 @@ function renderRestPanel(state) {
   //   유일한 파티 표시로 둔다(아바타가 둘로 중복되어 지저분해지지 않게 — 기능 그리드 가독성 우선).
   //   아바타가 실제로 보이는 건 #rest-panel에 av-stage가 붙은 덕분(index.html). 모닥불 불꽃은 분위기로 유지.
   const picked = (document.getElementById("rest-panel").dataset.picked) || null;
+  // Rest Grove Mood 01 — "밤의 숲 캠프" 분위기 복원: 별빛 + 모닥불 글로우(장식 레이어). 기능 그리드는 그대로 유지
+  //   (시스템 편성창이 아니라 밤에 정비하는 캠프처럼). 중복 아바타 줄은 되살리지 않음(분위기는 배경/빛으로만).
+  const STAR_POS = [
+    [10, 16], [24, 9], [38, 22], [52, 12], [66, 19], [80, 10], [90, 26], [16, 32], [72, 33], [44, 6],
+  ];
+  const stars = STAR_POS.map(([x, y], i) =>
+    `<span class="rest-star" style="left:${x}%;top:${y}%;animation-delay:${(i % 5) * 0.4}s"></span>`
+  ).join("");
   body.innerHTML = `
     <h2 class="flow-heading">이슬 쉼터 — 정비</h2>
-    <div class="rest-scene rest-scene--slim">
+    <div class="rest-scene rest-scene--night">
+      <div class="rest-stars" aria-hidden="true">${stars}</div>
       <div class="rest-campfire" aria-hidden="true">
+        <span class="rest-glow"></span>
         <span class="rest-flame"></span>
         <span class="rest-flame rest-flame--b"></span>
         <span class="rest-embers"></span>
         <span class="rest-logs"></span>
       </div>
     </div>
-    <p class="flow-note">숨을 고르고 진형을 정비합니다 — 전원 회복.<br>이번 기회를 날린 게 아닙니다. 다음 여정에서 빌드(영입·합체) 기회가 이어집니다.</p>
+    <p class="flow-note">밤의 숲에서 숨을 고르고 진형을 정비합니다 — 전원 회복.<br>이번 기회를 날린 게 아닙니다. 다음 여정에서 빌드(영입·합체) 기회가 이어집니다.</p>
     <div class="flow-kicker">현재 파티 · 진형 정비 — 슬롯을 눌러 위치를 바꿔 다음 전투를 준비하세요</div>
     <div class="party-preview-grid party-preview-grid--rest">${restPartyGridHTML(state, picked)}</div>
     <button type="button" class="route-card rest-continue" data-rest-continue>정비 완료 — 여정을 잇는다</button>
@@ -2121,6 +2131,36 @@ function spawnAoeSpread(casterInstanceId, enemyIds) {
     ring.addEventListener("animationend", () => ring.remove());
     layer.appendChild(ring);
   });
+  // Mage AoE Presence 01 — 적 진영 전체를 덮는 큰 마력 파동(dome) 1겹: 두껍고 느리게 확산("광역" 스케일 강조).
+  const dome = document.createElement("span");
+  dome.className = "fx-aoe-dome fx-var--special";
+  dome.style.left = `${c.x}px`;
+  dome.style.top = `${c.y}px`;
+  dome.style.setProperty("--aoe-r", `${maxR + 30}px`);
+  dome.addEventListener("animationend", () => dome.remove());
+  layer.appendChild(dome);
+  // Mage AoE Presence 01 — 적별 동시 피격 펄스: "모두에게 동시에 맞았다"가 눈에 읽히게(코어 폭발 직후 거의 동시 + 미세 stagger).
+  pts.forEach((p, i) => {
+    const hit = document.createElement("span");
+    hit.className = "fx-aoe-hit fx-var--special";
+    hit.style.left = `${p.x}px`;
+    hit.style.top = `${p.y}px`;
+    hit.style.animationDelay = `${90 + i * 26}ms`;
+    hit.addEventListener("animationend", () => hit.remove());
+    layer.appendChild(hit);
+  });
+  // Mage AoE Presence 01 — 작은 화면 흔들림(꽈광). 전장 전체가 한 번 울린다.
+  triggerFieldShake(field);
+}
+
+// Mage AoE Presence 01 — 광역 폭발 순간 전장(#battle-field)에 짧은 흔들림 클래스. playActorFx가 fxSuppressed 가드 뒤에서만
+//   spawnAoeSpread를 부르므로 헤드리스/Lab sim에선 호출되지 않는다(전투 계산/수치 불변, presentation 전용).
+function triggerFieldShake(field) {
+  if (!field) return;
+  field.classList.remove("fx-field-shake");
+  void field.offsetWidth; // reflow로 애니메이션 재시작 보장
+  field.classList.add("fx-field-shake");
+  setTimeout(() => field.classList.remove("fx-field-shake"), 380);
 }
 
 // Combat Grammar Follow-up 01 — 성황 성역: 시전자(성황) 중심 노랑 성역 파동이 아군 전체 영역으로 퍼진다 + 각 아군 금빛 보호 펄스.

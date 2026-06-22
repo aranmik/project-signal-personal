@@ -377,6 +377,7 @@ export const gameState = {
     party4Reached: false, party4Depth: 0, alertnessAtParty4: 0, effectiveAlertnessAtParty4: 0,
     preParty4Battles: 0, preParty4GrowthCount: 0, preParty4DangerCount: 0, preParty4RecruitCount: 0, farmWarnShown: 0,
     restJustTaken: false, lastRestDepth: 0, // Rest Grove 01 — 정비 직후 오퍼 보정 플래그 / 마지막 정비 심도
+    bondMissStreak: 0, eliteCooldown: 0,    // Route Choice Polish 02 — 결속 굶김 가드 / 정예 노출 쿨다운
     // Run Footprints 01 — 현실 전투 시간 누적(ms). 전투 화면에서만 누적(선택/보상/편성 제외). resetBattle에서 0.
     combatMs: 0,
     battleStartTs: null,        // 현재 전투 시작 시각(performance.now). 전투 종료 시 차이를 combatMs에 더한다.

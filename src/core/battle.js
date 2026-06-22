@@ -3,7 +3,7 @@ import { createInitialParty, createPreviewEnemies, createStageEnemies, createRou
 import { ACTIVE_FUSION_RECIPES, BASE_JOBS, ADVANCED_JOBS, SECOND_CLASS_JOBS, prefersFront, slotPreference, availableFusions, combatRoleOf } from "../data/jobs.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { STAGE_CLEAR_EVENTS } from "../data/stages.js";
-import { ROUTE_TYPES, rollRouteOffer, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions, depthSpeedFactor, routeReward, farmWarnLevel } from "../data/routes.js";
+import { ROUTE_TYPES, rollRouteOffer, SAGE_COOLDOWN, bossFury, bossReadinessPressure, bossMenace, alertnessFromFusions, depthSpeedFactor, routeReward, farmWarnLevel } from "../data/routes.js";
 import { REWARDS, rewardById, REWARD_MAX_LEVEL } from "../data/rewards.js";
 import { saveFootprint } from "../data/footprints.js";
 // Discovery Codex Foundation 01 — 안전한 진행도 기록 훅(headless 주회 중엔 호출 안 함). 전투 계산/수치 불변.
@@ -295,6 +295,8 @@ export function resetBattle() {
   gameState.run.farmWarnShown = 0;           // 마지막으로 보여준 파밍 경고 단계
   gameState.run.restJustTaken = false;       // Rest Grove 01 — 직전에 쉼터(정비)를 골랐는가(다음 오퍼 보정용)
   gameState.run.lastRestDepth = 0;           // Rest Grove 01 — 마지막 정비 심도
+  gameState.run.bondMissStreak = 0;          // Route Choice Polish 02 — 결속 미노출 연속수(굶김 가드)
+  gameState.run.eliteCooldown = 0;           // Route Choice Polish 02 — 정예(현자의 가지) 노출 쿨다운
   gameState.run.partyHp = null;              // Stage Persistence 01 — 전투 간 HP 지속 초기화(첫 전투는 풀피)
   gameState.run.combatMs = 0;                // Run Footprints 01 — 현실 전투 시간 누적 초기화(새 런)
   gameState.run.battleStartTs = null;
@@ -410,15 +412,24 @@ function showRouteChoice() {
   const av = aliveParty();
   const hpRatio = av.length ? av.reduce((s, u) => s + Math.max(0, u.hp) / u.maxHp, 0) / av.length : 1;
   const restJustTaken = !!gameState.run.restJustTaken;
-  gameState.run.routeChoices = rollRouteOffer({
-    depth: gameState.run.depth,
-    bossKeys: gameState.run.bossKeys,
+  const run = gameState.run;
+  const canFuseNow = availableFusions(partyJobIds()).length > 0;
+  const canBondNow = canFuseNow && partyJobIds().length >= 3; // 결속의 공터 노출 가능(3인+ & 조합)
+  run.routeChoices = rollRouteOffer({
+    depth: run.depth,
+    bossKeys: run.bossKeys,
     partySize: partyJobIds().length,
     canRecruit: recruitCandidates().length > 0,          // 동료의 흔적 노출 조건(빈자리 + 미보유 기본직업)
-    canFuse: availableFusions(partyJobIds()).length > 0, // 결속의 공터 노출 조건(실제 합체 조합 — 인원 게이트는 rollRouteOffer가 3인+로 적용)
+    canFuse: canFuseNow,                                  // 결속의 공터 노출 조건(실제 합체 조합 — 인원 게이트는 rollRouteOffer가 3인+로 적용)
     hpRatio, restJustTaken,
+    bondMissStreak: run.bondMissStreak || 0,              // Route Choice Polish 02 — 결속 굶김 가드
+    eliteCooldown: run.eliteCooldown || 0,               // Route Choice Polish 02 — 정예(현자의 가지) 쿨다운
   });
-  gameState.run.restJustTaken = false; // 오퍼에 반영했으니 소비
+  run.restJustTaken = false; // 오퍼에 반영했으니 소비
+  // Route Choice Polish 02 — 오퍼 결과로 카운터 갱신: 결속 미노출 연속수 / 정예 쿨다운(연속·조기 노출 억제).
+  const offered = run.routeChoices;
+  run.bondMissStreak = canBondNow ? (offered.includes("bond") ? 0 : (run.bondMissStreak || 0) + 1) : 0;
+  run.eliteCooldown = offered.includes("elite") ? SAGE_COOLDOWN : Math.max(0, (run.eliteCooldown || 0) - 1);
   gameState.screen = "route";
   renderGame(gameState);
 }
