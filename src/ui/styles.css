@@ -1522,22 +1522,34 @@ body {
 }
 /* Combat Feedback Polish 02 — 광역 발동: 중앙에서 굵은 충격파 원이 커지며 적 전체로 확산(확실히 보이게). --aoe-r = 도달 반경. */
 /* Mage/Sage AoE Shockwave Polish 01 — 충격파 원: 더 두껍고, "바깥으로 이동하는 동안" 또렷이 유지(중앙에서만 번쩍하지 않게). */
+/* Mage/Sage Shockwave Presence Polish 02 — 외곽 링 선명도/두께/잔존감 소폭 강화(테두리 4→5px·글로우 ↑).
+   곡선은 무희 피날레(.fx-finale-wave)/결계장(.fx-wardwave)이 공유하는 fx-aoe-spread와 분리한 fx-aoe-shock를 쓴다. */
 .fx-aoe-spread {
   position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px;
-  border-radius: 50%; border: 4px solid currentColor;
+  border-radius: 50%; border: 5px solid currentColor;
   background: radial-gradient(circle, transparent 0 56%, currentColor 70%, transparent 84%);
-  box-shadow: 0 0 26px currentColor, inset 0 0 12px currentColor;
+  box-shadow: 0 0 30px currentColor, inset 0 0 14px currentColor;
   opacity: 0; pointer-events: none; z-index: 3;
-  animation: fx-aoe-spread 0.82s ease-out forwards;
+  animation: fx-aoe-shock 0.82s ease-out forwards;
 }
+/* 무희 피날레/결계장 파동이 그대로 쓰는 공유 곡선(변경 금지 — 마도/현자만 fx-aoe-shock로 분리). */
 @keyframes fx-aoe-spread {
   0%   { opacity: 0;    transform: scale(0.6); }
   12%  { opacity: 1;    }
   62%  { opacity: 0.6;  }  /* 바깥으로 퍼지는 도중에도 또렷 — 압력이 밀려나가는 느낌 */
   100% { opacity: 0;    transform: scale(calc(var(--aoe-r, 120px) / 6)); }
 }
-/* 약한 잔향 링(3번째) — 1차 강한 파동 뒤 한 번 더 밀려나가는 여운. */
-.fx-aoe-spread--echo { border-width: 2px; filter: opacity(0.55); }
+/* 마도/현자 충격파 전용 곡선 — "웨이브가 끝까지 퍼졌다"는 도달감 강화: 바깥으로 가는 동안 더 또렷이 유지하고,
+   외곽(선두)에 거의 도달할 때까지 윤곽이 읽히게(끝에서만 사라짐). 템포(0.82s)·스케일 종점은 유지. */
+@keyframes fx-aoe-shock {
+  0%   { opacity: 0;    transform: scale(0.6); }
+  12%  { opacity: 1;    }
+  68%  { opacity: 0.72; }  /* 62%/0.6 → 68%/0.72: 퍼지는 동안 선두 윤곽이 더 또렷 */
+  90%  { opacity: 0.45; }  /* 외곽 충격파 원형 웨이브가 끝까지 퍼진 게 보이게(코어만 남지 않게) */
+  100% { opacity: 0;    transform: scale(calc(var(--aoe-r, 120px) / 6)); }
+}
+/* 약한 잔향 링(3번째) — 1차 강한 파동 뒤 한 번 더 밀려나가는 여운. 외곽 도달감 강화로 소폭 또렷하게(2→3px·0.55→0.62). */
+.fx-aoe-spread--echo { border-width: 3px; filter: opacity(0.62); }
 /* Combat Feedback Polish 02 — "팡!" 폭죽 코어: 그 자리에서 밝은 보라가 터지듯 부풀었다 사라진다(폭발 시작점 강조). */
 .fx-blast-core {
   position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px;
@@ -2556,7 +2568,8 @@ body {
 
 .recruit-card {
   width: 100%;
-  padding: 15px;
+  /* Recruit Card Compact Hotfix 01 — 모바일 세로 다이어트: 패딩 15px → 10/12px(가독성 유지, 카드 높이 축소). */
+  padding: 10px 12px;
   font-size: 14px;
   font-weight: bold;
   color: #eee;
@@ -2640,29 +2653,37 @@ body {
    합체 힌트가 좌/가운데/우 3열에서 줄바꿈으로 지저분해지던 문제 해결 — 한 줄 카드라 가로 폭을 충분히 쓴다. */
 /* 리스트=flex column / 카드=flex row / 아바타 타일 레이아웃은 avatars.css가 소유(C 재디자인).
    여기선 선택 하이라이트 + 정보/역할/합체 힌트 스타일만 둔다. (방어적으로 리스트 방향만 한 번 더 못박음.) */
-#recruit-body #recruit-list { display: flex; flex-direction: column; grid-template-columns: none; }
+#recruit-body #recruit-list { display: flex; flex-direction: column; grid-template-columns: none; gap: 8px; }
 .recruit-card--row.selected {
   border-color: #f0c040;
   background: #26344f;
   box-shadow: 0 0 9px rgba(240, 192, 64, 0.4);
 }
-.recruit-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+/* Recruit Card Compact Hotfix 01 — 정보 컬럼/힌트 간격 다이어트(가독성 유지). */
+.recruit-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
 .recruit-headline { font-size: 13px; line-height: 1.2; }
 .recruit-headline .recruit-name { font-size: 13.5px; color: #eef3f8; }
 .recruit-role { font-size: 11px; color: #9fb3c6; font-weight: normal; }
 .recruit-hints { display: flex; flex-direction: column; gap: 2px; }
+/* "합체 가능" 녹색 배지 → 작고 약한 "합체 힌트" 라벨로 축소(세로 공간/시선 점유 최소화). */
 .recruit-hint-label {
   align-self: flex-start;
-  font-size: 9px; font-weight: 700; color: #0e1a2a;
-  background: #7fc8a0; border-radius: 4px; padding: 1px 5px; letter-spacing: .03em;
+  font-size: 9px; font-weight: 700; color: #6f93b0; letter-spacing: .04em;
 }
-.recruit-hint-line { font-size: 10.5px; line-height: 1.3; color: #cfe7d8; word-break: keep-all; }
+.recruit-hint-line { font-size: 10.5px; line-height: 1.25; color: #cfe7d8; word-break: keep-all; }
 .recruit-hint-role { color: #7fb3d6; }
 .recruit-hints--none { font-size: 10.5px; color: #8295a8; }
 /* 다음 여정으로 — 주요 액션. 미선택이면 딤드/비활성. */
-.recruit-next { color: #eef3f8; border-color: #3a6ea8; background: #1b2c4a; font-weight: 700; }
+/* Recruit Card Compact Hotfix 01 — 후보 3장이 길어 CTA가 fold 아래로 밀리는 경우 대비: recruit 화면 한정으로 하단 고정(sticky).
+   기존 동작(후보 선택해야 활성)·플로우는 그대로. 스크롤되는 카드가 비치지 않게 위쪽 페이드(box-shadow) + 불투명 배경. */
+.recruit-next {
+  position: sticky; bottom: 8px; z-index: 5;
+  color: #eef3f8; border-color: #3a6ea8; background: #1b2c4a; font-weight: 700;
+  box-shadow: 0 -10px 16px 10px rgba(10, 13, 20, 0.92);
+}
 .flow-next.is-disabled, .flow-next:disabled { opacity: 0.4; cursor: default; }
-.recruit-next.is-disabled { background: transparent; color: #6a7d92; }
+/* 비활성 CTA도 sticky 배경이 불투명해야 카드가 비치지 않음(기존 transparent → 어두운 단색, opacity 복원). */
+.recruit-next.is-disabled { background: #15243c; color: #7286a0; opacity: 1; }
 
 /* === Battlefield Preview & Layout Tune 01 → Dev Preview Access Hotfix 01 — 케이스 전환 바 ===
    가로 한 줄(스크롤) 대신 여러 줄로 wrap + 세로 스크롤 → 13개 전부 모바일에서 터치 가능(잘림 없음). */

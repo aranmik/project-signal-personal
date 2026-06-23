@@ -365,7 +365,9 @@ function recruitFusionHint(candidateJob, ownedJobs) {
     if (ownedJobs.includes(r.result)) return; // 이미 보유한 결과는 제외
     const others = r.materials.filter((m) => m !== candidateJob);
     if (others.length && others.every((m) => ownedJobs.includes(m))) {
-      out.push({ formula: `${r.materials.map(jobName).join(" + ")} → ${jobName(r.result)}`, role: combatRoleLabelOf(r.result) || "" });
+      // Recruit Card Compact Hotfix 01 — 후보 이름은 카드 헤드라인에 이미 있으므로 힌트에선 생략한다.
+      //   "수호자 + 신관 → 성벽"(후보 반복) → "수호자 → 성벽"(상대 직업 → 결과)로 압축해 "누구와 합치면 무엇이 되나"를 빠르게 읽힌다.
+      out.push({ formula: `${others.map(jobName).join(" + ")} → ${jobName(r.result)}`, role: combatRoleLabelOf(r.result) || "" });
     }
   });
   return out;
@@ -389,8 +391,10 @@ function renderRecruitPanel(state) {
         const hints = recruitFusionHint(id, baseJobs);
         // Recruit Fusion Hint 03 — 후보 1명이 현재 파티원(최대 3명)과 가질 수 있는 합체 조합을 모두 노출(최대 3개).
         //   recruitFusionHint가 유효 레시피를 전부 수집하므로, 표시 cap만 2→3으로 올린다(영입 시 파티 ≤3 → 최대 3개).
+        // Recruit Card Compact Hotfix 01 — "합체 가능" 배지를 작은 "합체 힌트" 라벨로 축소 + 결과 역할명(· 탱커 등) 제거.
+        //   힌트 3개는 그대로 모두 노출(표시 cap 3 유지). 줄당 텍스트를 짧게 해 카드 높이를 줄이고 "여정 이어하기" 접근성을 높인다.
         const hintHtml = hints.length
-          ? `<span class="recruit-hints"><span class="recruit-hint-label">합체 가능</span>${hints.slice(0, 3).map((h) => `<span class="recruit-hint-line">${h.formula}${h.role ? ` <span class="recruit-hint-role">· ${h.role}</span>` : ""}</span>`).join("")}</span>`
+          ? `<span class="recruit-hints"><span class="recruit-hint-label">합체 힌트</span>${hints.slice(0, 3).map((h) => `<span class="recruit-hint-line">${h.formula}</span>`).join("")}</span>`
           : `<span class="recruit-hints recruit-hints--none">새 조합 탐색</span>`;
         return `<button type="button" class="recruit-card recruit-card--row${preview === id ? " selected" : ""}" data-recruit="${id}" aria-label="${jobName(id)}">
           <span class="recruit-ava">${jobAvatarHTML(id, "av-fit--card")}</span>
