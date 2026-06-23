@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Expedition Observatory — 귀환/전리품/욕심 관측소 · Signal Personal (Dev)</title>
+  <!--
+    Expedition Observatory — Observation Gear Reframe 01 / Phase 1 (Dev 전용 관측소, 본게임/AR/Balance Lab/Run Replay Lab과 분리).
+    "클리어 심도 유도"가 아니라 "귀환 / 전리품 프록시(lootProxy) / 욕심 / 조합 가치 / 효과 가치"를 읽는다.
+    4 Expedition Profile(최단귀환/1전리품/회수귀환/욕심전멸)을 같은 seed로 주회. 실제 전투 엔진 헤드리스 구동
+    (렌더/FX/발자취/localStorage 미발생, gameState 복구). 본게임 수치/route/보스 조건 무변경 — lootProxy는 dev 임시 지표.
+  -->
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0b0f14; color: #dfe9f2; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 13px; line-height: 1.5; }
+    #eo-app { max-width: 1180px; margin: 0 auto; padding: 16px 12px 60px; }
+    header h1 { font-size: 18px; margin: 0 0 4px; }
+    header .tag { display: inline-block; font-size: 10px; font-weight: 800; color: #f0c89a; border: 1px solid #6e553a; background: rgba(220,170,110,.1); border-radius: 999px; padding: 2px 8px; }
+    header p { color: #9fb3c4; font-size: 11px; margin: 8px 0 0; }
+    h3 { font-size: 13px; color: #ecd9bc; border-left: 3px solid #c0915f; padding-left: 8px; margin: 22px 0 8px; }
+    .eo-meta { font-size: 10px; color: #6f8497; font-weight: 400; }
+    .eo-sub { font-size: 9px; color: #7c93a6; font-weight: 400; }
+    #eo-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #11161d; border: 1px solid #2c3a46; border-radius: 12px; padding: 12px; margin-top: 14px; }
+    #eo-controls label { font-size: 11px; color: #8aa0b2; margin-right: 3px; }
+    #eo-controls input { background: #1b232c; color: #e7f0f7; border: 1px solid #34434f; border-radius: 8px; padding: 6px 8px; font-size: 13px; width: 90px; }
+    .eo-btn { border: 1px solid #765a3a; border-radius: 8px; background: #5b452a; color: #fbf0e6; padding: 8px 12px; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .eo-btn.ghost { background: #1b232c; color: #cfe0ee; border-color: #34434f; }
+    .eo-btn:active { transform: translateY(1px); }
+    .eo-btn:disabled { opacity: .5; cursor: progress; }
+    #eo-status { font-size: 11px; color: #9fb8cc; margin-left: 4px; }
+    .eo-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; margin: 8px 0; }
+    .eo-card { background: #11161d; border: 1px solid #243039; border-radius: 10px; padding: 10px 12px; }
+    .eo-card .eo-cn { font-size: 14px; font-weight: 800; color: #eef6ff; }
+    .eo-card .eo-cd { font-size: 10.5px; color: #8aa0b2; margin: 3px 0 6px; line-height: 1.4; }
+    .eo-crow { display: flex; justify-content: space-between; font-size: 11px; color: #aebfce; padding: 1px 0; }
+    .eo-crow b { color: #eef6ff; } .eo-crow b.clear { color: #7fd1a8; } .eo-crow b.wipe { color: #f0a0a0; }
+    .eo-tablewrap { overflow-x: auto; border: 1px solid #243039; border-radius: 10px; margin: 6px 0 10px; }
+    table { border-collapse: collapse; width: 100%; font-size: 11.5px; white-space: nowrap; }
+    th, td { padding: 5px 8px; border-bottom: 1px solid #1f2832; text-align: right; }
+    th.txt, td.txt { text-align: left; white-space: normal; }
+    thead th { position: sticky; top: 0; background: #1a232c; color: #9fb8cc; font-weight: 700; }
+    tbody tr:nth-child(odd) { background: rgba(255,255,255,.015); }
+    td.clear, b.clear { color: #7fd1a8; } td.wipe { color: #f0a0a0; }
+    .eo-grouprow td { background: #161e26; color: #c0aee0; font-weight: 700; text-align: left; }
+    .eo-indent { color: #9fb3c4; }
+    .eo-line { font-size: 12px; color: #cfe0ee; margin: 12px 0 2px; } .eo-line b { color: #e6c89a; }
+    .eo-line code { background: #161e26; color: #9fc4dd; padding: 1px 5px; border-radius: 4px; font-size: 11px; white-space: normal; }
+    .eo-note { font-size: 10.5px; color: #8aa0b2; background: #11161d; border: 1px solid #243039; border-left: 3px solid #6e553a; border-radius: 6px; padding: 7px 10px; margin: 6px 0; }
+    .eo-d { font-weight: 700; } .eo-d.up { color: #7fd1a8; } .eo-d.down { color: #f0a0a0; } .eo-d.zero { color: #6f8497; }
+    .eo-tag { display: inline-block; font-size: 9px; border-radius: 4px; padding: 0 5px; background: #21303d; color: #9fc4dd; border: 1px solid #2c4150; white-space: nowrap; }
+    .eo-tag.hi { background: #1b3326; color: #7fd1a8; border-color: #2f5e47; }
+    .eo-tag.lo { background: #3a2a1a; color: #e6c578; border-color: #5a4326; }
+    .eo-val { color: #cfe0ee; font-weight: 600; }
+    tr.eo-hl td { background: rgba(220,170,110,.10); }
+    .eo-scard { background: #11161d; border: 1px solid #243039; border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
+    .eo-sl { font-size: 13px; font-weight: 800; color: #eef6ff; margin-bottom: 4px; }
+    .eo-srow { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: #aebfce; margin: 2px 0; }
+    .eo-srow b { color: #eef6ff; }
+    .eo-sline { font-size: 11.5px; color: #cfe0ee; margin: 4px 0; } .eo-sline b { color: #e6c89a; }
+    .eo-sline code { background: #161e26; color: #9fc4dd; padding: 1px 5px; border-radius: 4px; font-size: 10.5px; white-space: normal; word-break: break-all; }
+    .eo-ev { font-size: 10.5px; color: #b9cad8; padding: 1px 0; }
+    .eo-empty { color: #7990a2; font-size: 12px; padding: 14px; text-align: center; }
+    .eo-foot { font-size: 10px; color: #6f8497; margin-top: 18px; }
+  </style>
+</head>
+<body>
+  <div id="eo-app">
+    <header>
+      <h1>🧭 Expedition Observatory <span class="tag">귀환 / 전리품 / 욕심 관측소 · Dev</span></h1>
+      <p>클리어는 끝이 아니라 귀환. 보스문은 엔딩이 아니라 발견품을 들고 집으로 가는 문(귀환 보험)입니다.
+        4개 탐험 프로필(최단귀환 / 1전리품 / 회수귀환 / 욕심전멸)을 같은 seed로 주회해 <b>무엇을 들고 · 언제 돌아왔고 · 어디서 욕심냈는가</b>를 봅니다.
+        lootProxy는 dev 전용 임시 지표 — 본게임 진행/저장/발자취/수치에 영향 없음.</p>
+    </header>
+
+    <div id="eo-controls">
+      <span><label>seed</label><input id="eo-seed" type="number" value="405" /></span>
+      <button type="button" id="eo-run100" class="eo-btn">100런 실행 ▶</button>
+      <button type="button" id="eo-run300" class="eo-btn">300런 실행 ▶</button>
+      <button type="button" id="eo-export-json" class="eo-btn ghost">JSON 복사</button>
+      <button type="button" id="eo-export-tsv" class="eo-btn ghost">TSV 복사</button>
+      <button type="button" id="eo-export-txt" class="eo-btn ghost">요약 복사</button>
+      <span id="eo-status">seed를 고르고 “100런 실행”을 눌러 시작하세요.</span>
+    </div>
+
+    <section id="eo-summary"><div class="eo-empty">A. Expedition Summary — 실행 대기 중</div></section>
+    <section id="eo-party"></section>
+    <section id="eo-seat"></section>
+    <section id="eo-effect"></section>
+    <section id="eo-samples"></section>
+
+    <p class="eo-foot">결과는 새로고침 전까지만 유지(저장 안 함). 4 프로필은 같은 seed(공유 RNG)로 주회해 전리품 stance 차이만 비교합니다.
+      lootProxy = 깊은 수풀/정예 생존 · 보스 열쇠 · 심층 보상 · 심도밴드 발견 · 보스문 후 욕심의 dev 임시 집계(실제 전리품 반출 시스템 아님).
+      Seat Value / Effect 효율 태그는 판단 보조 — 자동 수치 변경/밸런스 단정이 아닙니다.</p>
+  </div>
+
+  <script type="module">
+    import { initExpeditionObservatory } from "../src/dev/expeditionObservatory.js";
+    initExpeditionObservatory();
+  </script>
+</body>
+</html>
