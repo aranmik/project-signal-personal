@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:," />
   <title>Expedition Observatory — 귀환/전리품/욕심 관측소 · Signal Personal (Dev)</title>
   <!--
     Expedition Observatory — Observation Gear Reframe 01 / Phase 1 (Dev 전용 관측소, 본게임/AR/Balance Lab/Run Replay Lab과 분리).
@@ -53,6 +54,16 @@
     .eo-tag.lo { background: #3a2a1a; color: #e6c578; border-color: #5a4326; }
     .eo-val { color: #cfe0ee; font-weight: 600; }
     tr.eo-hl td { background: rgba(220,170,110,.10); }
+    /* Phase 1.5 — Seat Value lens UI */
+    .eo-lenscards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px; margin: 6px 0; }
+    .eo-lenscard { background: #11161d; border: 1px solid #243039; border-radius: 8px; padding: 6px 9px; opacity: .65; }
+    .eo-lenscard.active { opacity: 1; border-color: #6e553a; background: #161e26; }
+    .eo-lenscard b { color: #ecd9bc; font-size: 12px; }
+    .eo-lenscard .eo-cd { font-size: 10px; color: #8aa0b2; margin-top: 2px; line-height: 1.35; }
+    .eo-lenstabs { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 2px; }
+    .eo-lens-tab { font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 8px; cursor: pointer; background: #1b232c; color: #aebfce; border: 1px solid #34434f; }
+    .eo-lens-tab.active { background: #5b452a; color: #fbf0e6; border-color: #765a3a; }
+    .eo-lens-tab:active { transform: translateY(1px); }
     .eo-scard { background: #11161d; border: 1px solid #243039; border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
     .eo-sl { font-size: 13px; font-weight: 800; color: #eef6ff; margin-bottom: 4px; }
     .eo-srow { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: #aebfce; margin: 2px 0; }
@@ -78,7 +89,8 @@
       <button type="button" id="eo-run100" class="eo-btn">100런 실행 ▶</button>
       <button type="button" id="eo-run300" class="eo-btn">300런 실행 ▶</button>
       <button type="button" id="eo-export-json" class="eo-btn ghost">JSON 복사</button>
-      <button type="button" id="eo-export-tsv" class="eo-btn ghost">TSV 복사</button>
+      <button type="button" id="eo-export-tsv" class="eo-btn ghost">Run TSV 복사</button>
+      <button type="button" id="eo-export-seat-tsv" class="eo-btn ghost">Seat TSV 복사</button>
       <button type="button" id="eo-export-txt" class="eo-btn ghost">요약 복사</button>
       <span id="eo-status">seed를 고르고 “100런 실행”을 눌러 시작하세요.</span>
     </div>

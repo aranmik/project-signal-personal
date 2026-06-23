@@ -171,7 +171,7 @@ function playExpedition(profile, runIndex, seed) {
     loot, lootProxyTotal: 0, lootDeep21: 0, lootDeep30: 0,
     lootAtBossReady: null, lootAtClear: null, lootAtDeath: null,
     postBossReadyDepth: 0,
-    jobsSeen: new Set(), finalParty: [], bossParty: [], deathParty: [],
+    jobsSeen: new Set(), finalParty: [], bossParty: [], deathParty: [], postBossReadyJobs: new Set(),
     rewardsTaken: new Set(), deepRewardsTaken: new Set(),
     path: [], notableEvents: [],
     hpAtDeath: null, partySizeAtDeath: null, alertnessAtDeath: 0, routeBeforeWipe: "",
@@ -201,8 +201,11 @@ function playExpedition(profile, runIndex, seed) {
 
     const screen = gameState.screen;
     if (screen === "battle") {
-      partyJobIds().forEach((j) => rec.jobsSeen.add(j));
+      const battleJobs = partyJobIds();
+      battleJobs.forEach((j) => rec.jobsSeen.add(j));
       const route = pendingRoute, wasBossReady = bossReadyReached;
+      // Phase 1.5 — 보스문이 열린 뒤 욕심(비-보스) 전투에 들고 들어간 직업 집계(postBossReady lens).
+      if (wasBossReady && route !== "boss") battleJobs.forEach((j) => rec.postBossReadyJobs.add(j));
       const keysBefore = gameState.run.bossKeys || 0;
       rec.battleCount += 1; rec.path.push(ROUTE_TOKEN[route] || "B");
       const ok = runHeadlessBattle();
@@ -285,6 +288,7 @@ function playExpedition(profile, runIndex, seed) {
   rec.bossReadyReached = bossReadyReached;
   rec.pathSignature = rec.path.join(">");
   rec.jobsSeenList = [...rec.jobsSeen];
+  rec.postBossReadyJobsList = [...rec.postBossReadyJobs];
   return rec;
 }
 function jobNameSafeDeep(id) { const d = deepRewardById(id); return d ? d.name : id; }
@@ -443,6 +447,112 @@ function seatComparisons(seatRows) {
   };
 }
 
+/* ════════════════════════════════════════════════════════════════
+   Phase 1.5 — Seat Value Readability: "봤다 / 최종 자리 / 보스 시도 / 귀환 / 전멸" 관점을 분리한다.
+   각 lens는 universe(평가 모집단) + present(해당 lens 파티에 직업이 있었는가)로 정의된다.
+     · rate lens(seen/final/boss): universe 내 present/absent로 갈라 clearRate·심도·전리품 Δ를 본다.
+     · share lens(clear/death/postBoss): universe(클리어/전멸/욕심구간 런) 중 직업이 그 파티에 든 비율(점유율)을 본다.
+   집계만(메모리 내부) — 본게임/저장/전투 무영향. lootProxy/treasure는 dev 임시 지표.
+   ════════════════════════════════════════════════════════════════ */
+const SAMPLE_MIN = 8;   // present 표본이 이 미만이면 "표본부족"(과해석 방지)
+const RARE_AI = 5;      // seen 표본이 이 미만이면 "관측AI 미사용"(자동 주회가 거의 안 만드는 직업)
+const seenOf = (r, j) => (r.jobsSeen && r.jobsSeen.has) ? r.jobsSeen.has(j) : (r.jobsSeenList || []).includes(j);
+const pbrOf = (r, j) => (r.postBossReadyJobs && r.postBossReadyJobs.has) ? r.postBossReadyJobs.has(j) : (r.postBossReadyJobsList || []).includes(j);
+const inArr = (arr, j) => (arr || []).includes(j);
+const SEAT_LENSES = [
+  { id: "seen",     label: "Seen",  full: "런에 섞임",        desc: "등장/영입/합체 경유 등 어떤 방식으로든 런에 들어옴", kind: "rate",  universe: () => true,                present: (r, j) => seenOf(r, j) },
+  { id: "final",    label: "Final", full: "마지막 4자리",      desc: "런 종료 시(결과 무관) 최종 파티에 있었는가",          kind: "rate",  universe: () => true,                present: (r, j) => inArr(r.finalParty, j) },
+  { id: "boss",     label: "Boss",  full: "보스 시도 순간",    desc: "귀환문에 도전하는 순간 파티에 들고 갔는가(보스 시도 런 한정)", kind: "rate", universe: (r) => r.bossAttempted,   present: (r, j) => inArr(r.bossParty, j) },
+  { id: "clear",    label: "Clear", full: "귀환 성공 순간",    desc: "살아 돌아온 조합에 포함됐는가(클리어 런 한정)",        kind: "share", universe: (r) => r.cleared,          present: (r, j) => inArr(r.finalParty, j) },
+  { id: "death",    label: "Death", full: "전멸 순간",        desc: "실패/욕심 전멸 조합에 포함됐는가(전멸 런 한정)",       kind: "share", universe: (r) => r.wiped,            present: (r, j) => inArr(r.deathParty, j) },
+  { id: "postBoss", label: "Greed", full: "보스문 후 욕심",    desc: "보스문이 열린 뒤 추가 탐사에 들고 갔는가(욕심 구간 런 한정)", kind: "share", universe: (r) => r.bossReadyReached, present: (r, j) => pbrOf(r, j) },
+];
+
+// 한 lens에 대해 직업별 지표(present/absent 비교 + share + 평균 심도/전리품). universe로 모집단을 좁힌다.
+function computeLensSeat(allRuns, lens) {
+  const universe = allRuns.filter(lens.universe);
+  const uN = universe.length;
+  return ALL_JOBS.map((job) => {
+    const present = universe.filter((r) => lens.present(r, job));
+    const absent = universe.filter((r) => !lens.present(r, job));
+    const pN = present.length, aN = absent.length;
+    const clearP = rate(present.filter((r) => r.cleared).length, pN);
+    const clearA = rate(absent.filter((r) => r.cleared).length, aN);
+    const depthP = mean(present.map((r) => r.finalDepth)), depthA = mean(absent.map((r) => r.finalDepth));
+    const lootP = mean(present.map((r) => r.lootProxyTotal)), lootA = mean(absent.map((r) => r.lootProxyTotal));
+    // clearParty/deathParty count는 lens 무관(전역 — 표 공통 컬럼).
+    const clearPartyCount = allRuns.filter((r) => r.cleared && inArr(r.finalParty, job)).length;
+    const deathPartyCount = allRuns.filter((r) => r.wiped && inArr(r.deathParty, job)).length;
+    return {
+      job, name: jobName(job), tier: tierOf(job), role: roleAr(job), roleLabel: combatRoleLabelOf(job) || "—",
+      universeN: uN, presentCount: pN, absentCount: aN, share: rate(pN, uN),
+      clearCount: present.filter((r) => r.cleared).length, deathCount: present.filter((r) => r.wiped).length, bossAttemptCount: present.filter((r) => r.bossAttempted).length,
+      clearRatePresent: clearP, clearRateAbsent: clearA, deltaClearRate: (clearP != null && clearA != null) ? clearP - clearA : null,
+      avgDepthPresent: depthP, avgDepthAbsent: depthA, deltaAvgDepth: (depthP != null && depthA != null) ? depthP - depthA : null,
+      avgClearDepthPresent: mean(present.filter((r) => r.cleared).map((r) => r.clearDepth)),
+      avgDeathDepthPresent: mean(present.filter((r) => r.wiped).map((r) => r.deathDepth)),
+      avgLootPresent: lootP, avgLootAbsent: lootA, deltaAvgLoot: (lootP != null && lootA != null) ? lootP - lootA : null,
+      avgTreasurePresent: mean(present.map((r) => r.treasureTotal)),
+      avgPostBossReadyDepthPresent: mean(present.filter((r) => r.bossReadyReached).map((r) => r.postBossReadyDepth)),
+      clearPartyCount, deathPartyCount,
+      sampleTag: pN < SAMPLE_MIN ? "표본부족" : null,
+      readTags: [], // buildReport에서 retention 기반으로 주입
+    };
+  });
+}
+
+// Seen vs Final Gap / Retention — 많이 보이지만 최종에 안 남는 직업(합체 경유형) vs 끝까지 남는 직업 구분.
+function jobRetention(allRuns) {
+  return ALL_JOBS.map((job) => {
+    const seenN = allRuns.filter((r) => seenOf(r, job)).length;
+    const finalC = allRuns.filter((r) => inArr(r.finalParty, job)).length;
+    const bossC = allRuns.filter((r) => r.bossAttempted && inArr(r.bossParty, job)).length;
+    const clearC = allRuns.filter((r) => r.cleared && inArr(r.finalParty, job)).length;
+    const deathC = allRuns.filter((r) => r.wiped && inArr(r.deathParty, job)).length;
+    return {
+      job, name: jobName(job), tier: tierOf(job), role: roleAr(job),
+      seenCount: seenN, finalCount: finalC, bossCount: bossC, clearCount: clearC, deathCount: deathC,
+      finalRetention: rate(finalC, seenN), bossRetention: rate(bossC, seenN), clearRetention: rate(clearC, seenN), deathRetention: rate(deathC, seenN),
+      avgDepthFinalPresent: mean(allRuns.filter((r) => inArr(r.finalParty, job)).map((r) => r.finalDepth)),
+      avgLootFinalPresent: mean(allRuns.filter((r) => inArr(r.finalParty, job)).map((r) => r.lootProxyTotal)),
+    };
+  });
+}
+
+// 판독 태그(관측용·단정 금지) — retention + Final lens 지표에서 도출. "약함" 대신 "표본부족/WATCH/동반" 톤.
+function computeReadTags(ret, finalRow, gAvgDepth, gAvgLoot) {
+  const tags = [];
+  if (ret.seenCount < RARE_AI && ret.tier !== "기본") tags.push("관측AI 미사용");
+  if (ret.seenCount < SAMPLE_MIN) { tags.push("표본부족"); return tags.length ? tags : ["표본부족"]; }
+  if (ret.finalRetention != null && ret.finalRetention >= 0.55) tags.push("자리 후보");
+  if (ret.finalRetention != null && ret.finalRetention <= 0.25) tags.push("합체 경유형 가능성");
+  if (ret.clearRetention != null && ret.clearRetention >= 0.2) tags.push("귀환 동반");
+  if (ret.deathRetention != null && ret.clearRetention != null && ret.deathRetention > Math.max(0.12, ret.clearRetention * 1.6)) tags.push("전멸 동반 WATCH");
+  if (finalRow && finalRow.deltaClearRate != null && finalRow.deltaClearRate >= 0.05 && (finalRow.bossAttemptCount || 0) >= 3) tags.push("보스 신뢰");
+  if (finalRow && finalRow.avgDepthPresent != null && gAvgDepth != null && finalRow.avgDepthPresent >= gAvgDepth + 4) tags.push("고심도 동반");
+  if (finalRow && finalRow.avgLootPresent != null && gAvgLoot != null && finalRow.avgLootPresent >= gAvgLoot + 1.0) tags.push("전리품 동반");
+  if (!tags.length) tags.push("중립");
+  return tags;
+}
+
+// lens별 직접 비교(덫꾼 vs 도적 / 바드·무희 vs 딜러평균 / 마도·현자 / 힐 / 탱·보호막) — 선택된 lens의 rows로 계산.
+const SHIELD_JOBS = ["cleric", "wall", "wardkeeper", "forbidden", "gatekeeper"];
+function lensPrimary(row, kind) { return kind === "share" ? row.share : row.clearRatePresent; } // 대표 지표
+function lensCompareData(lensRows, kind) {
+  const get = (j) => lensRows.find((s) => s.job === j) || {};
+  const avgOf = (jobs, key) => mean(jobs.map((j) => get(j)[key]).filter((v) => v != null));
+  const pack = (j) => { const r = get(j); return { name: r.name, present: r.presentCount, primary: lensPrimary(r, kind), deltaClear: r.deltaClearRate, loot: r.avgLootPresent, depth: r.avgDepthPresent, sample: r.sampleTag }; };
+  const groupAvg = (jobs) => ({ present: avgOf(jobs, "presentCount"), primary: mean(jobs.map((j) => lensPrimary(get(j), kind)).filter((v) => v != null)), deltaClear: avgOf(jobs, "deltaClearRate"), loot: avgOf(jobs, "avgLootPresent"), depth: avgOf(jobs, "avgDepthPresent") });
+  return {
+    trapper: pack("trapper"), rogue: pack("rogue"),
+    bard: pack("bard"), dealerFirstAvg: groupAvg(DEALER_FIRST),
+    dancer: pack("dancer"), dealerSecondAvg: groupAvg(DEALER_SECOND),
+    mage: pack("mage"), sage: pack("sage"),
+    healAvg: groupAvg(HEAL_JOBS),
+    tankAvg: groupAvg(TANK_JOBS), shieldAvg: groupAvg(SHIELD_JOBS),
+  };
+}
+
 /* ── Effect Value — 현재 효과 값 표(데이터에서 직접 읽음) + 선택/보유별 효율 지표. ── */
 function effectValueTable() {
   const rows = [];
@@ -518,12 +628,24 @@ function sampleRuns(combined) {
 /* ── 전체 리포트 빌드 ── */
 function buildReport(profiles, meta) {
   const combined = EXPEDITION_ORDER.flatMap((id) => profiles[id]);
-  const seat = jobSeatValue(combined);
+  const seat = jobSeatValue(combined); // Phase 1 (seen 기반) — 호환 유지
+  // Phase 1.5 — lens별 seat + retention + read tags.
+  const lensSeat = {};
+  SEAT_LENSES.forEach((l) => { lensSeat[l.id] = computeLensSeat(combined, l); });
+  const retention = jobRetention(combined);
+  const gAvgDepth = mean(combined.map((r) => r.finalDepth)), gAvgLoot = mean(combined.map((r) => r.lootProxyTotal));
+  const finalRows = lensSeat.final;
+  const readTagsByJob = {};
+  retention.forEach((ret) => { const fr = finalRows.find((x) => x.job === ret.job); ret.readTags = computeReadTags(ret, fr, gAvgDepth, gAvgLoot); readTagsByJob[ret.job] = ret.readTags; });
+  SEAT_LENSES.forEach((l) => lensSeat[l.id].forEach((row) => { row.readTags = readTagsByJob[row.job] || []; }));
   return {
     meta, profiles,
     summaries: EXPEDITION_ORDER.reduce((o, id) => { o[id] = profileSummary(profiles[id]); return o; }, {}),
     combined,
     seat, seatComparisons: seatComparisons(seat),
+    lensSeat, retention, readTagsByJob, gAvgDepth, gAvgLoot,
+    lensList: SEAT_LENSES.map((l) => ({ id: l.id, label: l.label, full: l.full, desc: l.desc, kind: l.kind })),
+    sampleMin: SAMPLE_MIN,
     effectTable: effectValueTable(), effectDiag: effectDiagnostics(combined),
     samples: sampleRuns(combined),
   };
@@ -593,28 +715,68 @@ function renderParty(rep) {
     </tbody></table></div>`;
 }
 
-function seatRowHtml(s, highlight) {
-  return `<tr class="${highlight ? "eo-hl" : ""}"><td class="txt">${esc(s.name)} <span class="eo-meta">${s.tier}·${esc(s.roleLabel)}</span></td><td>${s.presentCount}</td><td>${s.finalHeld}</td><td>${s.bossHeld}</td><td>${s.clearHeld}</td><td>${s.deathHeld}</td><td class="${(s.presentWin || 0) > 0 ? "clear" : ""}">${fmtPct(s.presentWin)}</td><td>${fmtPct(s.absentWin)}</td><td>${deltaPct(s.seatWin)}</td><td>${fmt1(s.presentDepth)}</td><td>${delta(s.seatDepth)}</td><td>${fmt1(s.presentLoot)}</td><td>${delta(s.seatLoot)}</td></tr>`;
+/* ── Phase 1.5 Seat Value (lens 탭) ── */
+let currentLens = "final"; // 기본 = Final(한 자리 가치)
+const LENS_HL = new Set(["trapper", "rogue", "bard", "dancer"]);
+function lensChip(t) {
+  const lo = ["표본부족", "관측AI 미사용", "전멸 동반 WATCH"], hi = ["자리 후보", "보스 신뢰", "귀환 동반", "고심도 동반", "전리품 동반"];
+  const cls = lo.includes(t) ? "lo" : hi.includes(t) ? "hi" : "";
+  return `<span class="eo-tag ${cls}">${esc(t)}</span>`;
+}
+const sampMark = (s) => (s.sampleTag ? ' <span class="eo-tag lo">표</span>' : "");
+const tagCells = (s) => (s.readTags || []).slice(0, 3).map(lensChip).join("");
+function rateLensRow(s) {
+  return `<tr class="${LENS_HL.has(s.job) ? "eo-hl" : ""}"><td class="txt">${esc(s.name)} <span class="eo-meta">${s.tier}·${esc(s.roleLabel)}</span></td><td>${s.presentCount}${sampMark(s)}</td><td>${s.absentCount}</td><td class="${(s.clearRatePresent || 0) > 0 ? "clear" : ""}">${fmtPct(s.clearRatePresent)}</td><td>${fmtPct(s.clearRateAbsent)}</td><td>${deltaPct(s.deltaClearRate)}</td><td>${fmt1(s.avgDepthPresent)}</td><td>${delta(s.deltaAvgDepth)}</td><td>${fmt1(s.avgLootPresent)}</td><td>${delta(s.deltaAvgLoot)}</td><td>${s.clearPartyCount}</td><td>${s.deathPartyCount}</td><td class="txt">${tagCells(s)}</td></tr>`;
+}
+function shareLensRow(s) {
+  return `<tr class="${LENS_HL.has(s.job) ? "eo-hl" : ""}"><td class="txt">${esc(s.name)} <span class="eo-meta">${s.tier}·${esc(s.roleLabel)}</span></td><td>${s.presentCount}${sampMark(s)}</td><td>${fmtPct(s.share)}</td><td>${fmt1(s.avgDepthPresent)}</td><td>${fmt1(s.avgLootPresent)}</td><td>${fmt1(s.avgTreasurePresent)}</td><td>${s.clearPartyCount}</td><td>${s.deathPartyCount}</td><td class="txt">${tagCells(s)}</td></tr>`;
+}
+function lensTable(rows, kind) {
+  const sorted = rows.slice().sort((a, b) => b.presentCount - a.presentCount);
+  if (kind === "share") {
+    return `<div class="eo-tablewrap"><table><thead><tr><th class="txt">직업</th><th>점유런</th><th>점유율</th><th>P심도</th><th>P전리품</th><th>P전리품(의도)</th><th>clearP</th><th>deathP</th><th class="txt">판독</th></tr></thead><tbody>${sorted.map(shareLensRow).join("")}</tbody></table></div>`;
+  }
+  return `<div class="eo-tablewrap"><table><thead><tr><th class="txt">직업</th><th>present</th><th>absent</th><th>P승률</th><th>A승률</th><th>Δ승률</th><th>P심도</th><th>Δ심도</th><th>P전리품</th><th>Δ전리품</th><th>clearP</th><th>deathP</th><th class="txt">판독</th></tr></thead><tbody>${sorted.map(rateLensRow).join("")}</tbody></table></div>`;
+}
+function lensCompareTable(lensRows, kind) {
+  const c = lensCompareData(lensRows, kind);
+  const pLabel = kind === "share" ? "점유율" : "P승률";
+  const rowJob = (label, p, vs) => (p && p.name) ? `<tr><td class="txt">${esc(label)}</td><td>${p.present || 0}${p.sample ? ' <span class="eo-tag lo">표</span>' : ""}</td><td class="${(p.primary || 0) > 0 ? "clear" : ""}">${fmtPct(p.primary)}</td><td>${deltaPct(p.deltaClear)}</td><td>${fmt1(p.loot)}</td><td>${fmt1(p.depth)}</td><td class="txt eo-meta">${esc(vs)}</td></tr>` : "";
+  const rowGrp = (label, g, vs) => `<tr><td class="txt eo-indent">· ${esc(label)}</td><td>${fmt1(g.present)}</td><td>${fmtPct(g.primary)}</td><td>${deltaPct(g.deltaClear)}</td><td>${fmt1(g.loot)}</td><td>${fmt1(g.depth)}</td><td class="txt eo-meta">${esc(vs)}</td></tr>`;
+  return `<div class="eo-tablewrap"><table><thead><tr><th class="txt">대상</th><th>present</th><th>${pLabel}</th><th>Δ승률</th><th>전리품</th><th>심도</th><th class="txt">비교군</th></tr></thead><tbody>
+    ${rowJob("덫꾼(독)", c.trapper, "vs 도적")}
+    ${rowJob("도적", c.rogue, "vs 덫꾼")}
+    ${rowJob("바드", c.bard, "vs 1차 딜러 평균")}
+    ${rowGrp("1차 딜러 평균", c.dealerFirstAvg, "도적/워든/파수궁/마도/추적자")}
+    ${rowJob("무희", c.dancer, "vs 2차 딜러 평균")}
+    ${rowGrp("2차 딜러 평균", c.dealerSecondAvg, "용창/천궁/검성")}
+    ${rowJob("마도(AoE)", c.mage, "vs 현자")}
+    ${rowJob("현자(AoE)", c.sage, "vs 마도")}
+    ${rowGrp("힐러 계열 평균", c.healAvg, "사제/성직자/치유궁/정화사/구원자")}
+    ${rowGrp("탱커 계열 평균", c.tankAvg, "수호자/수문장/성기사/금제/성벽/결계장")}
+    ${rowGrp("보호막 계열 평균", c.shieldAvg, "신관/성벽/결계장/금제/수문장")}
+  </tbody></table></div>`;
+}
+function retentionTable(retention) {
+  const sorted = retention.slice().sort((a, b) => b.seenCount - a.seenCount);
+  return `<div class="eo-tablewrap"><table><thead><tr><th class="txt">직업</th><th>Seen</th><th>Final</th><th>Final유지</th><th>Boss유지</th><th>Clear유지</th><th>Death유지</th><th class="txt">판독</th></tr></thead><tbody>${sorted.map((r) => `<tr class="${LENS_HL.has(r.job) ? "eo-hl" : ""}"><td class="txt">${esc(r.name)} <span class="eo-meta">${r.tier}</span></td><td>${r.seenCount}</td><td>${r.finalCount}</td><td class="${(r.finalRetention || 0) >= 0.55 ? "clear" : ""}">${fmtPct(r.finalRetention)}</td><td>${fmtPct(r.bossRetention)}</td><td>${fmtPct(r.clearRetention)}</td><td>${fmtPct(r.deathRetention)}</td><td class="txt">${(r.readTags || []).slice(0, 3).map(lensChip).join("")}</td></tr>`).join("")}</tbody></table></div>`;
 }
 function renderSeat(rep) {
-  const seat = rep.seat.slice().sort((a, b) => (b.presentCount - a.presentCount));
-  const HL = new Set(["trapper", "rogue", "bard", "dancer"]);
-  const cmp = rep.seatComparisons;
-  const cmpRow = (label, a, b, bLabel) => `<tr><td class="txt">${label}</td><td>${fmtPct(a.presentWin)}</td><td>${deltaPct(a.seatWin)}</td><td>${fmt1(a.presentLoot)}</td><td>${delta(a.seatLoot)}</td><td class="txt eo-meta">${bLabel}</td></tr>`;
-  $("eo-seat").innerHTML = `<h3>C. Job Seat Value <span class="eo-meta">· 결합 ${rep.combined.length}런 · 보유=런 중 등장</span></h3>
-    <div class="eo-note">"이 직업을 한 자리 넣을 이유가 있나?" — 보유(present)=런 중 파티에 등장. Seat Value = 보유−미보유 차이(승률 Δ%p / 심도 Δ / 전리품 Δ). 통계 모델 아님(판단 보조).</div>
-    <div class="eo-line"><b>직접 비교 — 덫꾼 vs 도적 / 바드·무희 seat value</b></div>
-    <div class="eo-tablewrap"><table><thead><tr><th class="txt">대상</th><th>보유 승률</th><th>Δ승률</th><th>보유 전리품</th><th>Δ전리품</th><th class="txt">비교군</th></tr></thead><tbody>
-      ${cmpRow("덫꾼(독)", cmp.trapperVsRogue.a, cmp.trapperVsRogue.b, `도적 Δ승률 ${deltaPctText(cmp.trapperVsRogue.b.seatWin)} · 도적 보유승률 ${fmtPct(cmp.trapperVsRogue.b.presentWin)}`)}
-      ${cmpRow("도적", cmp.trapperVsRogue.b, cmp.trapperVsRogue.a, `덫꾼 Δ승률 ${deltaPctText(cmp.trapperVsRogue.a.seatWin)}`)}
-      ${cmpRow("바드", cmp.bardVsDealer.a, cmp.bardVsDealer.a, `1차 딜러 평균 Seat Δ승률 ${deltaPctText(cmp.bardVsDealer.avgSeatWin)} · Δ전리품 ${fmt1(cmp.bardVsDealer.avgSeatLoot)}`)}
-      ${cmpRow("무희", cmp.dancerVsDealer.a, cmp.dancerVsDealer.a, `2차 딜러 평균 Seat Δ승률 ${deltaPctText(cmp.dancerVsDealer.avgSeatWin)} · Δ전리품 ${fmt1(cmp.dancerVsDealer.avgSeatLoot)}`)}
-      ${cmpRow("마도(AoE)", cmp.mageSage.mage, cmp.mageSage.mage, `현자 Seat Δ승률 ${deltaPctText(cmp.mageSage.sage.seatWin)}`)}
-    </tbody></table></div>
-    <div class="eo-line"><b>전 직업 Seat Value</b> <span class="eo-meta">(덫꾼/도적/바드/무희 강조)</span></div>
-    <div class="eo-tablewrap"><table><thead><tr><th class="txt">직업</th><th>보유런</th><th>최종</th><th>보스</th><th>클리어</th><th>전멸</th><th>보유승률</th><th>미보유</th><th>Δ승률</th><th>보유심도</th><th>Δ심도</th><th>보유전리품</th><th>Δ전리품</th></tr></thead><tbody>
-      ${seat.map((s) => seatRowHtml(s, HL.has(s.job))).join("")}
-    </tbody></table></div>`;
+  const lens = rep.lensList.find((l) => l.id === currentLens) || rep.lensList[1];
+  const rows = rep.lensSeat[lens.id];
+  const tabs = rep.lensList.map((l) => `<button type="button" class="eo-lens-tab${l.id === currentLens ? " active" : ""}" data-lens="${l.id}">${l.label}</button>`).join("");
+  const lensCards = rep.lensList.map((l) => `<div class="eo-lenscard${l.id === currentLens ? " active" : ""}"><b>${l.label}</b> <span class="eo-meta">${esc(l.full)}</span><div class="eo-cd">${esc(l.desc)}</div></div>`).join("");
+  const uN = rows[0] ? rows[0].universeN : 0;
+  $("eo-seat").innerHTML = `<h3>C. Job Seat Value <span class="eo-meta">· 결합 ${rep.combined.length}런 · lens별 분리 · 표본부족 present &lt; ${rep.sampleMin}</span></h3>
+    <div class="eo-note">"이 직업을 봤다" vs "최종 4자리를 차지했다" vs "보스 시도/귀환/전멸 순간 있었다"를 분리해 봅니다. 기본 = Final(한 자리 가치). 판독 태그는 관측용(단정 아님 — 표본 적으면 "표본부족/관측AI 미사용"으로 표시).</div>
+    <div class="eo-lenscards">${lensCards}</div>
+    <div class="eo-lenstabs">${tabs}</div>
+    <div class="eo-line"><b>${lens.label} Lens — ${esc(lens.full)}</b> <span class="eo-meta">${lens.kind === "share" ? `모집단 ${uN}런 중 점유율(present/모집단)` : "present/absent 비교(모집단 " + uN + "런)"} · 보유=이 lens 파티에 직업이 있던 런</span></div>
+    ${lensTable(rows, lens.kind)}
+    <div class="eo-line"><b>직접 비교 (${lens.label} 기준)</b> <span class="eo-meta">덫꾼vs도적 / 바드·무희 vs 딜러평균 / 마도·현자 / 힐·탱·보호막 · 표본부족은 "표"</span></div>
+    ${lensCompareTable(rows, lens.kind)}
+    <div class="eo-line"><b>Seen vs Final Gap / Retention</b> <span class="eo-meta">많이 보이지만 안 남음=합체 경유형 / 끝까지 남음=자리형</span></div>
+    ${retentionTable(rep.retention)}`;
 }
 function deltaPctText(v) { return v == null ? "—" : (v > 0 ? "+" : "") + (Math.round(v * 1000) / 10).toFixed(1) + "%p"; }
 
@@ -665,11 +827,15 @@ function exportJSON() {
   if (!lastReport) return "";
   const rep = lastReport;
   return JSON.stringify({
-    metadata: { tool: "expedition-observatory-01", theme: "beginner", seed: rep.meta.seed, runsPerProfile: rep.meta.runs, profiles: EXPEDITION_ORDER, generatedAt: new Date().toISOString(),
-      note: "lootProxy = dev-only 임시 지표(실제 전리품/유물 시스템 아님). 본게임 수치/저장 무영향." },
+    metadata: { tool: "expedition-observatory", phase: "1.5", theme: "beginner", seed: rep.meta.seed, runsPerProfile: rep.meta.runs, profiles: EXPEDITION_ORDER, sampleMin: rep.sampleMin, generatedAt: new Date().toISOString(),
+      note: "lootProxy = dev-only 임시 지표(실제 전리품/유물 시스템 아님). 본게임 수치/저장 무영향. Seat은 lens별(seen/final/boss/clear/death/postBoss)로 분리." },
     summaries: rep.summaries,
     jobSeatValue: rep.seat.map((s) => ({ job: s.job, name: s.name, tier: s.tier, role: s.role, presentCount: s.presentCount, finalHeld: s.finalHeld, bossHeld: s.bossHeld, clearHeld: s.clearHeld, deathHeld: s.deathHeld, presentWin: s.presentWin, absentWin: s.absentWin, seatWin: s.seatWin, seatDepth: s.seatDepth, seatLoot: s.seatLoot })),
     seatComparisons: rep.seatComparisons,
+    // Phase 1.5 — lens별 seat value + retention + 판독 태그 + 표본 경고.
+    lensMeta: rep.lensList,
+    lensSeat: rep.lensList.reduce((o, l) => { o[l.id] = rep.lensSeat[l.id].map((s) => ({ job: s.job, name: s.name, tier: s.tier, lens: l.id, presentCount: s.presentCount, absentCount: s.absentCount, universeN: s.universeN, share: s.share, clearRatePresent: s.clearRatePresent, clearRateAbsent: s.clearRateAbsent, deltaClearRate: s.deltaClearRate, avgDepthPresent: s.avgDepthPresent, deltaAvgDepth: s.deltaAvgDepth, avgLootPresent: s.avgLootPresent, deltaAvgLoot: s.deltaAvgLoot, avgTreasurePresent: s.avgTreasurePresent, clearPartyCount: s.clearPartyCount, deathPartyCount: s.deathPartyCount, sampleTag: s.sampleTag, readTags: s.readTags })); return o; }, {}),
+    retention: rep.retention.map((r) => ({ job: r.job, name: r.name, tier: r.tier, seenCount: r.seenCount, finalCount: r.finalCount, bossCount: r.bossCount, clearCount: r.clearCount, deathCount: r.deathCount, finalRetention: r.finalRetention, bossRetention: r.bossRetention, clearRetention: r.clearRetention, deathRetention: r.deathRetention, readTags: r.readTags })),
     effectTable: rep.effectTable, effectDiagnostics: rep.effectDiag,
     samples: rep.samples.map((s) => s.rec ? { label: s.label, profile: s.rec.profile, seed: s.rec.seed, runIndex: s.rec.runIndex, result: s.rec.result, clearDepth: s.rec.clearDepth, deathDepth: s.rec.deathDepth, lootProxyTotal: s.rec.lootProxyTotal, finalParty: s.rec.finalParty.map(jobName), path: s.rec.path, notableEvents: s.rec.notableEvents } : { label: s.label, rec: null }),
     runs: buildRunsForExport(rep.combined),
@@ -684,6 +850,19 @@ function exportTSV() {
     r.finalParty.map(jobName).join("+"), r.bossParty.map(jobName).join("+"), r.deathParty.map(jobName).join("+"),
     Object.keys(r.roleTags).filter((k) => r.roleTags[k]).join(","), r.notableEvents.join(" | "),
   ].join("\t"));
+  return [cols.join("\t"), ...rows].join("\n");
+}
+// Phase 1.5 — lens별 seat value TSV(직업×lens 한 줄). run TSV와 별도 버튼.
+function exportSeatTSV() {
+  if (!lastReport) return "";
+  const cols = ["jobId", "jobName", "tier", "lens", "presentCount", "absentCount", "presentClearRate", "absentClearRate", "deltaClearRate", "presentAvgDepth", "absentAvgDepth", "deltaAvgDepth", "presentAvgLoot", "absentAvgLoot", "deltaAvgLoot", "share", "clearPartyCount", "deathPartyCount", "sampleTag", "readTag"];
+  const num = (v) => (v == null ? "" : Math.round(v * 1000) / 1000);
+  const rows = [];
+  lastReport.lensList.forEach((l) => {
+    lastReport.lensSeat[l.id].forEach((s) => {
+      rows.push([s.job, s.name, s.tier, l.id, s.presentCount, s.absentCount, num(s.clearRatePresent), num(s.clearRateAbsent), num(s.deltaClearRate), num(s.avgDepthPresent), num(s.avgDepthAbsent), num(s.deltaAvgDepth), num(s.avgLootPresent), num(s.avgLootAbsent), num(s.deltaAvgLoot), num(s.share), s.clearPartyCount, s.deathPartyCount, s.sampleTag || "", (s.readTags || []).join(";")].join("\t"));
+    });
+  });
   return [cols.join("\t"), ...rows].join("\n");
 }
 function exportSummaryText() {
@@ -722,6 +901,15 @@ export function initExpeditionObservatory() {
   $("eo-run100").addEventListener("click", () => runObservatory(100));
   $("eo-run300").addEventListener("click", () => runObservatory(300));
   $("eo-export-json").addEventListener("click", (e) => copyOut(exportJSON(), e.target, "JSON 복사"));
-  $("eo-export-tsv").addEventListener("click", (e) => copyOut(exportTSV(), e.target, "TSV 복사"));
+  $("eo-export-tsv").addEventListener("click", (e) => copyOut(exportTSV(), e.target, "Run TSV 복사"));
+  const seatBtn = $("eo-export-seat-tsv");
+  if (seatBtn) seatBtn.addEventListener("click", (e) => copyOut(exportSeatTSV(), e.target, "Seat TSV 복사"));
   $("eo-export-txt").addEventListener("click", (e) => copyOut(exportSummaryText(), e.target, "요약 복사"));
+  // Phase 1.5 — Seat Value lens 탭 전환(재실행 없이 캐시된 리포트로 즉시 재렌더).
+  $("eo-seat").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-lens]");
+    if (!b || !lastReport) return;
+    currentLens = b.dataset.lens;
+    renderSeat(lastReport);
+  });
 }
