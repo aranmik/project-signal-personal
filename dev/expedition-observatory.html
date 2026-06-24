@@ -73,6 +73,24 @@
     .eo-ev { font-size: 10.5px; color: #b9cad8; padding: 1px 0; }
     .eo-empty { color: #7990a2; font-size: 12px; padding: 14px; text-align: center; }
     .eo-foot { font-size: 10px; color: #6f8497; margin-top: 18px; }
+    /* Phase 2B — Nara Sandbox / Seed Finder */
+    .eo-sbnum { width: 56px; background: #1b232c; color: #e7f0f7; border: 1px solid #34434f; border-radius: 6px; padding: 3px 5px; font-size: 12px; text-align: right; }
+    .eo-sbnum::placeholder { color: #5d7282; }
+    .eo-sb-ind { font-size: 12px; font-weight: 700; color: #8aa0b2; background: #11161d; border: 1px solid #243039; border-radius: 8px; padding: 7px 10px; margin: 6px 0; }
+    .eo-sb-ind.on { color: #f0c89a; border-color: #6e553a; background: rgba(220,170,110,.08); }
+    .eo-sb-ind .eo-meta { font-weight: 400; }
+    .eo-sb-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+    .eo-sb-mini { padding: 5px 9px; font-size: 11.5px; }
+    .eo-sb-run { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #11161d; border: 1px solid #2c3a46; border-radius: 10px; padding: 10px; margin: 10px 0 6px; }
+    .eo-sb-run label { font-size: 11px; color: #8aa0b2; margin-right: 3px; }
+    .eo-sb-run input { background: #1b232c; color: #e7f0f7; border: 1px solid #34434f; border-radius: 8px; padding: 6px 8px; font-size: 13px; width: 70px; }
+    .eo-sb-ta { width: 100%; min-height: 56px; background: #1b232c; color: #cfe0ee; border: 1px solid #34434f; border-radius: 8px; padding: 7px 9px; font-size: 11px; font-family: ui-monospace, monospace; margin: 4px 0 8px; resize: vertical; }
+    #eo-sf-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #11161d; border: 1px solid #2c3a46; border-radius: 10px; padding: 10px; margin: 8px 0; }
+    #eo-sf-controls label { font-size: 11px; color: #8aa0b2; margin-right: 3px; }
+    #eo-sf-controls input { width: 70px; background: #1b232c; color: #e7f0f7; border: 1px solid #34434f; border-radius: 8px; padding: 5px 7px; font-size: 12px; }
+    #eo-sf-controls select { background: #1b232c; color: #e7f0f7; border: 1px solid #34434f; border-radius: 8px; padding: 5px 7px; font-size: 12px; }
+    .eo-sf-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+    .eo-sf-chips .eo-tag { font-size: 11px; padding: 2px 8px; }
   </style>
 </head>
 <body>
@@ -95,11 +113,32 @@
       <span id="eo-status">seed를 고르고 “100런 실행”을 눌러 시작하세요.</span>
     </div>
 
+    <section id="eo-sandbox"></section>
+    <section id="eo-compare"></section>
+
     <section id="eo-summary"><div class="eo-empty">A. Expedition Summary — 실행 대기 중</div></section>
     <section id="eo-party"></section>
     <section id="eo-seat"></section>
     <section id="eo-effect"></section>
     <section id="eo-samples"></section>
+
+    <section id="eo-seedfinder">
+      <h3>G. Seed Finder Lite <span class="eo-meta">· 특정 직업이 등장한 seed 후보 찾기(메모용)</span></h3>
+      <div class="eo-note"><b>자연 주회 성능 ≠ 표적 실험.</b> 이건 "이 직업이 나온 seed 후보 목록"을 만드는 도구일 뿐 — "800번대는 무조건 무희" 같은 규칙을 만드는 게 아닙니다. 무희/검성/현자 등 희귀 직업이 등장하는 seed를 메모해 두는 용도. 브라우저 멈춤 방지를 위해 batch+진행률+취소를 지원합니다.
+        <br><b>※ Seed Finder는 현재 sandbox override를 적용하지 않고, 코드 기본값 기준 자연 주회 seed 후보를 찾습니다.</b> (위 Nara Sandbox의 스탯 편집/배수와 무관 — 무희/검성/현자 등이 기본 게임 기준으로 등장하는 seed를 메모하기 위함. override 적용 Seed Finder는 이번 범위 아님.)</div>
+      <div id="eo-sf-controls">
+        <span><label>seed</label><input id="eo-sf-start" type="number" value="1" /> ~ <input id="eo-sf-end" type="number" value="200" /></span>
+        <span><label>직업</label><select id="eo-sf-job"></select></span>
+        <span><label>lens</label><select id="eo-sf-lens"><option value="seen">Seen(섞임)</option><option value="final">Final(최종 자리)</option><option value="boss">Boss(보스 시도)</option><option value="clear">Clear(귀환)</option></select></span>
+        <span><label>profile</label><select id="eo-sf-profile"></select></span>
+        <span><label>runs/seed</label><input id="eo-sf-runs" type="number" value="6" /></span>
+        <span><label>찾을 개수</label><input id="eo-sf-count" type="number" value="3" /></span>
+        <button type="button" id="eo-sf-run" class="eo-btn">스캔 ▶</button>
+        <button type="button" id="eo-sf-cancel" class="eo-btn ghost" disabled>취소</button>
+        <span id="eo-sf-prog" class="eo-meta">대기 중</span>
+      </div>
+      <div id="eo-sf-out"></div>
+    </section>
 
     <p class="eo-foot">결과는 새로고침 전까지만 유지(저장 안 함). 4 프로필은 같은 seed(공유 RNG)로 주회해 전리품 stance 차이만 비교합니다.
       lootProxy = 깊은 수풀/정예 생존 · 보스 열쇠 · 심층 보상 · 심도밴드 발견 · 보스문 후 욕심의 dev 임시 집계(실제 전리품 반출 시스템 아님).

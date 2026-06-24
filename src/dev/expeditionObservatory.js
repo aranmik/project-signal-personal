@@ -25,7 +25,7 @@ import { UNIT_TEMPLATES } from "../data/units.js";
 import { REWARDS, REWARD_MAX_LEVEL } from "../data/rewards.js";
 import { activeDeepRewards, deepRewardById } from "../data/deepRewards.js";
 import { SKILLS } from "../data/skills.js";
-import { depthBand, BOSS_MENACE } from "../data/routes.js";
+import { depthBand, BOSS_MENACE, BOSS_FLOOR } from "../data/routes.js";
 
 /* ── 이름/포맷 ───────────────────────────────────────────────────── */
 const jobName = (id) => (UNIT_TEMPLATES.party[id] && UNIT_TEMPLATES.party[id].name) || id;
@@ -162,7 +162,103 @@ const LOOT_TYPE_LABELS = { dangerRoute: "깊은 수풀 생존", elite: "정예 �
 const MAX_DECISIONS = 600, MAX_BATTLES = 90;
 const ROUTE_TOKEN = { normal: "N", danger: "D", elite: "E", boss: "BOSS", ally: "ALLY", bond: "BOND", rest: "REST" };
 
-function playExpedition(profile, runIndex, seed) {
+/* ════════════════════════════════════════════════════════════════
+   Nara Sandbox — Stat Override (dev-only A/B 실험 장비, Phase 2B).
+   ★원본 데이터(UNIT_TEMPLATES / 코어 상수)는 절대 mutate하지 않는다 — 읽기만.
+     override는 "전투 진입 시점에 새로 생성된 per-battle 클론"(gameState.party/enemies)에만 적용한다.
+     advanceStage가 매 전투 createInitialParty/createRouteEnemies로 인스턴스를 새로 만들므로(템플릿 fresh read),
+     클론에 적용 → 다음 전투에서 다시 fresh → 누적/오염 없음. 배치 종료 시 restoreState가 클론을 통째로 되돌린다.
+   ★두 레이어:
+     · 절대 기본값 편집(absolute) — 영웅(party.*) + 일반 몹(enemies.* normal pool). 템플릿 기본값 대비 delta(영웅)/factor(몹)로 클론에 주입.
+     · 배수(%) — 영웅전체/일반/정예/보스. 정예·보스는 코어 상수(RANK_OVERRIDES state.js / BOSS_FLOOR routes.js)가 기준이라
+       템플릿 편집이 닿지 않음 → 배수로만 조정(전투 클론에 곱). 정직한 한계 표기.
+   ★본게임/저장/route/스킬/합체/영입/보상 무변경. lootProxy와 동일하게 dev 임시 실험 — localStorage 무영향(헤드리스).
+   ════════════════════════════════════════════════════════════════ */
+const HERO_FIELDS = ["maxHp", "atk", "speed"];     // 실제 데이터에 존재하는 수치형 필드만(units.js)
+const MONSTER_FIELDS = ["maxHp", "atk", "speed"];  // defense/damageReduction 등은 기본 필드로 존재하지 않음 — 신설 금지
+const FIELD_LABEL = { maxHp: "HP", atk: "ATK", speed: "SPD" };
+// 초보자 테마 "동물 연합" 일반 몹(템플릿 기준 편집 = 전투에 반영). 레거시 slime/goblin/wolf는 초보자 테마 미사용.
+const NORMAL_MONSTERS = ["bear", "fox", "bird", "dewslime", "lamb"];
+// 정예/보스 본체 type(표시·참조용). 이들의 실효 스탯은 코어 상수가 결정 → 배수로만.
+const ELITE_TYPES = ["owl", "deer"];
+const BOSS_TYPE = "lion";
+const MULT_KEYS = ["heroAll", "monNormal", "monElite", "monBoss"];
+const MULT_LABEL = { heroAll: "영웅 전체", monNormal: "일반 몹", monElite: "정예", monBoss: "보스(사자왕)" };
+// 정예 코어 기준(state.js RANK_OVERRIDES.elite — export 안 됨이라 표시용 참조 상수). 보스는 BOSS_FLOOR import.
+const ELITE_REF = { maxHp: 170, atk: 12, speed: 5 };
+
+function emptyOverrides() {
+  return {
+    hero: {},      // { jobId: { maxHp?, atk?, speed? } } — 절대 기본값(템플릿 대비 delta로 클론 주입)
+    monster: {},   // { type: { maxHp?, atk?, speed? } } — 일반 몹 절대 기본값(템플릿 대비 factor로 클론 주입)
+    mult: { heroAll: { hp: 1, atk: 1 }, monNormal: { hp: 1, atk: 1 }, monElite: { hp: 1, atk: 1 }, monBoss: { hp: 1, atk: 1 } },
+  };
+}
+// 영웅/몹 기본값(템플릿에서 직접 읽음 — 표시 + delta/factor 기준). 원본은 읽기만.
+const heroBase = (jobId) => { const t = UNIT_TEMPLATES.party[jobId] || {}; return { maxHp: t.maxHp, atk: t.atk, speed: t.speed }; };
+const monsterBase = (type) => { const t = UNIT_TEMPLATES.enemies[type] || {}; return { maxHp: t.maxHp, atk: t.atk, speed: t.speed }; };
+
+const m1 = (v) => (v == null || v === 1 ? false : true); // 배수가 의미있게 설정됐는가
+function hasActiveOverrides(ov) {
+  if (!ov) return false;
+  for (const j in ov.hero) for (const f of HERO_FIELDS) { const v = ov.hero[j][f]; if (v != null && v !== heroBase(j)[f]) return true; }
+  for (const t in ov.monster) for (const f of MONSTER_FIELDS) { const v = ov.monster[t][f]; if (v != null && v !== monsterBase(t)[f]) return true; }
+  for (const k of MULT_KEYS) { const m = ov.mult[k] || {}; if (m1(m.hp) || m1(m.atk)) return true; }
+  return false;
+}
+// 사람이 읽는 override 요약(인디케이터/리포트용).
+function describeOverrides(ov) {
+  if (!ov) return [];
+  const out = [];
+  for (const j of Object.keys(ov.hero)) { const b = heroBase(j); HERO_FIELDS.forEach((f) => { const v = ov.hero[j][f]; if (v != null && v !== b[f]) out.push(`${jobName(j)} ${FIELD_LABEL[f]} ${b[f]}→${v}`); }); }
+  for (const t of Object.keys(ov.monster)) { const b = monsterBase(t); const nm = (UNIT_TEMPLATES.enemies[t] && UNIT_TEMPLATES.enemies[t].name) || t; MONSTER_FIELDS.forEach((f) => { const v = ov.monster[t][f]; if (v != null && v !== b[f]) out.push(`${nm} ${FIELD_LABEL[f]} ${b[f]}→${v}`); }); }
+  for (const k of MULT_KEYS) { const m = ov.mult[k] || {}; if (m1(m.hp)) out.push(`${MULT_LABEL[k]} HP ×${m.hp}`); if (m1(m.atk)) out.push(`${MULT_LABEL[k]} ATK ×${m.atk}`); }
+  return out;
+}
+
+// ★override 적용 — 전투 진입 시점(playExpedition screen==="battle")에 호출. gameState의 per-battle 클론만 건드림.
+//   영웅: 절대 기본값 = 템플릿 대비 delta(가산 모델 — 인스턴스 maxHp = 템플릿+성장). HP비율 보존. 그 뒤 배수.
+//   몹: 절대 기본값 = 템플릿 대비 factor(곱셈 모델 — 인스턴스 = 템플릿×심도스케일). 그 뒤 tier 배수. 적은 항상 풀피로 스폰.
+export function applyCombatOverrides(ov) {
+  if (!ov) return;
+  const hm = (ov.mult && ov.mult.heroAll) || null;
+  (gameState.party || []).forEach((u) => {
+    const tpl = u.jobId && UNIT_TEMPLATES.party[u.jobId];
+    if (!tpl) return;
+    const ratio = u.maxHp > 0 ? u.hp / u.maxHp : 1; // 이월된 HP 비율 보존
+    const oh = (ov.hero && ov.hero[u.jobId]) || null;
+    if (oh) {
+      if (oh.maxHp != null) u.maxHp = Math.max(1, u.maxHp + (oh.maxHp - tpl.maxHp));
+      if (oh.atk != null) u.atk = Math.max(1, u.atk + (oh.atk - tpl.atk));
+      if (oh.speed != null) u.speed = Math.max(1, u.speed + (oh.speed - tpl.speed));
+    }
+    if (hm) {
+      if (m1(hm.hp)) u.maxHp = Math.max(1, Math.round(u.maxHp * hm.hp));
+      if (m1(hm.atk)) u.atk = Math.max(1, Math.round(u.atk * hm.atk));
+    }
+    u.hp = Math.max(1, Math.min(u.maxHp, Math.round(u.maxHp * ratio)));
+  });
+  (gameState.enemies || []).forEach((e) => {
+    const tierKey = e.tier === "boss" ? "monBoss" : e.tier === "elite" ? "monElite" : "monNormal";
+    if (tierKey === "monNormal") { // 일반 몹만 절대 기본값 편집(템플릿 대비 factor)
+      const tpl = e.type && UNIT_TEMPLATES.enemies[e.type];
+      const om = (ov.monster && ov.monster[e.type]) || null;
+      if (tpl && om) {
+        if (om.maxHp != null && tpl.maxHp) e.maxHp = Math.max(1, Math.round(e.maxHp * (om.maxHp / tpl.maxHp)));
+        if (om.atk != null && tpl.atk) e.atk = Math.max(1, Math.round(e.atk * (om.atk / tpl.atk)));
+        if (om.speed != null && tpl.speed) e.speed = Math.max(1, Math.round(e.speed * (om.speed / tpl.speed)));
+      }
+    }
+    const tm = (ov.mult && ov.mult[tierKey]) || null;
+    if (tm) {
+      if (m1(tm.hp)) e.maxHp = Math.max(1, Math.round(e.maxHp * tm.hp));
+      if (m1(tm.atk)) { e.atk = Math.max(1, Math.round(e.atk * tm.atk)); if (e.menaceBaseAtk) e.menaceBaseAtk = Math.max(1, Math.round(e.menaceBaseAtk * tm.atk)); }
+    }
+    e.hp = e.maxHp; // 적은 스폰 시 항상 풀피
+  });
+}
+
+function playExpedition(profile, runIndex, seed, overrides) {
   const loot = { dangerRoute: 0, elite: 0, bossKey: 0, deepReward: 0, discovery: 0, postBossReadyGreed: 0 };
   const rec = {
     runIndex, seed, profile: profile.id, result: null,
@@ -208,6 +304,7 @@ function playExpedition(profile, runIndex, seed) {
       if (wasBossReady && route !== "boss") battleJobs.forEach((j) => rec.postBossReadyJobs.add(j));
       const keysBefore = gameState.run.bossKeys || 0;
       rec.battleCount += 1; rec.path.push(ROUTE_TOKEN[route] || "B");
+      applyCombatOverrides(overrides); // Nara Sandbox — per-battle 클론에만 적용(템플릿 무변경). null이면 no-op.
       const ok = runHeadlessBattle();
       if (!ok) { rec.result = "incomplete"; rec.path.push("TIMEOUT"); break; }
       const res = gameState.run.result === "defeat" ? "wipe" : (gameState.run.result === "clear" ? "clear" : "win");
@@ -297,7 +394,7 @@ function jobNameSafeDeep(id) { const d = deepRewardById(id); return d ? d.name :
    배치 실행 — 4 프로필을 같은 seed(공유 RNG)로 주회(공정 A/B). 헤드리스 + 상태 복구.
    ════════════════════════════════════════════════════════════════ */
 const yieldUI = () => new Promise((r) => setTimeout(r, 0));
-export async function runExpeditionAll({ seed, runs, onProgress }) {
+export async function runExpeditionAll({ seed, runs, onProgress, overrides = null }) {
   const useSeed = seed != null && !Number.isNaN(seed);
   const snap = snapshotState();
   const profiles = {};
@@ -308,7 +405,7 @@ export async function runExpeditionAll({ seed, runs, onProgress }) {
       if (useSeed) installSeed(seed); // 같은 seed에서 출발(프로필 간 공정 비교)
       const out = [];
       for (let i = 0; i < runs; i++) {
-        out.push(playExpedition(EXPEDITIONS[id], i, useSeed ? seed : 0));
+        out.push(playExpedition(EXPEDITIONS[id], i, useSeed ? seed : 0, overrides));
         if (i % 40 === 39) { if (onProgress) onProgress(id, i + 1); await yieldUI(); }
       }
       if (useSeed) restoreRandom();
@@ -827,8 +924,11 @@ function exportJSON() {
   if (!lastReport) return "";
   const rep = lastReport;
   return JSON.stringify({
-    metadata: { tool: "expedition-observatory", phase: "1.5", theme: "beginner", seed: rep.meta.seed, runsPerProfile: rep.meta.runs, profiles: EXPEDITION_ORDER, sampleMin: rep.sampleMin, generatedAt: new Date().toISOString(),
-      note: "lootProxy = dev-only 임시 지표(실제 전리품/유물 시스템 아님). 본게임 수치/저장 무영향. Seat은 lens별(seen/final/boss/clear/death/postBoss)로 분리." },
+    metadata: { tool: "expedition-observatory", phase: "2B", theme: "beginner", seed: rep.meta.seed, runsPerProfile: rep.meta.runs, profiles: EXPEDITION_ORDER, sampleMin: rep.sampleMin, generatedAt: new Date().toISOString(),
+      // Phase 2B — Nara Sandbox: 이 리포트가 어떤 stat override로 돌았는지(없으면 null = baseline).
+      statOverrides: (rep.meta.overrides && hasActiveOverrides(rep.meta.overrides)) ? rep.meta.overrides : null,
+      statOverrideSummary: rep.meta.overrides ? describeOverrides(rep.meta.overrides) : [],
+      note: "lootProxy = dev-only 임시 지표(실제 전리품/유물 시스템 아님). 본게임 수치/저장 무영향. Seat은 lens별(seen/final/boss/clear/death/postBoss)로 분리. statOverrides는 dev A/B 실험값 — 본게임 기본 스탯 무변경." },
     summaries: rep.summaries,
     jobSeatValue: rep.seat.map((s) => ({ job: s.job, name: s.name, tier: s.tier, role: s.role, presentCount: s.presentCount, finalHeld: s.finalHeld, bossHeld: s.bossHeld, clearHeld: s.clearHeld, deathHeld: s.deathHeld, presentWin: s.presentWin, absentWin: s.absentWin, seatWin: s.seatWin, seatDepth: s.seatDepth, seatLoot: s.seatLoot })),
     seatComparisons: rep.seatComparisons,
@@ -877,29 +977,305 @@ function exportSummaryText() {
 }
 async function copyOut(text, btn, label) { const done = (ok) => { if (btn) { btn.textContent = ok ? "복사됨!" : "복사 실패"; setTimeout(() => { btn.textContent = label; }, 1200); } }; try { await navigator.clipboard.writeText(text); done(true); } catch (e) { try { const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); done(true); } catch (e2) { done(false); } } }
 
-/* ── 실행 ── */
+/* ════════════════════════════════════════════════════════════════
+   Nara Sandbox — UI (stat override editors / presets / import-export / target guide).
+   ════════════════════════════════════════════════════════════════ */
+let sandbox = emptyOverrides();
+let baselineReport = null, variantReport = null; // Baseline↔Variant 비교 슬롯(meta에 seed/runs/overrides 태그)
+const cloneOv = (ov) => JSON.parse(JSON.stringify(ov));
+const HERO_GROUPS = [
+  { tier: "기본", jobs: BASE_JOBS },
+  { tier: "1차", jobs: ADVANCED_JOBS },
+  { tier: "2차", jobs: SECOND_CLASS_JOBS },
+];
+// WATCH 직업(나라 요청 — 반드시 포함). id 매핑.
+const WATCH_JOBS = new Set(["archer", "watchbow", "rogue", "trapper", "cleric", "saint", "mage", "sage", "bard", "dancer", "swordsaint"]);
+
+// sandbox.hero/monster에 값 set/clear(기본값과 같거나 빈값이면 키 제거 — export 청결).
+function setHeroOv(jobId, field, raw) {
+  const base = heroBase(jobId)[field];
+  const v = (raw === "" || raw == null) ? null : Math.round(Number(raw));
+  if (!sandbox.hero[jobId]) sandbox.hero[jobId] = {};
+  if (v == null || Number.isNaN(v) || v === base) delete sandbox.hero[jobId][field];
+  else sandbox.hero[jobId][field] = Math.max(1, v);
+  if (!Object.keys(sandbox.hero[jobId]).length) delete sandbox.hero[jobId];
+}
+function setMonsterOv(type, field, raw) {
+  const base = monsterBase(type)[field];
+  const v = (raw === "" || raw == null) ? null : Math.round(Number(raw));
+  if (!sandbox.monster[type]) sandbox.monster[type] = {};
+  if (v == null || Number.isNaN(v) || v === base) delete sandbox.monster[type][field];
+  else sandbox.monster[type][field] = Math.max(1, v);
+  if (!Object.keys(sandbox.monster[type]).length) delete sandbox.monster[type];
+}
+function setMultOv(key, stat, pctRaw) {
+  const pct = Number(pctRaw);
+  const m = sandbox.mult[key] || (sandbox.mult[key] = { hp: 1, atk: 1 });
+  m[stat] = (Number.isNaN(pct) || pct <= 0) ? 1 : Math.max(0.01, Math.min(10, Math.round(pct) / 100));
+}
+
+const PRESETS = {
+  resetAll: { label: "Reset All", apply: () => { sandbox = emptyOverrides(); } },
+  heroHp5:  { label: "Hero HP +5%",   apply: () => setMultOv("heroAll", "hp", 105) },
+  heroHp10: { label: "Hero HP +10%",  apply: () => setMultOv("heroAll", "hp", 110) },
+  monAtk5:  { label: "Monster ATK -5%",  apply: () => { setMultOv("monNormal", "atk", 95); setMultOv("monElite", "atk", 95); setMultOv("monBoss", "atk", 95); } },
+  monAtk10: { label: "Monster ATK -10%", apply: () => { setMultOv("monNormal", "atk", 90); setMultOv("monElite", "atk", 90); setMultOv("monBoss", "atk", 90); } },
+  bossHp10: { label: "Boss HP -10%",  apply: () => setMultOv("monBoss", "hp", 90) },
+  rogueAtk2:{ label: "Rogue ATK +2",  apply: () => setHeroOv("rogue", "atk", heroBase("rogue").atk + 2) },
+  sageHp10: { label: "Sage HP +10",   apply: () => setHeroOv("sage", "maxHp", heroBase("sage").maxHp + 10) },
+};
+const PRESET_ORDER = ["resetAll", "heroHp5", "heroHp10", "monAtk5", "monAtk10", "bossHp10", "rogueAtk2", "sageHp10"];
+
+// 영웅 편집 표(전 직업 — 그룹/티어, WATCH 강조).
+function heroEditorHTML() {
+  const rows = HERO_GROUPS.map((g) => {
+    const head = `<tr class="eo-grouprow"><td class="txt" colspan="4">${g.tier} 직업</td></tr>`;
+    const body = g.jobs.map((j) => {
+      const b = heroBase(j), ov = sandbox.hero[j] || {};
+      const cell = (f) => `<td><input class="eo-sbnum" type="number" data-sb="hero" data-job="${j}" data-field="${f}" placeholder="${b[f]}" value="${ov[f] != null ? ov[f] : ""}" /></td>`;
+      return `<tr class="${WATCH_JOBS.has(j) ? "eo-hl" : ""}"><td class="txt">${esc(jobName(j))}${WATCH_JOBS.has(j) ? ' <span class="eo-tag">WATCH</span>' : ""}</td>${HERO_FIELDS.map(cell).join("")}</tr>`;
+    }).join("");
+    return head + body;
+  }).join("");
+  return `<div class="eo-tablewrap"><table><thead><tr><th class="txt">직업</th>${HERO_FIELDS.map((f) => `<th>${FIELD_LABEL[f]}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+// 몹 편집(일반 절대편집) + 정예/보스 참조(배수 안내).
+function monsterEditorHTML() {
+  const normal = NORMAL_MONSTERS.map((t) => {
+    const b = monsterBase(t), ov = sandbox.monster[t] || {};
+    const nm = UNIT_TEMPLATES.enemies[t]?.name || t;
+    const cell = (f) => `<td><input class="eo-sbnum" type="number" data-sb="monster" data-type="${t}" data-field="${f}" placeholder="${b[f]}" value="${ov[f] != null ? ov[f] : ""}" /></td>`;
+    return `<tr><td class="txt">${esc(nm)} <span class="eo-meta">${t}</span></td>${MONSTER_FIELDS.map(cell).join("")}</tr>`;
+  }).join("");
+  return `<div class="eo-tablewrap"><table><thead><tr><th class="txt">일반 몹(절대 편집)</th>${MONSTER_FIELDS.map((f) => `<th>${FIELD_LABEL[f]}</th>`).join("")}</tr></thead><tbody>${normal}</tbody></table></div>
+    <div class="eo-note">정예(${ELITE_TYPES.map((t) => UNIT_TEMPLATES.enemies[t]?.name || t).join("·")})·보스(${UNIT_TEMPLATES.enemies[BOSS_TYPE]?.name || BOSS_TYPE})의 실효 스탯은 <b>코어 상수</b>(정예 RANK_OVERRIDES ${ELITE_REF.maxHp}HP/${ELITE_REF.atk}ATK · 보스 BOSS_FLOOR ${BOSS_FLOOR.hp}HP/${BOSS_FLOOR.atk}ATK · 심도/분노/준비압력 스케일)가 결정합니다 — 템플릿 편집이 닿지 않아 <b>아래 배수(%)</b>로만 조정합니다(정직한 한계).</div>`;
+}
+function multEditorHTML() {
+  const row = (k) => { const m = sandbox.mult[k] || { hp: 1, atk: 1 }; const pct = (x) => Math.round((x == null ? 1 : x) * 100);
+    return `<tr><td class="txt">${MULT_LABEL[k]}</td><td><input class="eo-sbnum" type="number" data-sb="mult" data-key="${k}" data-stat="hp" value="${pct(m.hp)}" />%</td><td><input class="eo-sbnum" type="number" data-sb="mult" data-key="${k}" data-stat="atk" value="${pct(m.atk)}" />%</td></tr>`; };
+  return `<div class="eo-tablewrap"><table><thead><tr><th class="txt">배수(100=기본)</th><th>HP %</th><th>ATK %</th></tr></thead><tbody>${MULT_KEYS.map(row).join("")}</tbody></table></div>`;
+}
+function indicatorHTML() {
+  const active = hasActiveOverrides(sandbox);
+  const list = describeOverrides(sandbox);
+  return `<div class="eo-sb-ind ${active ? "on" : ""}">${active
+    ? `● Override 적용 중 (${list.length}항목) <span class="eo-meta">${esc(list.slice(0, 8).join(" · "))}${list.length > 8 ? " …" : ""}</span>`
+    : "○ Override 없음 — Variant = Baseline과 동일"}</div>`;
+}
+const GUIDE_RANGES = { bossRush: [0.15, 0.22], oneLoot: [0.20, 0.28], collector: [0.10, 0.16], greed: [0.00, 0.03] };
+function guideHTML() {
+  return `<div class="eo-note"><b>Beginner Target Guide</b> (dev 판단 보조 — 본게임 룰 아님): 빠른 귀환선
+    최단귀환 15~22% · 1전리품 귀환 20~28%(하나 먹고 나가기 선명) · 회수귀환 10~16%(욕심·위험) · 욕심전멸 0~3%. Variant 결과가 범위 밖이면 ↑/↓ 표시.</div>`;
+}
+function renderSandbox() {
+  const el = $("eo-sandbox"); if (!el) return;
+  el.innerHTML = `<h3>S. Nara Sandbox <span class="eo-meta">· dev 전용 stat override A/B — 본게임 기본 스탯·코어 무변경(전투 클론에만 적용)</span></h3>
+    <div class="eo-note">현재 코드의 영웅/몹 기본 스탯을 읽어 표시합니다. 숫자를 바꾸면 <b>dev 주회의 전투 클론에만</b> 적용되고(원본 템플릿은 읽기만), 같은 seed로 Baseline↔Variant를 비교합니다. 빈칸=기본값. 본게임/저장/발자취 무영향.</div>
+    ${indicatorHTML()}
+    <div class="eo-sb-presets">${PRESET_ORDER.map((k) => `<button type="button" class="eo-btn ghost eo-sb-mini" data-preset="${k}">${PRESETS[k].label}</button>`).join("")}</div>
+    <div class="eo-line"><b>영웅 기본 스탯 편집</b> <span class="eo-meta">절대값(템플릿 대비 delta로 클론 주입) · HP비율 보존 · WATCH 강조</span></div>
+    ${heroEditorHTML()}
+    <div class="eo-line"><b>몹 스탯 편집</b> <span class="eo-meta">일반=절대 편집 / 정예·보스=배수</span></div>
+    ${monsterEditorHTML()}
+    <div class="eo-line"><b>배수(%) — 영웅전체 / 일반 / 정예 / 보스</b> <span class="eo-meta">정예·보스 조정 유일 경로(코어 상수 기준 위에 곱)</span></div>
+    ${multEditorHTML()}
+    <div class="eo-sb-run">
+      <span><label>runs/프로필</label><input id="eo-sb-runs" type="number" value="100" /></span>
+      <button type="button" id="eo-sb-baseline" class="eo-btn">Run Baseline ▶</button>
+      <button type="button" id="eo-sb-variant" class="eo-btn">Run Variant ▶</button>
+      <button type="button" id="eo-sb-compare" class="eo-btn">Compare B↔V ▶</button>
+      <button type="button" id="eo-sb-ovexport" class="eo-btn ghost">Override JSON 복사</button>
+      <button type="button" id="eo-sb-ovimport-btn" class="eo-btn ghost">Override JSON 적용</button>
+    </div>
+    <textarea id="eo-sb-ovimport" class="eo-sb-ta" placeholder="여기에 Override JSON을 붙여넣고 'Override JSON 적용'을 누르세요"></textarea>
+    ${guideHTML()}
+    <div class="eo-note">A/B 주의: 같은 seed 비교는 동일 난수표 기반 A/B 실험입니다. 단, 전투 결과 변화 이후에는 런 분기(영입/합체/route)가 달라질 수 있어 완전한 1:1 리플레이는 아닙니다.</div>`;
+}
+function refreshIndicator() { const host = $("eo-sandbox"); if (!host) return; const ind = host.querySelector(".eo-sb-ind"); if (ind) ind.outerHTML = indicatorHTML(); }
+
+/* ── Baseline vs Variant 비교 렌더 ── */
+const CMP_METRICS = [
+  { label: "승률(귀환)", get: (s) => s.winRate, pct: true, guide: true },
+  { label: "전멸률", get: (s) => s.wipeRate, pct: true },
+  { label: "평균 도달 심도", get: (s) => s.avgFinalDepth },
+  { label: "평균 lootProxy", get: (s) => s.avgLootProxy },
+  { label: "보스문 개방률", get: (s) => s.bossReadyRate, pct: true },
+  { label: "평균 보스문 심도", get: (s) => s.avgBossReadyDepth },
+];
+function guideFlag(profileId, winRate) {
+  const r = GUIDE_RANGES[profileId]; if (!r || winRate == null) return "";
+  if (winRate < r[0]) return ` <span class="eo-tag lo">↓ 목표 ${Math.round(r[0]*100)}~${Math.round(r[1]*100)}%</span>`;
+  if (winRate > r[1]) return ` <span class="eo-tag lo">↑ 목표 ${Math.round(r[0]*100)}~${Math.round(r[1]*100)}%</span>`;
+  return ` <span class="eo-tag hi">✓ 목표 ${Math.round(r[0]*100)}~${Math.round(r[1]*100)}%</span>`;
+}
+function renderCompare() {
+  const el = $("eo-compare"); if (!el) return;
+  if (!baselineReport || !variantReport) { el.innerHTML = ""; return; }
+  const sameCond = baselineReport.meta.seed === variantReport.meta.seed && baselineReport.meta.runs === variantReport.meta.runs;
+  const condNote = sameCond ? `seed ${variantReport.meta.seed} · 프로필당 ${variantReport.meta.runs}런 · 동일 조건 A/B`
+    : `<span class="eo-tag lo">조건 불일치</span> Baseline(seed ${baselineReport.meta.seed}/${baselineReport.meta.runs}런) ↔ Variant(seed ${variantReport.meta.seed}/${variantReport.meta.runs}런) — 다시 같은 조건으로 실행 권장`;
+  const ovList = describeOverrides(variantReport.meta.overrides || emptyOverrides());
+  const profBlock = (id) => {
+    const bs = baselineReport.summaries[id], vs = variantReport.summaries[id], c = EXPEDITIONS[id];
+    const rows = CMP_METRICS.map((m) => {
+      const bv = m.get(bs), vv = m.get(vs);
+      const d = (bv != null && vv != null) ? vv - bv : null;
+      const dCell = m.pct ? deltaPct(d) : delta(d);
+      const flag = (m.guide ? guideFlag(id, vv) : "");
+      const fmt = m.pct ? fmtPct : fmt1;
+      return `<tr><td class="txt">${m.label}</td><td>${fmt(bv)}</td><td class="${m.guide && (vv||0) > 0 ? "clear" : ""}">${fmt(vv)}${flag}</td><td>${dCell}</td></tr>`;
+    }).join("");
+    return `<div class="eo-line"><b>${esc(c.label)}</b> <span class="eo-meta">${esc(c.sub)}</span></div>
+      <div class="eo-tablewrap"><table><thead><tr><th class="txt">지표</th><th>Baseline</th><th>Variant</th><th>Δ</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  };
+  // WATCH 직업 Final lens seat 변화(present clearRate base↔var).
+  const bFinal = baselineReport.lensSeat.final, vFinal = variantReport.lensSeat.final;
+  const seatRows = [...WATCH_JOBS].map((j) => {
+    const b = bFinal.find((s) => s.job === j), v = vFinal.find((s) => s.job === j); if (!b || !v) return "";
+    const d = (b.clearRatePresent != null && v.clearRatePresent != null) ? v.clearRatePresent - b.clearRatePresent : null;
+    return `<tr><td class="txt">${esc(jobName(j))}</td><td>${b.presentCount}→${v.presentCount}</td><td>${fmtPct(b.clearRatePresent)}</td><td class="${(v.clearRatePresent||0)>0?"clear":""}">${fmtPct(v.clearRatePresent)}</td><td>${deltaPct(d)}</td></tr>`;
+  }).join("");
+  el.innerHTML = `<h3>F. Baseline ↔ Variant <span class="eo-meta">· ${condNote}</span></h3>
+    <div class="eo-note"><b>Variant override:</b> ${ovList.length ? esc(ovList.join(" · ")) : "없음(=Baseline)"} </div>
+    ${EXPEDITION_ORDER.map(profBlock).join("")}
+    <div class="eo-line"><b>WATCH 직업 자리값 변화 (Final lens · present clearRate)</b></div>
+    <div class="eo-tablewrap"><table><thead><tr><th class="txt">직업</th><th>present B→V</th><th>Base P승률</th><th>Var P승률</th><th>Δ</th></tr></thead><tbody>${seatRows || `<tr><td colspan="5" class="eo-meta">표본 없음</td></tr>`}</tbody></table></div>`;
+}
+
+/* ── Override / Sandbox export ── */
+function exportOverrideJSON() {
+  return JSON.stringify({ tool: "expedition-observatory", kind: "stat-overrides", generatedAt: new Date().toISOString(), summary: describeOverrides(sandbox), overrides: sandbox }, null, 2);
+}
+// import: 알려진 job/type/field만 허용(안전 sanitize).
+function importOverrideJSON(text) {
+  let parsed;
+  try { parsed = JSON.parse(text); } catch (e) { return { ok: false, msg: "JSON 파싱 실패" }; }
+  const src = parsed && parsed.overrides ? parsed.overrides : parsed;
+  if (!src || typeof src !== "object") return { ok: false, msg: "overrides 객체 없음" };
+  const next = emptyOverrides();
+  const allJobs = new Set(ALL_JOBS);
+  if (src.hero && typeof src.hero === "object") for (const j in src.hero) { if (!allJobs.has(j)) continue; const oh = src.hero[j]; if (!oh || typeof oh !== "object") continue; HERO_FIELDS.forEach((f) => { const v = oh[f]; if (v != null && !Number.isNaN(Number(v))) { next.hero[j] = next.hero[j] || {}; next.hero[j][f] = Math.max(1, Math.round(Number(v))); } }); if (next.hero[j] && !Object.keys(next.hero[j]).length) delete next.hero[j]; }
+  if (src.monster && typeof src.monster === "object") for (const t in src.monster) { if (!NORMAL_MONSTERS.includes(t)) continue; const om = src.monster[t]; if (!om || typeof om !== "object") continue; MONSTER_FIELDS.forEach((f) => { const v = om[f]; if (v != null && !Number.isNaN(Number(v))) { next.monster[t] = next.monster[t] || {}; next.monster[t][f] = Math.max(1, Math.round(Number(v))); } }); if (next.monster[t] && !Object.keys(next.monster[t]).length) delete next.monster[t]; }
+  if (src.mult && typeof src.mult === "object") for (const k of MULT_KEYS) { const m = src.mult[k]; if (!m) continue; ["hp", "atk"].forEach((s) => { const v = Number(m[s]); if (!Number.isNaN(v) && v > 0) next.mult[k][s] = Math.max(0.01, Math.min(10, v)); }); }
+  sandbox = next;
+  return { ok: true, msg: `적용됨 (${describeOverrides(sandbox).length}항목)` };
+}
+
+/* ── 실행(Baseline / Variant) ── */
 let running = false;
-async function runObservatory(runs) {
-  if (running) return; running = true;
-  const seedRaw = parseInt($("eo-seed").value, 10);
-  const seed = Number.isNaN(seedRaw) ? 405 : seedRaw;
+function setRunningUI(on) {
+  ["eo-run100", "eo-run300", "eo-sb-baseline", "eo-sb-variant", "eo-sb-compare", "eo-sf-run"].forEach((id) => { const b = $(id); if (b) b.disabled = on; });
+}
+function readSeed() { const r = parseInt($("eo-seed").value, 10); return Number.isNaN(r) ? 405 : r; }
+function readSbRuns() { const r = parseInt(($("eo-sb-runs") || {}).value, 10); return (Number.isNaN(r) || r < 1) ? 100 : Math.min(500, r); }
+
+async function execRun(runs, overrides) {
+  const seed = readSeed();
   const status = $("eo-status");
-  status.textContent = `실행 중… (seed ${seed} · 프로필당 ${runs}런)`;
-  $("eo-run100").disabled = $("eo-run300").disabled = true;
+  const label = overrides && hasActiveOverrides(overrides) ? "Variant" : "Baseline";
+  status.textContent = `${label} 실행 중… (seed ${seed} · 프로필당 ${runs}런)`;
+  const profiles = await runExpeditionAll({ seed, runs, overrides, onProgress: (id, done, complete) => { status.textContent = complete ? `${label} · ${EXPEDITIONS[id].label} 완료…` : `${label} · ${EXPEDITIONS[id].label} ${done}런…`; } });
+  return buildReport(profiles, { seed, runs, overrides: overrides ? cloneOv(overrides) : null });
+}
+
+// 상단 100/300 = baseline. mode: "baseline" | "variant".
+async function runObservatory(runs, mode = "baseline") {
+  if (running) return; running = true; setRunningUI(true);
+  const status = $("eo-status");
   try {
-    const profiles = await runExpeditionAll({ seed, runs, onProgress: (id, done, complete) => { status.textContent = complete ? `${EXPEDITIONS[id].label} 완료…` : `${EXPEDITIONS[id].label} ${done}런…`; } });
-    lastReport = buildReport(profiles, { seed, runs });
+    const overrides = mode === "variant" ? cloneOv(sandbox) : null;
+    const rep = await execRun(runs, overrides);
+    lastReport = rep;
+    if (mode === "variant") variantReport = rep; else baselineReport = rep;
     renderAll(lastReport);
-    status.textContent = `완료 — seed ${seed} · 프로필당 ${runs}런 · 결합 ${lastReport.combined.length}런`;
+    renderCompare();
+    status.textContent = `${mode === "variant" ? "Variant" : "Baseline"} 완료 — seed ${rep.meta.seed} · 프로필당 ${runs}런 · 결합 ${rep.combined.length}런`;
   } catch (e) {
-    status.textContent = "에러: " + (e && e.message);
-    console.error(e);
-  } finally { $("eo-run100").disabled = $("eo-run300").disabled = false; running = false; }
+    status.textContent = "에러: " + (e && e.message); console.error(e);
+  } finally { setRunningUI(false); running = false; }
+}
+async function runCompareSeq() {
+  if (running) return; running = true; setRunningUI(true);
+  const status = $("eo-status");
+  const runs = readSbRuns();
+  try {
+    status.textContent = "Compare — Baseline 먼저…";
+    baselineReport = await execRun(runs, null);
+    status.textContent = "Compare — Variant 다음…";
+    variantReport = await execRun(runs, cloneOv(sandbox));
+    lastReport = variantReport;
+    renderAll(lastReport);
+    renderCompare();
+    status.textContent = `Compare 완료 — seed ${variantReport.meta.seed} · 프로필당 ${runs}런 (Baseline↔Variant)`;
+    $("eo-compare").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (e) {
+    status.textContent = "에러: " + (e && e.message); console.error(e);
+  } finally { setRunningUI(false); running = false; }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Seed Finder Lite — 특정 직업이 lens(seen/final/boss/clear)에 등장하는 seed 후보를 찾는다.
+   ★자연 주회 성능 ≠ 표적 실험. "이 직업이 나온 seed 후보 목록"일 뿐(규칙 만들기 아님).
+   batch + progress + cancel — 브라우저 프리즈 방지. 헤드리스 + 상태 복구(본게임 무영향).
+   ════════════════════════════════════════════════════════════════ */
+function jobInLens(rec, job, lens) {
+  if (lens === "seen") return rec.jobsSeen && rec.jobsSeen.has ? rec.jobsSeen.has(job) : (rec.jobsSeenList || []).includes(job);
+  if (lens === "final") return (rec.finalParty || []).includes(job);
+  if (lens === "boss") return rec.bossAttempted && (rec.bossParty || []).includes(job);
+  if (lens === "clear") return rec.cleared && (rec.finalParty || []).includes(job);
+  return false;
+}
+let sfRunning = false, sfCancel = false;
+async function runSeedFinder() {
+  if (sfRunning || running) return;
+  const start = Math.max(1, parseInt($("eo-sf-start").value, 10) || 1);
+  const end = Math.max(start, parseInt($("eo-sf-end").value, 10) || 200);
+  const job = $("eo-sf-job").value;
+  const lens = $("eo-sf-lens").value;
+  const profSel = $("eo-sf-profile").value; // 프로필 id 또는 "all"
+  const runsPer = Math.max(1, Math.min(30, parseInt($("eo-sf-runs").value, 10) || 6));
+  const want = Math.max(1, Math.min(20, parseInt($("eo-sf-count").value, 10) || 3));
+  const profIds = profSel === "all" ? EXPEDITION_ORDER : [profSel];
+  const out = $("eo-sf-out"), prog = $("eo-sf-prog");
+  const found = [];
+  sfRunning = true; sfCancel = false;
+  $("eo-sf-run").disabled = true; $("eo-sf-cancel").disabled = false; setRunningUI(true);
+  const snap = snapshotState();
+  try {
+    setHeadlessRun(true);
+    if (gameState.dev) gameState.dev.immortal = false;
+    for (let seed = start; seed <= end; seed++) {
+      if (sfCancel) { prog.textContent = `취소됨 — ${seed - start}/${end - start + 1} seed 스캔, ${found.length}개 발견`; break; }
+      let matchRuns = 0;
+      for (const pid of profIds) {
+        installSeed(seed);
+        for (let i = 0; i < runsPer; i++) { const rec = playExpedition(EXPEDITIONS[pid], i, seed); if (jobInLens(rec, job, lens)) matchRuns++; }
+        restoreRandom();
+      }
+      if (matchRuns > 0) { found.push({ seed, matchRuns }); }
+      // 진행률 렌더는 5seed/발견 시에만(가벼움), yield는 매 seed(프리즈 방지 + 취소 보장).
+      if (seed % 5 === 0 || matchRuns > 0 || seed === end) { prog.textContent = `스캔 ${seed - start + 1}/${end - start + 1} · 발견 ${found.length}/${want}`; renderSeedFinderOut(out, job, lens, profSel, runsPer, found); }
+      if (found.length >= want) { prog.textContent = `완료 — ${found.length}개 발견 (seed ${start}~${seed} 스캔)`; break; }
+      if (seed === end) prog.textContent = `완료 — seed ${start}~${end} 스캔, ${found.length}개 발견`;
+      await yieldUI(); // 매 seed yield — 브라우저 프리즈 방지 + 취소 반응성
+    }
+    renderSeedFinderOut(out, job, lens, profSel, runsPer, found);
+  } catch (e) { prog.textContent = "에러: " + (e && e.message); console.error(e); }
+  finally { setHeadlessRun(false); restoreRandom(); restoreState(snap); sfRunning = false; $("eo-sf-run").disabled = false; $("eo-sf-cancel").disabled = true; setRunningUI(false); }
+}
+function renderSeedFinderOut(out, job, lens, profSel, runsPer, found) {
+  if (!out) return;
+  const lensName = { seen: "Seen", final: "Final", boss: "Boss", clear: "Clear" }[lens] || lens;
+  const profName = profSel === "all" ? "전체 4프로필" : EXPEDITIONS[profSel].label;
+  out.innerHTML = found.length
+    ? `<div class="eo-line"><b>${esc(jobName(job))} · ${lensName} · ${esc(profName)}</b> <span class="eo-meta">seed당 ${runsPer}런 · ${found.length}개</span></div>`
+      + `<div class="eo-sf-chips">${found.map((f) => `<span class="eo-tag hi">seed ${f.seed} <span class="eo-meta">(${f.matchRuns}런)</span></span>`).join(" ")}</div>`
+    : `<div class="eo-meta">아직 발견 없음 — range를 넓히거나 runs/seed를 늘려보세요.</div>`;
 }
 
 export function initExpeditionObservatory() {
-  $("eo-run100").addEventListener("click", () => runObservatory(100));
-  $("eo-run300").addEventListener("click", () => runObservatory(300));
+  $("eo-run100").addEventListener("click", () => runObservatory(100, "baseline"));
+  $("eo-run300").addEventListener("click", () => runObservatory(300, "baseline"));
   $("eo-export-json").addEventListener("click", (e) => copyOut(exportJSON(), e.target, "JSON 복사"));
   $("eo-export-tsv").addEventListener("click", (e) => copyOut(exportTSV(), e.target, "Run TSV 복사"));
   const seatBtn = $("eo-export-seat-tsv");
@@ -912,4 +1288,44 @@ export function initExpeditionObservatory() {
     currentLens = b.dataset.lens;
     renderSeat(lastReport);
   });
+
+  // ── Nara Sandbox ──
+  renderSandbox();
+  const sb = $("eo-sandbox");
+  if (sb) {
+    // 입력 — 포커스 유지 위해 full re-render 없이 sandbox 갱신 + 인디케이터만 새로고침.
+    sb.addEventListener("input", (e) => {
+      const t = e.target; const kind = t.dataset && t.dataset.sb; if (!kind) return;
+      if (kind === "hero") setHeroOv(t.dataset.job, t.dataset.field, t.value);
+      else if (kind === "monster") setMonsterOv(t.dataset.type, t.dataset.field, t.value);
+      else if (kind === "mult") setMultOv(t.dataset.key, t.dataset.stat, t.value);
+      refreshIndicator();
+    });
+    // 프리셋 / 실행 / import-export 버튼.
+    sb.addEventListener("click", (e) => {
+      const pb = e.target.closest("[data-preset]");
+      if (pb) { PRESETS[pb.dataset.preset].apply(); renderSandbox(); return; }
+      const id = e.target.id;
+      if (id === "eo-sb-baseline") runObservatory(readSbRuns(), "baseline");
+      else if (id === "eo-sb-variant") runObservatory(readSbRuns(), "variant");
+      else if (id === "eo-sb-compare") runCompareSeq();
+      else if (id === "eo-sb-ovexport") copyOut(exportOverrideJSON(), e.target, "Override JSON 복사");
+      else if (id === "eo-sb-ovimport-btn") {
+        const res = importOverrideJSON(($("eo-sb-ovimport") || {}).value || "");
+        renderSandbox();
+        $("eo-status").textContent = "Override import: " + res.msg;
+      }
+    });
+  }
+  // ── Seed Finder ──
+  const jobSel = $("eo-sf-job");
+  if (jobSel) {
+    jobSel.innerHTML = HERO_GROUPS.map((g) => `<optgroup label="${g.tier}">${g.jobs.map((j) => `<option value="${j}"${j === "dancer" ? " selected" : ""}>${esc(jobName(j))}</option>`).join("")}</optgroup>`).join("");
+  }
+  const profSel = $("eo-sf-profile");
+  if (profSel) {
+    profSel.innerHTML = `<option value="all">전체 4프로필</option>` + EXPEDITION_ORDER.map((id) => `<option value="${id}">${esc(EXPEDITIONS[id].label)}</option>`).join("");
+  }
+  const sfRun = $("eo-sf-run"); if (sfRun) sfRun.addEventListener("click", runSeedFinder);
+  const sfCancelBtn = $("eo-sf-cancel"); if (sfCancelBtn) sfCancelBtn.addEventListener("click", () => { sfCancel = true; });
 }
