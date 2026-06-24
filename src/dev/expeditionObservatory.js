@@ -723,6 +723,86 @@ function sampleRuns(combined) {
 }
 
 /* ── 전체 리포트 빌드 ── */
+/* ════════════════════════════════════════════════════════════════
+   Phase 3B — One Loot Failure Breakdown (1전리품 실패 해부) — 집계.
+   One Loot 프로필 defeat 런이 "어디서 무너지는가"를 run record의 심도 마커로 추정 분해.
+   ★이벤트 스키마/payload 무확장 — bossReadyDepth / bossAttemptDepth / postBossReadyDepth /
+     deathDepth / finalPartySize / roleTags 등 기존 캡처만 사용. 마커 기반 추정이므로 estimated.
+   ════════════════════════════════════════════════════════════════ */
+const OL_EARLY_DEPTH = 4;        // 너무 이른 파티 붕괴 기준 심도(보조 tag)
+const OL_GREED_AFTER_DOOR = 4;   // 보스문 후 "욕심" 전멸로 보는 추가 심도(estimated 임계)
+const OL_WATCH_JOBS = ["trapper", "rogue", "bard", "dancer"]; // 덫꾼/도적/바드/무희(기존 WATCH 부분집합)
+const OL_BUCKET_ORDER = ["preBossReadyWipe", "postBossReadyPreBossWipe", "bossAttemptWipe", "postBossReadyGreedWipe", "unknown"];
+const OL_BUCKET_LABELS = {
+  preBossReadyWipe: "보스문 열기 전 전멸", postBossReadyPreBossWipe: "보스문 후·보스 도전 전 전멸",
+  bossAttemptWipe: "보스 도전 패배", postBossReadyGreedWipe: "보스문 후 욕심 전멸", unknown: "알 수 없음",
+};
+const OL_GAP_ORDER = ["noHealer", "noTank", "noAoE", "noShield", "noSecondClass", "partySizeLe3"];
+const OL_GAP_LABELS = { noHealer: "힐러 없음", noTank: "탱커 없음", noAoE: "광역 없음", noShield: "보호막 없음", noSecondClass: "2차직업 없음", partySizeLe3: "파티 ≤3" };
+
+// defeat 1런 → primary failure bucket(1~4 mutually exclusive). 우선순위: 보스 시도 > 보스문 후 > 보스문 전.
+function classifyOneLootWipe(r) {
+  if (r.bossAttempted) return "bossAttemptWipe";                                   // 3. 보스 도전에서 패배
+  if (r.bossReadyReached) return (r.postBossReadyDepth >= OL_GREED_AFTER_DOOR)
+    ? "postBossReadyGreedWipe"                                                     // 4. 보스문 후 욕심 구간 전멸
+    : "postBossReadyPreBossWipe";                                                  // 2. 보스문 열었으나 보스 도전 전 전멸
+  if (r.deathDepth > 0) return "preBossReadyWipe";                                 // 1. 보스문 열기 전 전멸
+  return "unknown";                                                               // 6. 데이터만으로 애매(거의 0)
+}
+
+// clear 또는 defeat 그룹의 평균/비율(파티 역할은 finalParty 기준 roleTags 사용).
+function olGroupStats(runs) {
+  const n = runs.length;
+  const reached = runs.filter((r) => r.bossReadyReached);
+  const attempted = runs.filter((r) => r.bossAttempted);
+  const wipes = runs.filter((r) => r.wiped);
+  const tagRate = (k) => rate(runs.filter((r) => r.roleTags && r.roleTags[k]).length, n);
+  const watchRate = {};
+  OL_WATCH_JOBS.forEach((j) => { watchRate[j] = rate(runs.filter((r) => (r.finalParty || []).includes(j)).length, n); });
+  return {
+    count: n,
+    avgFinalDepth: mean(runs.map((r) => r.finalDepth)),
+    avgDeathDepth: mean(wipes.map((r) => r.deathDepth)),
+    avgBossReadyDepth: mean(reached.map((r) => r.bossReadyDepth)),
+    avgBossAttemptDepth: mean(attempted.map((r) => r.bossAttemptDepth)),
+    avgPostBossReadyDepth: mean(reached.map((r) => r.postBossReadyDepth)),
+    avgLootProxy: mean(runs.map((r) => r.lootProxyTotal)),
+    avgPartySize: mean(runs.map((r) => r.finalPartySize)),
+    healerRate: tagRate("healer"), tankRate: tagRate("tank"), aoeRate: tagRate("aoe"),
+    shieldRate: tagRate("shield"), secondRate: tagRate("second"), watchRate,
+  };
+}
+
+// One Loot 프로필 런 배열 → breakdown(집계만, raw run 미포함 — JSON-lightweight).
+function computeOneLootBreakdown(runs) {
+  const list = runs || [];
+  const total = list.length;
+  const clears = list.filter((r) => r.cleared);
+  const defeats = list.filter((r) => r.wiped);
+  const incompletes = list.filter((r) => r.result === "incomplete");
+  const buckets = { preBossReadyWipe: 0, postBossReadyPreBossWipe: 0, bossAttemptWipe: 0, postBossReadyGreedWipe: 0, unknown: 0 };
+  defeats.forEach((r) => { buckets[classifyOneLootWipe(r)] += 1; });
+  const cnt = (fn) => defeats.filter(fn).length;
+  const roleGaps = {
+    noHealer: cnt((r) => !(r.roleTags && r.roleTags.healer)),
+    noTank: cnt((r) => !(r.roleTags && r.roleTags.tank)),
+    noAoE: cnt((r) => !(r.roleTags && r.roleTags.aoe)),
+    noShield: cnt((r) => !(r.roleTags && r.roleTags.shield)),
+    noSecondClass: cnt((r) => !(r.roleTags && r.roleTags.second)),
+    partySizeLe3: cnt((r) => (r.finalPartySize || 0) <= 3),
+  };
+  const watchPresentDefeat = {};
+  OL_WATCH_JOBS.forEach((j) => { watchPresentDefeat[j] = cnt((r) => (r.finalParty || []).includes(j)); });
+  const earlyPartyWipe = cnt((r) => (r.deathDepth > 0 && r.deathDepth <= OL_EARLY_DEPTH) || (r.finalPartySize || 0) <= 3);
+  return {
+    total, clear: clears.length, defeat: defeats.length, incomplete: incompletes.length,
+    clearRate: rate(clears.length, total), defeatRate: rate(defeats.length, total),
+    buckets, roleGaps, watchPresentDefeat, earlyPartyWipe,
+    clearStats: olGroupStats(clears), defeatStats: olGroupStats(defeats),
+    meta: { earlyDepth: OL_EARLY_DEPTH, greedAfterDoor: OL_GREED_AFTER_DOOR, estimated: true },
+  };
+}
+
 function buildReport(profiles, meta) {
   const combined = EXPEDITION_ORDER.flatMap((id) => profiles[id]);
   const seat = jobSeatValue(combined); // Phase 1 (seen 기반) — 호환 유지
@@ -745,6 +825,8 @@ function buildReport(profiles, meta) {
     sampleMin: SAMPLE_MIN,
     effectTable: effectValueTable(), effectDiag: effectDiagnostics(combined),
     samples: sampleRuns(combined),
+    // Phase 3B — One Loot 실패 해부(집계만, raw run 미포함). 단일 Baseline/Variant·diff·JSON에서 재사용.
+    oneLootBreakdown: computeOneLootBreakdown(profiles.oneLoot || []),
   };
 }
 
@@ -948,6 +1030,9 @@ function exportJSON() {
     // Phase 3A — Multi-Seed Experiment Queue 결과(없으면 null/""). 기존 필드 제거 없음.
     multiSeedSummary: lastMultiSeed || null,
     multiSeedSummaryText: buildMultiSeedSummary() || "",
+    // Phase 3B — One Loot Failure Breakdown(집계만, raw run 미포함). 없으면 null/"". 기존 필드 제거 없음.
+    oneLootBreakdown: oneLootBreakdownExport(),
+    oneLootBreakdownText: buildOneLootBreakdownText() || "",
     runs: buildRunsForExport(rep.combined),
   }, null, 0);
 }
@@ -1156,7 +1241,7 @@ function renderCompare() {
    Phase 2D — Copy Experiment Summary: Baseline↔Variant 결과를 사람이 읽는 텍스트로.
    나라가 표를 일일이 설명하지 않고 유키에게 붙여넣으면 바로 해석되게.
    ════════════════════════════════════════════════════════════════ */
-const TOOL_PHASE = "3A";
+const TOOL_PHASE = "3B"; // Phase 3B — One Loot Failure Breakdown (experiment/multiseed 요약 phase 라벨도 이 상수 공유)
 const pctT = (v) => (v == null ? "—" : (Math.round(v * 1000) / 10).toFixed(1) + "%");
 const ppT = (v) => (v == null ? "—" : (v > 0 ? "+" : "") + (Math.round(v * 1000) / 10).toFixed(1) + "%p");
 const n1T = (v) => (v == null ? "—" : (Math.round(v * 10) / 10).toFixed(1));
@@ -1226,6 +1311,148 @@ export function buildExperimentSummary(baseRep = baselineReport, varRep = varian
   return L.join("\n");
 }
 
+/* ════════════════════════════════════════════════════════════════
+   Phase 3B — One Loot Failure Breakdown : 텍스트 / JSON / 렌더.
+   단일 Baseline/Variant breakdown이 핵심. 둘 다 있으면 Baseline→Variant diff. estimated 기준·다음 실험 힌트 포함.
+   ════════════════════════════════════════════════════════════════ */
+// 리포트에 부착된 breakdown(없으면 profiles.oneLoot로 즉석 계산 — Node 합성 리포트 검증 대비).
+const olBd = (rep) => (rep ? (rep.oneLootBreakdown || (rep.profiles && computeOneLootBreakdown(rep.profiles.oneLoot || [])) || null) : null);
+const olSgn = (d) => (d == null ? "—" : (d > 0 ? "+" + d : "" + d));
+const olOverrideText = (ref, varRep) => { const ov = (varRep && varRep.meta.overrides) || (ref && ref.meta.overrides); return (ov && describeOverrides(ov).length) ? describeOverrides(ov).join(" · ") : "없음"; };
+const olCriteriaText = `우선순위 = 보스 시도 > 보스문 후 > 보스문 전(상호배타). 보스문 열기 전 = 보스문/보스시도 마커 없음 · 보스문 후·보스 도전 전 = 보스문 열림+보스 미시도+보스문 후 +${OL_GREED_AFTER_DOOR}심도 미만 · 보스 도전 패배 = 보스 시도 후 전멸 · 보스문 후 욕심 = 보스문 후 +${OL_GREED_AFTER_DOOR}심도 이상 진행 후 전멸. 보조 tag(primary와 중복 가능): 너무 이른 붕괴 = 전멸심도 ≤${OL_EARLY_DEPTH} 또는 최종 파티 ≤3. 전부 run record 심도 마커 기반 추정(estimated) — event schema 미확장.`;
+
+// dev-only 다음 실험 힌트(자동 밸런스 변경 절대 없음 — 텍스트 제안만).
+function oneLootHints(bd) {
+  if (!bd || !bd.defeat) return ["전멸 표본이 없어 분해할 게 없습니다 — runs를 늘리거나 다른 seed를 시도하세요."];
+  const out = [], b = bd.buckets, dn = bd.defeat;
+  const top = OL_BUCKET_ORDER.filter((k) => k !== "unknown").map((k) => [k, b[k]]).reduce((a, c) => (c[1] > a[1] ? c : a), ["", -1]);
+  if (top[0] === "preBossReadyWipe") out.push("preBossReadyWipe 우세 → 초중반 안정성 / 파티 4인 완성 / 영입 곡선 확인.");
+  else if (top[0] === "bossAttemptWipe") out.push("bossAttemptWipe 우세 → 보스 전환부 / 보스 HP / 보스 피해량 확인.");
+  else if (top[0] === "postBossReadyGreedWipe") out.push("postBossReadyGreedWipe 우세 → 귀환 유도 / 보스문 이후 욕심 제어 확인.");
+  else if (top[0] === "postBossReadyPreBossWipe") out.push("postBossReadyPreBossWipe 우세 → 보스문 이후 위험 루트 / 쉼터 / 귀환 판단 확인.");
+  if (bd.roleGaps.noHealer >= dn * 0.5 || bd.roleGaps.noTank >= dn * 0.5) out.push("전멸 다수가 힐러/탱커 결핍 → 영입 / 합체 / 역할 조합 안정성 확인.");
+  if (b.unknown >= dn * 0.2) out.push("unknown 비중 큼 → 추가 run marker가 필요할 수 있음(단, 이번 Phase에서는 event schema 확장 금지).");
+  return out.length ? out : ["뚜렷한 단일 실패 축이 없습니다 → seed/override를 바꿔 방향성을 재확인하세요."];
+}
+
+// export(JSON용) — 전역 baselineReport/variantReport의 breakdown(집계만). 둘 다 없으면 null.
+function oneLootBreakdownExport() {
+  const b = olBd(baselineReport), v = olBd(variantReport);
+  if (!b && !v) return null;
+  return { baseline: b || null, variant: v || null };
+}
+
+// export = Node 검증에서 합성 리포트로 직접 테스트 가능. 인자 미지정 시 전역 baselineReport/variantReport.
+export function buildOneLootBreakdownText(baseRep = baselineReport, varRep = variantReport) {
+  const ref = varRep || baseRep;
+  if (!ref) return null;
+  const bd = olBd(ref), bb = olBd(baseRep), vb = olBd(varRep);
+  if (!bd) return null;
+  const both = !!(baseRep && varRep);
+  const which = both ? "Variant(기준)" : (varRep ? "Variant" : "Baseline");
+  const L = [];
+  L.push("[One Loot Failure Breakdown · 1전리품 실패 해부]");
+  L.push("phase: " + TOOL_PHASE);
+  L.push("seed: " + ref.meta.seed);
+  L.push("runs/profile: " + ref.meta.runs);
+  L.push("override(Variant): " + olOverrideText(ref, varRep));
+  L.push("generated: " + new Date().toISOString());
+  L.push("", `[${which}] One Loot — total ${bd.total} · clear ${bd.clear} (${pctT(bd.clearRate)}) · defeat ${bd.defeat} (${pctT(bd.defeatRate)})`);
+  L.push("", "Primary failure buckets (defeat 기준, mutually exclusive · estimated):");
+  OL_BUCKET_ORDER.forEach((k) => L.push(`* ${OL_BUCKET_LABELS[k]} (${k}): ${bd.buckets[k]}`));
+  L.push(`보조 tag — 너무 이른 붕괴(earlyPartyWipe, primary와 중복 가능): ${bd.earlyPartyWipe}`);
+  L.push("", "Role gaps among defeats:");
+  OL_GAP_ORDER.forEach((k) => L.push(`* ${OL_GAP_LABELS[k]} (${k}): ${bd.roleGaps[k]}/${bd.defeat}`));
+  L.push("WATCH 보유(전멸 파티): " + OL_WATCH_JOBS.map((j) => `${jobName(j)} ${bd.watchPresentDefeat[j]}/${bd.defeat}`).join(" · "));
+  const cs = bd.clearStats, ds = bd.defeatStats;
+  L.push("", `Clear vs Defeat (평균, ${which}):`);
+  L.push(`* count: clear ${cs.count} / defeat ${ds.count}`);
+  L.push(`* 평균 도달 심도: clear ${n1T(cs.avgFinalDepth)} / defeat ${n1T(ds.avgFinalDepth)}`);
+  L.push(`* 전멸 심도: defeat ${n1T(ds.avgDeathDepth)} (clear 해당없음)`);
+  L.push(`* 보스문 심도: clear ${n1T(cs.avgBossReadyDepth)} / defeat ${n1T(ds.avgBossReadyDepth)}`);
+  L.push(`* 보스 시도 심도: clear ${n1T(cs.avgBossAttemptDepth)} / defeat ${n1T(ds.avgBossAttemptDepth)}`);
+  L.push(`* 보스문 후 추가 심도: clear ${n1T(cs.avgPostBossReadyDepth)} / defeat ${n1T(ds.avgPostBossReadyDepth)}`);
+  L.push(`* 전리품 지표: clear ${n1T(cs.avgLootProxy)} / defeat ${n1T(ds.avgLootProxy)}`);
+  L.push(`* 평균 파티 크기: clear ${n1T(cs.avgPartySize)} / defeat ${n1T(ds.avgPartySize)}`);
+  L.push(`* healer rate: clear ${pctT(cs.healerRate)} / defeat ${pctT(ds.healerRate)}`);
+  L.push(`* tank rate: clear ${pctT(cs.tankRate)} / defeat ${pctT(ds.tankRate)}`);
+  L.push(`* AoE rate: clear ${pctT(cs.aoeRate)} / defeat ${pctT(ds.aoeRate)}`);
+  L.push(`* shield rate: clear ${pctT(cs.shieldRate)} / defeat ${pctT(ds.shieldRate)}`);
+  L.push(`* 2nd class rate: clear ${pctT(cs.secondRate)} / defeat ${pctT(ds.secondRate)}`);
+  L.push("* WATCH present rate(clear→defeat): " + OL_WATCH_JOBS.map((j) => `${jobName(j)} ${pctT(cs.watchRate[j])}→${pctT(ds.watchRate[j])}`).join(" · "));
+  if (bb && vb) {
+    L.push("", "Baseline → Variant diff:");
+    L.push(`* clear rate: ${pctT(bb.clearRate)} → ${pctT(vb.clearRate)} / Δ ${ppT((vb.clearRate || 0) - (bb.clearRate || 0))}`);
+    OL_BUCKET_ORDER.forEach((k) => L.push(`* ${k}: ${bb.buckets[k]} → ${vb.buckets[k]} / Δ ${olSgn(vb.buckets[k] - bb.buckets[k])}`));
+    OL_GAP_ORDER.forEach((k) => L.push(`* ${k}: ${bb.roleGaps[k]} → ${vb.roleGaps[k]} / Δ ${olSgn(vb.roleGaps[k] - bb.roleGaps[k])}`));
+  }
+  L.push("", "다음 실험 힌트 (dev-only · 자동 밸런스 변경 아님):");
+  oneLootHints(bd).forEach((h) => L.push("- " + h));
+  L.push("", "estimated/주의:");
+  L.push("- 모든 분류는 run record 심도 마커(bossReadyDepth/bossAttemptDepth/postBossReadyDepth/deathDepth) 기반 추정입니다 — event schema는 확장하지 않았습니다.");
+  L.push(`- 보스문 후 욕심 임계 = +${OL_GREED_AFTER_DOOR}심도, 너무 이른 붕괴 = 전멸심도 ≤${OL_EARLY_DEPTH} 또는 파티 ≤3 (보조 tag, primary와 중복 가능).`);
+  L.push("- Loot Proxy(전리품 지표)는 실제 아이템 개수가 아니라 dev-only 임시 지표입니다.");
+  L.push("- One Loot Failure Breakdown은 단일 스탯 튜닝 정답이 아니라 실패 축 진단입니다(밸런스 확정 아님).");
+  return L.join("\n");
+}
+
+function renderOneLootBreakdown() {
+  const el = $("eo-ol-out");
+  if (!el) return;
+  const ref = variantReport || baselineReport;
+  const bd = olBd(ref);
+  if (!ref || !bd) { el.innerHTML = `<div class="eo-empty">Baseline / Variant(또는 Compare)를 실행하면 One Loot 프로필 전멸 해부가 여기에 표시됩니다.</div>`; return; }
+  const bb = olBd(baselineReport), vb = olBd(variantReport), both = !!(bb && vb);
+  const which = both ? "Variant(기준)" : (variantReport ? "Variant" : "Baseline");
+  const metaLine = `<div class="eo-line"><b>${esc(which)}</b> <span class="eo-meta">· seed ${ref.meta.seed} · 프로필당 ${ref.meta.runs}런 · override ${esc(olOverrideText(ref, variantReport))} · <span class="eo-tag lo">estimated</span></span></div>
+    <div class="eo-srow"><span>total</span><b>${bd.total}</b> <span>clear</span><b class="clear">${bd.clear} (${pctT(bd.clearRate)})</b> <span>defeat</span><b class="wipe">${bd.defeat} (${pctT(bd.defeatRate)})</b></div>`;
+  const clearDiff = both ? `<div class="eo-srow"><span>clear rate (B→V)</span><b>${pctT(bb.clearRate)} → ${pctT(vb.clearRate)}</b> ${deltaPct((vb.clearRate || 0) - (bb.clearRate || 0))}</div>` : "";
+  // Primary buckets
+  const bucketHead = both ? `<th class="txt">실패 버킷 (defeat ${bd.defeat})</th><th>Baseline</th><th>Variant</th><th>Δ</th>` : `<th class="txt">실패 버킷 (defeat ${bd.defeat})</th><th>${esc(which)}</th>`;
+  const bucketRows = OL_BUCKET_ORDER.map((k) => both
+    ? `<tr><td class="txt">${esc(OL_BUCKET_LABELS[k])} <span class="eo-meta">${k}</span></td><td>${bb.buckets[k]}</td><td>${vb.buckets[k]}</td><td>${olSgn(vb.buckets[k] - bb.buckets[k])}</td></tr>`
+    : `<tr><td class="txt">${esc(OL_BUCKET_LABELS[k])} <span class="eo-meta">${k}</span></td><td>${bd.buckets[k]}</td></tr>`).join("");
+  const earlyRow = both
+    ? `<tr><td class="txt eo-indent">· 너무 이른 붕괴 <span class="eo-meta">earlyPartyWipe · 보조 tag</span></td><td>${bb.earlyPartyWipe}</td><td>${vb.earlyPartyWipe}</td><td>${olSgn(vb.earlyPartyWipe - bb.earlyPartyWipe)}</td></tr>`
+    : `<tr><td class="txt eo-indent">· 너무 이른 붕괴 <span class="eo-meta">earlyPartyWipe · 보조 tag</span></td><td>${bd.earlyPartyWipe}</td></tr>`;
+  const bucketTable = `<div class="eo-line"><b>Primary failure buckets</b> <span class="eo-meta">mutually exclusive · defeat 기준</span></div>
+    <div class="eo-tablewrap"><table><thead><tr>${bucketHead}</tr></thead><tbody>${bucketRows}${earlyRow}</tbody></table></div>`;
+  // Role gaps
+  const gapHead = both ? `<th class="txt">역할 결핍 (defeat ${bd.defeat})</th><th>Baseline</th><th>Variant</th><th>Δ</th>` : `<th class="txt">역할 결핍 (defeat ${bd.defeat})</th><th>${esc(which)}</th>`;
+  const gapRows = OL_GAP_ORDER.map((k) => both
+    ? `<tr><td class="txt">${esc(OL_GAP_LABELS[k])} <span class="eo-meta">${k}</span></td><td>${bb.roleGaps[k]}/${bb.defeat}</td><td>${vb.roleGaps[k]}/${vb.defeat}</td><td>${olSgn(vb.roleGaps[k] - bb.roleGaps[k])}</td></tr>`
+    : `<tr><td class="txt">${esc(OL_GAP_LABELS[k])} <span class="eo-meta">${k}</span></td><td>${bd.roleGaps[k]}/${bd.defeat}</td></tr>`).join("");
+  const watchRow = both
+    ? `<tr><td class="txt eo-indent">· WATCH 보유 <span class="eo-meta">${esc(OL_WATCH_JOBS.map(jobName).join("/"))}</span></td><td>${OL_WATCH_JOBS.map((j) => bb.watchPresentDefeat[j]).join("·")}</td><td>${OL_WATCH_JOBS.map((j) => vb.watchPresentDefeat[j]).join("·")}</td><td></td></tr>`
+    : `<tr><td class="txt eo-indent">· WATCH 보유 <span class="eo-meta">${esc(OL_WATCH_JOBS.map(jobName).join("/"))}</span></td><td>${OL_WATCH_JOBS.map((j) => bd.watchPresentDefeat[j]).join("·")}</td></tr>`;
+  const gapTable = `<div class="eo-line"><b>Role gaps among defeats</b> <span class="eo-meta">전멸 파티 역할 결핍 수 / 전멸 수</span></div>
+    <div class="eo-tablewrap"><table><thead><tr>${gapHead}</tr></thead><tbody>${gapRows}${watchRow}</tbody></table></div>`;
+  // Clear vs Defeat (기준 리포트)
+  const cs = bd.clearStats, ds = bd.defeatStats;
+  const cv = (label, c, d) => `<tr><td class="txt">${esc(label)}</td><td>${c}</td><td>${d}</td></tr>`;
+  const cvTable = `<div class="eo-line"><b>Clear vs Defeat</b> <span class="eo-meta">${esc(which)} · One Loot 평균</span></div>
+    <div class="eo-tablewrap"><table><thead><tr><th class="txt">지표</th><th>Clear (${cs.count})</th><th>Defeat (${ds.count})</th></tr></thead><tbody>
+      ${cv("평균 도달 심도", n1T(cs.avgFinalDepth), n1T(ds.avgFinalDepth))}
+      ${cv("전멸 심도", n1T(cs.avgDeathDepth), n1T(ds.avgDeathDepth))}
+      ${cv("보스문 심도", n1T(cs.avgBossReadyDepth), n1T(ds.avgBossReadyDepth))}
+      ${cv("보스 시도 심도", n1T(cs.avgBossAttemptDepth), n1T(ds.avgBossAttemptDepth))}
+      ${cv("보스문 후 추가 심도", n1T(cs.avgPostBossReadyDepth), n1T(ds.avgPostBossReadyDepth))}
+      ${cv("전리품 지표", n1T(cs.avgLootProxy), n1T(ds.avgLootProxy))}
+      ${cv("평균 파티 크기", n1T(cs.avgPartySize), n1T(ds.avgPartySize))}
+      ${cv("힐러 보유율", pctT(cs.healerRate), pctT(ds.healerRate))}
+      ${cv("탱커 보유율", pctT(cs.tankRate), pctT(ds.tankRate))}
+      ${cv("광역 보유율", pctT(cs.aoeRate), pctT(ds.aoeRate))}
+      ${cv("보호막 보유율", pctT(cs.shieldRate), pctT(ds.shieldRate))}
+      ${cv("2차직업 보유율", pctT(cs.secondRate), pctT(ds.secondRate))}
+      ${OL_WATCH_JOBS.map((j) => cv("WATCH " + jobName(j) + " 보유율", pctT(cs.watchRate[j]), pctT(ds.watchRate[j]))).join("")}
+    </tbody></table></div>`;
+  const hints = oneLootHints(bd).map((h) => `<div class="eo-ev">• ${esc(h)}</div>`).join("");
+  el.innerHTML = metaLine + clearDiff
+    + `<div class="eo-note"><b>분류 기준 (estimated)</b> ${esc(olCriteriaText)}</div>`
+    + bucketTable + gapTable + cvTable
+    + `<div class="eo-note"><b>다음 실험 힌트</b> <span class="eo-meta">dev-only · 자동 밸런스 변경 아님</span>${hints}</div>`;
+}
+
 /* ── Override / Sandbox export ── */
 function exportOverrideJSON() {
   return JSON.stringify({ tool: "expedition-observatory", kind: "stat-overrides", generatedAt: new Date().toISOString(), summary: describeOverrides(sandbox), overrides: sandbox }, null, 2);
@@ -1273,6 +1500,7 @@ async function runObservatory(runs, mode = "baseline") {
     if (mode === "variant") variantReport = rep; else baselineReport = rep;
     renderAll(lastReport);
     renderCompare();
+    renderOneLootBreakdown();
     status.textContent = `${mode === "variant" ? "Variant" : "Baseline"} 완료 — seed ${rep.meta.seed} · 프로필당 ${runs}런 · 결합 ${rep.combined.length}런`;
   } catch (e) {
     status.textContent = "에러: " + (e && e.message); console.error(e);
@@ -1290,6 +1518,7 @@ async function runCompareSeq() {
     lastReport = variantReport;
     renderAll(lastReport);
     renderCompare();
+    renderOneLootBreakdown();
     status.textContent = `Compare 완료 — seed ${variantReport.meta.seed} · 프로필당 ${runs}런 (Baseline↔Variant)`;
     $("eo-compare").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) {
@@ -1633,6 +1862,25 @@ export function initExpeditionObservatory() {
   if (msToggle) msToggle.addEventListener("click", () => {
     const ta = $("eo-ms-text"); if (!ta) return;
     if (!ta.value) { ta.value = buildMultiSeedSummary() || "먼저 Run Multi-Seed Compare를 실행하세요."; }
+    ta.style.display = (ta.style.display === "none" || !ta.style.display) ? "block" : "none";
+  });
+
+  // ── Phase 3B — Copy One Loot Breakdown ──
+  const olCopy = $("eo-ol-copy");
+  if (olCopy) olCopy.addEventListener("click", async () => {   // 2D/3A fallback 구조 재사용
+    const status = $("eo-ol-status"), ta = $("eo-ol-text");
+    const txt = buildOneLootBreakdownText();
+    if (!txt) { if (status) status.textContent = "먼저 Baseline / Variant(또는 Compare)를 실행하세요."; return; }
+    if (ta) { ta.value = txt; ta.style.display = "block"; }
+    let ok = false;
+    try { await navigator.clipboard.writeText(txt); ok = true; }
+    catch (e) { try { ta.focus(); ta.select(); ok = document.execCommand("copy"); } catch (e2) { ok = false; } }
+    if (status) status.textContent = ok ? "One Loot Breakdown을 클립보드에 복사했습니다." : "클립보드 실패 — 아래 칸에서 직접 선택해 복사하세요(텍스트는 표시됨).";
+  });
+  const olToggle = $("eo-ol-toggle");
+  if (olToggle) olToggle.addEventListener("click", () => {
+    const ta = $("eo-ol-text"); if (!ta) return;
+    if (!ta.value) { ta.value = buildOneLootBreakdownText() || "먼저 Baseline / Variant(또는 Compare)를 실행하세요."; }
     ta.style.display = (ta.style.display === "none" || !ta.style.display) ? "block" : "none";
   });
 }

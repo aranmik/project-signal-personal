@@ -158,6 +158,18 @@
       <textarea id="eo-ms-text" class="eo-exp-ta" readonly placeholder="Multi-Seed 요약이 여기에 표시됩니다 (길면 내부 스크롤 — 클립보드 실패 시 여기서 직접 선택/복사)" style="display:none"></textarea>
     </section>
 
+    <section id="eo-oneloot">
+      <h3>One Loot Failure Breakdown <span class="eo-meta">· 1전리품 실패 해부 · Phase 3B — One Loot 전멸 런이 어디서 무너지는가 (estimated)</span></h3>
+      <div class="eo-note">단일 스탯 튜닝으로 One Loot 18%가 안 풀리니, <b>One Loot 프로필의 전멸 런이 어디서 무너졌는지</b>를 분해합니다(보스문 전 / 보스문 후·도전 전 / 보스 도전 패배 / 보스문 후 욕심). Baseline·Variant(또는 Compare) 실행 후 표시되며, 둘 다 있으면 <b>Baseline→Variant diff</b>를 함께 보여줍니다. 모든 분류는 run record의 심도 마커 기반 <b>추정(estimated)</b>이며 — 전투 이벤트 스키마는 확장하지 않았습니다.</div>
+      <div class="eo-exp-controls">
+        <button type="button" id="eo-ol-copy" class="eo-btn">Copy One Loot Breakdown ▶</button>
+        <button type="button" id="eo-ol-toggle" class="eo-btn ghost">요약 보기/접기</button>
+        <span id="eo-ol-status" class="eo-meta">Baseline·Variant(또는 Compare) 실행 후 복사하세요.</span>
+      </div>
+      <div id="eo-ol-out"><div class="eo-empty">One Loot Failure Breakdown — Baseline / Variant 실행 대기 중</div></div>
+      <textarea id="eo-ol-text" class="eo-exp-ta" readonly placeholder="One Loot Breakdown 요약이 여기에 표시됩니다 (클립보드 실패 시 여기서 직접 선택/복사)" style="display:none"></textarea>
+    </section>
+
     <section id="eo-summary"><div class="eo-empty">A. Expedition Summary — 실행 대기 중</div></section>
     <section id="eo-party"></section>
     <section id="eo-seat"></section>
