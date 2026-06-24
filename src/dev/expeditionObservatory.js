@@ -758,12 +758,17 @@ let lastReport = null;
 function delta(v) { if (v == null) return ""; const cls = v > 0.0005 ? "up" : v < -0.0005 ? "down" : "zero"; const sign = v > 0 ? "+" : ""; return `<span class="eo-d ${cls}">${sign}${fmt1(v)}</span>`; }
 function deltaPct(v) { if (v == null) return ""; const cls = v > 0.0005 ? "up" : v < -0.0005 ? "down" : "zero"; const sign = v > 0 ? "+" : ""; return `<span class="eo-d ${cls}">${sign}${(Math.round(v * 1000) / 10).toFixed(1)}%p</span>`; }
 
+// Phase 2D — Loot Proxy 명칭 명료화. "전리품 지표"는 실제 아이템 개수가 아니라 런 가치/파밍 성향 관측치.
+const LOOT_PROXY_NOTE_TEXT = "Loot Proxy(전리품 지표)는 실제 획득 아이템 개수가 아니라, 깊이/위험/정예/보스 열쇠/심층 보상/보스문 후 욕심 등 귀환 가치를 합산한 dev-only 임시 지표입니다. 예: 5.4는 아이템 5.4개가 아니라 런 가치 점수입니다(보상 경제 수치 아님).";
+const LOOT_PROXY_NOTE_HTML = `<div class="eo-note"><b>전리품 지표(Loot Proxy)란?</b> ${esc(LOOT_PROXY_NOTE_TEXT)}</div>`;
+
 function renderSummary(rep) {
   const head = EXPEDITION_ORDER.map((id) => `<th>${esc(EXPEDITIONS[id].label)}<div class="eo-sub">${esc(EXPEDITIONS[id].sub)}</div></th>`).join("");
   const row = (label, fn, fmt) => `<tr><td class="txt">${label}</td>${EXPEDITION_ORDER.map((id) => `<td>${fmt(fn(rep.summaries[id]))}</td>`).join("")}</tr>`;
   const lootRows = LOOT_TYPES.map((t) => `<tr><td class="txt eo-indent">· ${ROLE_TAG_LABELS_FALLBACK(t)}</td>${EXPEDITION_ORDER.map((id) => `<td>${fmt1(rep.summaries[id].lootByType[t])}</td>`).join("")}</tr>`).join("");
   $("eo-summary").innerHTML = `<h3>A. Expedition Summary <span class="eo-meta">· seed ${rep.meta.seed} · 프로필당 ${rep.meta.runs}런</span></h3>
-    <div class="eo-cards">${EXPEDITION_ORDER.map((id) => { const s = rep.summaries[id]; const c = EXPEDITIONS[id]; return `<div class="eo-card" style="border-top:3px solid ${c.color}"><div class="eo-cn">${esc(c.label)}</div><div class="eo-cd">${esc(c.desc)}</div><div class="eo-crow"><span>승률</span><b class="${(s.winRate || 0) > 0 ? "clear" : ""}">${fmtPct(s.winRate)}</b></div><div class="eo-crow"><span>전멸률</span><b class="wipe">${fmtPct(s.wipeRate)}</b></div><div class="eo-crow"><span>평균 전리품</span><b>${fmt1(s.avgLootProxy)}</b></div></div>`; }).join("")}</div>
+    ${LOOT_PROXY_NOTE_HTML}
+    <div class="eo-cards">${EXPEDITION_ORDER.map((id) => { const s = rep.summaries[id]; const c = EXPEDITIONS[id]; return `<div class="eo-card" style="border-top:3px solid ${c.color}"><div class="eo-cn">${esc(c.label)}</div><div class="eo-cd">${esc(c.desc)}</div><div class="eo-crow"><span>승률</span><b class="${(s.winRate || 0) > 0 ? "clear" : ""}">${fmtPct(s.winRate)}</b></div><div class="eo-crow"><span>전멸률</span><b class="wipe">${fmtPct(s.wipeRate)}</b></div><div class="eo-crow" title="Loot Proxy — 실제 아이템 개수 아님(dev 임시 지표)"><span>평균 전리품 지표</span><b>${fmt1(s.avgLootProxy)}</b></div></div>`; }).join("")}</div>
     <div class="eo-tablewrap"><table><thead><tr><th class="txt">지표</th>${head}</tr></thead><tbody>
       ${row("승률(귀환 성공)", (s) => s.winRate, fmtPct)}
       ${row("전멸률", (s) => s.wipeRate, fmtPct)}
@@ -773,16 +778,16 @@ function renderSummary(rep) {
       ${row("평균 전멸 심도", (s) => s.avgDeathDepth, fmt1)}
       ${row("평균 도달 심도", (s) => s.avgFinalDepth, fmt1)}
       ${row("평균 전투 수", (s) => s.avgBattles, fmt1)}
-      ${row("평균 lootProxy", (s) => s.avgLootProxy, fmt1)}
-      ${row("최대 lootProxy", (s) => s.maxLootProxy, (v) => v == null ? "—" : v)}
-      ${row("평균 전리품(의도적)", (s) => s.avgTreasure, fmt1)}
-      ${row("보스문 시점 lootProxy", (s) => s.avgLootAtBossReady, fmt1)}
-      ${row("클리어 시점 lootProxy", (s) => s.avgLootAtClear, fmt1)}
-      ${row("전멸 시점 lootProxy", (s) => s.avgLootAtDeath, fmt1)}
+      ${row("평균 전리품 지표 (Loot Proxy)", (s) => s.avgLootProxy, fmt1)}
+      ${row("최대 전리품 지표", (s) => s.maxLootProxy, (v) => v == null ? "—" : v)}
+      ${row("평균 전리품 지표(의도적)", (s) => s.avgTreasure, fmt1)}
+      ${row("보스문 시점 전리품 지표", (s) => s.avgLootAtBossReady, fmt1)}
+      ${row("클리어 시점 전리품 지표", (s) => s.avgLootAtClear, fmt1)}
+      ${row("전멸 시점 전리품 지표", (s) => s.avgLootAtDeath, fmt1)}
       ${row("보스문 후 추가 심도", (s) => s.avgPostBossReadyDepth, fmt1)}
       ${row("1전리품 후 보스 클리어율", (s) => s.oneLootBossClearRate, fmtPct)}
       ${row("회수3+ 런 생존율", (s) => s.highLootSurvivalRate, fmtPct)}
-      <tr class="eo-grouprow"><td class="txt" colspan="${EXPEDITION_ORDER.length + 1}">lootProxy 평균 분해(byType)</td></tr>
+      <tr class="eo-grouprow"><td class="txt" colspan="${EXPEDITION_ORDER.length + 1}">전리품 지표(Loot Proxy) 평균 분해(byType)</td></tr>
       ${lootRows}
     </tbody></table></div>`;
 }
@@ -790,7 +795,7 @@ function ROLE_TAG_LABELS_FALLBACK(t) { return LOOT_TYPE_LABELS[t] || t; }
 
 function comboTable(title, rows) {
   if (!rows.length) return `<div class="eo-line"><b>${title}</b> <span class="eo-meta">— 표본 없음</span></div>`;
-  return `<div class="eo-line"><b>${title}</b></div><div class="eo-tablewrap"><table><thead><tr><th class="txt">조합</th><th>런</th><th>승률</th><th>전멸률</th><th>평균심도</th><th>평균전리품</th></tr></thead><tbody>${rows.map((e) => `<tr><td class="txt">${esc(e.key)}</td><td>${e.count}</td><td class="${(e.winRate || 0) > 0 ? "clear" : ""}">${fmtPct(e.winRate)}</td><td class="wipe">${fmtPct(e.wipeRate)}</td><td>${fmt1(e.avgDepth)}</td><td>${fmt1(e.avgLoot)}</td></tr>`).join("")}</tbody></table></div>`;
+  return `<div class="eo-line"><b>${title}</b></div><div class="eo-tablewrap"><table><thead><tr><th class="txt">조합</th><th>런</th><th>승률</th><th>전멸률</th><th>평균심도</th><th title="Loot Proxy — dev 임시 지표">전리품 지표</th></tr></thead><tbody>${rows.map((e) => `<tr><td class="txt">${esc(e.key)}</td><td>${e.count}</td><td class="${(e.winRate || 0) > 0 ? "clear" : ""}">${fmtPct(e.winRate)}</td><td class="wipe">${fmtPct(e.wipeRate)}</td><td>${fmt1(e.avgDepth)}</td><td>${fmt1(e.avgLoot)}</td></tr>`).join("")}</tbody></table></div>`;
 }
 function renderParty(rep) {
   const combined = rep.combined;
@@ -803,7 +808,7 @@ function renderParty(rep) {
     ${comboTable("실패(전멸) 조합 TOP — 전멸 파티", comboTop(fail, "deathParty", { minCount: 2 }))}
     ${comboTable("보스 시도 조합 TOP — 보스 파티", comboTop(combined.filter((r) => r.bossAttempted), "bossParty", { minCount: 2 }))}
     <div class="eo-line"><b>역할 태그별 결과(최종 파티 보유 여부)</b></div>
-    <div class="eo-tablewrap"><table><thead><tr><th class="txt">역할</th><th>보유런</th><th>보유 승률</th><th>미보유 승률</th><th>Δ승률</th><th>보유 평균심도</th><th>보유 평균전리품</th></tr></thead><tbody>
+    <div class="eo-tablewrap"><table><thead><tr><th class="txt">역할</th><th>보유런</th><th>보유 승률</th><th>미보유 승률</th><th>Δ승률</th><th>보유 평균심도</th><th title="Loot Proxy — dev 임시 지표">보유 전리품 지표</th></tr></thead><tbody>
       ${rt.map((e) => `<tr><td class="txt">${e.label}</td><td>${e.presentCount}</td><td class="${(e.presentWin || 0) > 0 ? "clear" : ""}">${fmtPct(e.presentWin)}</td><td>${fmtPct(e.absentWin)}</td><td>${deltaPct(e.presentWin != null && e.absentWin != null ? e.presentWin - e.absentWin : null)}</td><td>${fmt1(e.presentDepth)}</td><td>${fmt1(e.presentLoot)}</td></tr>`).join("")}
     </tbody></table></div>
     <div class="eo-line"><b>depth band별 대표 조합(도달 심도)</b></div>
@@ -897,7 +902,7 @@ function renderSamples(rep) {
     const tl = rec.path.join(" › ");
     return `<div class="eo-scard"><div class="eo-sl">${esc(label)} <span class="eo-tag">${esc(prof.label)}</span></div>
       <div class="eo-srow"><span>결과</span><b class="${rec.cleared ? "clear" : rec.wiped ? "wipe" : ""}">${rec.cleared ? "귀환 성공" : rec.wiped ? "전멸" : "미완"}</b> <span>seed</span><b>${rec.seed}#${rec.runIndex}</b></div>
-      <div class="eo-srow"><span>클리어/전멸 심도</span><b>${rec.cleared ? rec.clearDepth : rec.deathDepth}</b> <span>lootProxy</span><b>${rec.lootProxyTotal}</b> <span>보스문</span><b>${rec.bossReadyReached ? "심도 " + rec.bossReadyDepth : "미개방"}</b></div>
+      <div class="eo-srow"><span>클리어/전멸 심도</span><b>${rec.cleared ? rec.clearDepth : rec.deathDepth}</b> <span title="Loot Proxy — dev 임시 지표">전리품 지표</span><b>${rec.lootProxyTotal}</b> <span>보스문</span><b>${rec.bossReadyReached ? "심도 " + rec.bossReadyDepth : "미개방"}</b></div>
       <div class="eo-sline"><b>최종 파티:</b> ${rec.finalParty.map(jobName).map(esc).join(" · ") || "—"}</div>
       <div class="eo-sline"><b>route:</b> <code>${esc(tl)}</code></div>
       <div class="eo-sline"><b>notable:</b> ${rec.notableEvents.map(esc).map((s) => `<div class="eo-ev">${s}</div>`).join("") || "—"}</div></div>`;
@@ -924,7 +929,7 @@ function exportJSON() {
   if (!lastReport) return "";
   const rep = lastReport;
   return JSON.stringify({
-    metadata: { tool: "expedition-observatory", phase: "2B", theme: "beginner", seed: rep.meta.seed, runsPerProfile: rep.meta.runs, profiles: EXPEDITION_ORDER, sampleMin: rep.sampleMin, generatedAt: new Date().toISOString(),
+    metadata: { tool: "expedition-observatory", phase: TOOL_PHASE, theme: "beginner", seed: rep.meta.seed, runsPerProfile: rep.meta.runs, profiles: EXPEDITION_ORDER, sampleMin: rep.sampleMin, generatedAt: new Date().toISOString(),
       // Phase 2B — Nara Sandbox: 이 리포트가 어떤 stat override로 돌았는지(없으면 null = baseline).
       statOverrides: (rep.meta.overrides && hasActiveOverrides(rep.meta.overrides)) ? rep.meta.overrides : null,
       statOverrideSummary: rep.meta.overrides ? describeOverrides(rep.meta.overrides) : [],
@@ -938,6 +943,8 @@ function exportJSON() {
     retention: rep.retention.map((r) => ({ job: r.job, name: r.name, tier: r.tier, seenCount: r.seenCount, finalCount: r.finalCount, bossCount: r.bossCount, clearCount: r.clearCount, deathCount: r.deathCount, finalRetention: r.finalRetention, bossRetention: r.bossRetention, clearRetention: r.clearRetention, deathRetention: r.deathRetention, readTags: r.readTags })),
     effectTable: rep.effectTable, effectDiagnostics: rep.effectDiag,
     samples: rep.samples.map((s) => s.rec ? { label: s.label, profile: s.rec.profile, seed: s.rec.seed, runIndex: s.rec.runIndex, result: s.rec.result, clearDepth: s.rec.clearDepth, deathDepth: s.rec.deathDepth, lootProxyTotal: s.rec.lootProxyTotal, finalParty: s.rec.finalParty.map(jobName), path: s.rec.path, notableEvents: s.rec.notableEvents } : { label: s.label, rec: null }),
+    // Phase 2D — Baseline↔Variant 사람이 읽는 요약(둘 다 실행됐을 때만 채워짐, 아니면 ""). 기존 필드 제거 없음.
+    experimentSummaryText: buildExperimentSummary() || "",
     runs: buildRunsForExport(rep.combined),
   }, null, 0);
 }
@@ -970,7 +977,7 @@ function exportSummaryText() {
   const rep = lastReport;
   const L = [];
   L.push(`[Expedition Observatory] seed ${rep.meta.seed} · 프로필당 ${rep.meta.runs}런`);
-  EXPEDITION_ORDER.forEach((id) => { const s = rep.summaries[id]; const c = EXPEDITIONS[id]; L.push(`· ${c.label}(${c.sub}): 승률 ${fmtPct(s.winRate)} / 전멸 ${fmtPct(s.wipeRate)} / 평균전리품 ${fmt1(s.avgLootProxy)} / 평균클리어심도 ${fmt1(s.avgClearDepth)} / 보스문후 +${fmt1(s.avgPostBossReadyDepth)}심도`); });
+  EXPEDITION_ORDER.forEach((id) => { const s = rep.summaries[id]; const c = EXPEDITIONS[id]; L.push(`· ${c.label}(${c.sub}): 승률 ${fmtPct(s.winRate)} / 전멸 ${fmtPct(s.wipeRate)} / 전리품지표 ${fmt1(s.avgLootProxy)} / 평균클리어심도 ${fmt1(s.avgClearDepth)} / 보스문후 +${fmt1(s.avgPostBossReadyDepth)}심도`); });
   const seatHl = ["trapper", "rogue", "bard", "dancer"].map((j) => rep.seat.find((s) => s.job === j)).filter(Boolean);
   L.push("Seat Value(보유−미보유 Δ승률): " + seatHl.map((s) => `${s.name} ${deltaPctText(s.seatWin)}`).join(" / "));
   return L.join("\n");
@@ -1098,7 +1105,7 @@ const CMP_METRICS = [
   { label: "승률(귀환)", get: (s) => s.winRate, pct: true, guide: true },
   { label: "전멸률", get: (s) => s.wipeRate, pct: true },
   { label: "평균 도달 심도", get: (s) => s.avgFinalDepth },
-  { label: "평균 lootProxy", get: (s) => s.avgLootProxy },
+  { label: "평균 전리품 지표 (Loot Proxy)", get: (s) => s.avgLootProxy },
   { label: "보스문 개방률", get: (s) => s.bossReadyRate, pct: true },
   { label: "평균 보스문 심도", get: (s) => s.avgBossReadyDepth },
 ];
@@ -1140,6 +1147,80 @@ function renderCompare() {
     ${EXPEDITION_ORDER.map(profBlock).join("")}
     <div class="eo-line"><b>WATCH 직업 자리값 변화 (Final lens · present clearRate)</b></div>
     <div class="eo-tablewrap"><table><thead><tr><th class="txt">직업</th><th>present B→V</th><th>Base P승률</th><th>Var P승률</th><th>Δ</th></tr></thead><tbody>${seatRows || `<tr><td colspan="5" class="eo-meta">표본 없음</td></tr>`}</tbody></table></div>`;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Phase 2D — Copy Experiment Summary: Baseline↔Variant 결과를 사람이 읽는 텍스트로.
+   나라가 표를 일일이 설명하지 않고 유키에게 붙여넣으면 바로 해석되게.
+   ════════════════════════════════════════════════════════════════ */
+const TOOL_PHASE = "2D";
+const pctT = (v) => (v == null ? "—" : (Math.round(v * 1000) / 10).toFixed(1) + "%");
+const ppT = (v) => (v == null ? "—" : (v > 0 ? "+" : "") + (Math.round(v * 1000) / 10).toFixed(1) + "%p");
+const n1T = (v) => (v == null ? "—" : (Math.round(v * 10) / 10).toFixed(1));
+const dn1T = (v) => (v == null ? "—" : (v > 0 ? "+" : "") + (Math.round(v * 10) / 10).toFixed(1));
+const profLine = (s) => `win ${pctT(s.winRate)}, wipe ${pctT(s.wipeRate)}, depth ${n1T(s.avgFinalDepth)}, 전리품지표 ${n1T(s.avgLootProxy)}, bossReady ${pctT(s.bossReadyRate)}, bossReadyDepth ${n1T(s.avgBossReadyDepth)}`;
+function targetCheckLine(id, winRate) {
+  const r = GUIDE_RANGES[id]; if (!r) return "";
+  const lbl = EXPEDITIONS[id].label, lo = Math.round(r[0] * 100), hi = Math.round(r[1] * 100);
+  let verdict;
+  if (winRate == null) verdict = "데이터 없음";
+  else if (winRate < r[0]) verdict = `${pctT(winRate)} → 목표 ${lo}~${hi}% 미만(↓)`;
+  else if (winRate > r[1]) verdict = `${pctT(winRate)} → 목표 ${lo}~${hi}% 초과(↑)`;
+  else verdict = `${pctT(winRate)} → 목표 ${lo}~${hi}% 범위 내(✓)`;
+  return `- ${lbl}: ${verdict}`;
+}
+// baseRep/varRep(둘 다 있으면 full B/V/diff, 하나만 있으면 단일 요약). 없으면 null.
+//   인자 미지정 시 모듈 전역(baselineReport/variantReport) 사용 — 실제 호출부는 인자 없이 호출(동작 동일).
+//   export = dev 검증(Node)에서 합성 리포트로 직접 테스트 가능하게.
+export function buildExperimentSummary(baseRep = baselineReport, varRep = variantReport) {
+  const both = baseRep && varRep;
+  if (!both && !(baseRep || varRep)) return null;
+  const ref = varRep || baseRep;
+  const L = [];
+  L.push("[Expedition Observatory Experiment Summary]");
+  L.push("phase: " + TOOL_PHASE);
+  L.push("seed: " + ref.meta.seed);
+  L.push("runs/profile: " + ref.meta.runs);
+  L.push("profiles: " + EXPEDITION_ORDER.map((id) => EXPEDITIONS[id].label).join(", "));
+  L.push("generated: " + new Date().toISOString());
+  const ov = varRep && varRep.meta.overrides;
+  L.push("override(Variant): " + ((ov && describeOverrides(ov).length) ? describeOverrides(ov).join(" · ") : "없음"));
+
+  if (!both) {
+    const r = baseRep || varRep;
+    const which = baseRep ? "Baseline" : "Variant";
+    L.push("");
+    L.push(`(${which}만 실행됨 — Baseline↔Variant 비교는 Compare 실행 후 다시 복사하세요)`);
+    L.push("", which + ":");
+    EXPEDITION_ORDER.forEach((id) => L.push(`* ${EXPEDITIONS[id].label}: ${profLine(r.summaries[id])}`));
+  } else {
+    L.push("", "Baseline:");
+    EXPEDITION_ORDER.forEach((id) => L.push(`* ${EXPEDITIONS[id].label}: ${profLine(baseRep.summaries[id])}`));
+    L.push("", "Variant:");
+    EXPEDITION_ORDER.forEach((id) => L.push(`* ${EXPEDITIONS[id].label}: ${profLine(varRep.summaries[id])}`));
+    L.push("", "Diff (Variant − Baseline):");
+    EXPEDITION_ORDER.forEach((id) => {
+      const b = baseRep.summaries[id], v = varRep.summaries[id];
+      const sub = (k) => (b[k] != null && v[k] != null) ? v[k] - b[k] : null;
+      L.push(`* ${EXPEDITIONS[id].label}: win ${ppT(sub("winRate"))}, depth ${dn1T(sub("avgFinalDepth"))}, 전리품지표 ${dn1T(sub("avgLootProxy"))}, bossReady ${ppT(sub("bossReadyRate"))}`);
+    });
+    L.push("", "목표 범위 점검 (Variant 승률 기준):");
+    EXPEDITION_ORDER.forEach((id) => L.push(targetCheckLine(id, varRep.summaries[id].winRate)));
+    const bFinal = baseRep.lensSeat.final, vFinal = varRep.lensSeat.final;
+    const seatDeltas = [...WATCH_JOBS].map((j) => {
+      const b = bFinal.find((s) => s.job === j), v = vFinal.find((s) => s.job === j);
+      if (!b || !v || b.clearRatePresent == null || v.clearRatePresent == null) return null;
+      return { name: jobName(j), b: b.clearRatePresent, v: v.clearRatePresent, d: v.clearRatePresent - b.clearRatePresent, bp: b.presentCount, vp: v.presentCount };
+    }).filter(Boolean).sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
+    L.push("", "주요 직업 변화 (WATCH · Final lens present clearRate, |Δ| 상위):");
+    if (seatDeltas.length) seatDeltas.slice(0, 6).forEach((s) => L.push(`* ${s.name}: ${pctT(s.b)}→${pctT(s.v)} (${ppT(s.d)}, present ${s.bp}→${s.vp})`));
+    else L.push("* (표본 부족 — WATCH lens diff는 UI 표 참고)");
+  }
+  L.push("", "해석 주의:");
+  L.push("- 같은 seed 비교는 동일 난수표 기반 A/B 실험이지만, 전투 결과 변화 이후 런 분기가 달라질 수 있어 완전한 1:1 리플레이는 아닙니다.");
+  L.push("- Loot Proxy(전리품 지표)는 실제 획득 아이템 개수가 아니라 dev-only 임시 지표입니다(깊이/위험/정예/보스 열쇠/심층 보상/보스문 후 욕심 등 귀환 가치 합산).");
+  L.push("- Seed Finder는 sandbox override를 적용하지 않는 코드 기본값 기준 자연 주회 탐색입니다.");
+  return L.join("\n");
 }
 
 /* ── Override / Sandbox export ── */
@@ -1328,4 +1409,23 @@ export function initExpeditionObservatory() {
   }
   const sfRun = $("eo-sf-run"); if (sfRun) sfRun.addEventListener("click", runSeedFinder);
   const sfCancelBtn = $("eo-sf-cancel"); if (sfCancelBtn) sfCancelBtn.addEventListener("click", () => { sfCancel = true; });
+
+  // ── Phase 2D — Copy Experiment Summary ──
+  const expCopy = $("eo-exp-copy");
+  if (expCopy) expCopy.addEventListener("click", async () => {
+    const status = $("eo-exp-status"), ta = $("eo-exp-text");
+    const txt = buildExperimentSummary();
+    if (!txt) { if (status) status.textContent = "먼저 Baseline / Variant(또는 Compare)를 실행하세요."; return; }
+    if (ta) { ta.value = txt; ta.style.display = "block"; }
+    let ok = false;
+    try { await navigator.clipboard.writeText(txt); ok = true; }
+    catch (e) { try { ta.focus(); ta.select(); ok = document.execCommand("copy"); } catch (e2) { ok = false; } }
+    if (status) status.textContent = ok ? "실험 요약을 클립보드에 복사했습니다." : "클립보드 실패 — 아래 칸에서 직접 선택해 복사하세요(텍스트는 표시됨).";
+  });
+  const expToggle = $("eo-exp-toggle");
+  if (expToggle) expToggle.addEventListener("click", () => {
+    const ta = $("eo-exp-text"); if (!ta) return;
+    if (!ta.value) { ta.value = buildExperimentSummary() || "먼저 Baseline / Variant(또는 Compare)를 실행하세요."; }
+    ta.style.display = (ta.style.display === "none" || !ta.style.display) ? "block" : "none";
+  });
 }
