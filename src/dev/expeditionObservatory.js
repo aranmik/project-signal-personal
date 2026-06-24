@@ -945,6 +945,9 @@ function exportJSON() {
     samples: rep.samples.map((s) => s.rec ? { label: s.label, profile: s.rec.profile, seed: s.rec.seed, runIndex: s.rec.runIndex, result: s.rec.result, clearDepth: s.rec.clearDepth, deathDepth: s.rec.deathDepth, lootProxyTotal: s.rec.lootProxyTotal, finalParty: s.rec.finalParty.map(jobName), path: s.rec.path, notableEvents: s.rec.notableEvents } : { label: s.label, rec: null }),
     // Phase 2D — Baseline↔Variant 사람이 읽는 요약(둘 다 실행됐을 때만 채워짐, 아니면 ""). 기존 필드 제거 없음.
     experimentSummaryText: buildExperimentSummary() || "",
+    // Phase 3A — Multi-Seed Experiment Queue 결과(없으면 null/""). 기존 필드 제거 없음.
+    multiSeedSummary: lastMultiSeed || null,
+    multiSeedSummaryText: buildMultiSeedSummary() || "",
     runs: buildRunsForExport(rep.combined),
   }, null, 0);
 }
@@ -1153,7 +1156,7 @@ function renderCompare() {
    Phase 2D — Copy Experiment Summary: Baseline↔Variant 결과를 사람이 읽는 텍스트로.
    나라가 표를 일일이 설명하지 않고 유키에게 붙여넣으면 바로 해석되게.
    ════════════════════════════════════════════════════════════════ */
-const TOOL_PHASE = "2D";
+const TOOL_PHASE = "3A";
 const pctT = (v) => (v == null ? "—" : (Math.round(v * 1000) / 10).toFixed(1) + "%");
 const ppT = (v) => (v == null ? "—" : (v > 0 ? "+" : "") + (Math.round(v * 1000) / 10).toFixed(1) + "%p");
 const n1T = (v) => (v == null ? "—" : (Math.round(v * 10) / 10).toFixed(1));
@@ -1245,7 +1248,7 @@ function importOverrideJSON(text) {
 /* ── 실행(Baseline / Variant) ── */
 let running = false;
 function setRunningUI(on) {
-  ["eo-run100", "eo-run300", "eo-sb-baseline", "eo-sb-variant", "eo-sb-compare", "eo-sf-run"].forEach((id) => { const b = $(id); if (b) b.disabled = on; });
+  ["eo-run100", "eo-run300", "eo-sb-baseline", "eo-sb-variant", "eo-sb-compare", "eo-sf-run", "eo-ms-run"].forEach((id) => { const b = $(id); if (b) b.disabled = on; });
 }
 function readSeed() { const r = parseInt($("eo-seed").value, 10); return Number.isNaN(r) ? 405 : r; }
 function readSbRuns() { const r = parseInt(($("eo-sb-runs") || {}).value, 10); return (Number.isNaN(r) || r < 1) ? 100 : Math.min(500, r); }
@@ -1292,6 +1295,189 @@ async function runCompareSeq() {
   } catch (e) {
     status.textContent = "에러: " + (e && e.message); console.error(e);
   } finally { setRunningUI(false); running = false; }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Phase 3A — Multi-Seed Experiment Queue.
+   같은 Variant(현재 Stat Override)를 여러 seed에서 반복 비교 — 단일 seed 우연 vs 방향성 확인용 dev 관측.
+   ★기존 Compare 계산 경로를 그대로 감싼다(runExpeditionAll + buildReport per seed). override/seed-finder/단일 Compare 로직 무변경.
+   ════════════════════════════════════════════════════════════════ */
+const MS_MAX_SEEDS = 5;
+let lastMultiSeed = null;
+let msRunning = false, msCancel = false;
+const meanOf = (arr) => { const xs = arr.filter((v) => v != null); return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null; };
+const subN = (a, b) => (a != null && b != null) ? a - b : null;
+
+// seed list 파싱: 쉼표/공백/줄바꿈 구분, 양의 정수만, 중복 제거(순서 유지), 상한 MS_MAX_SEEDS.
+function parseSeedList(raw) {
+  const toks = String(raw || "").split(/[\s,]+/).filter((t) => t.length);
+  const seen = new Set(); const seeds = []; let invalid = 0;
+  for (const t of toks) {
+    const n = Number(t);
+    if (!Number.isInteger(n) || n <= 0 || n > 99999999) { invalid++; continue; }
+    if (!seen.has(n)) { seen.add(n); seeds.push(n); }
+  }
+  const capped = seeds.length > MS_MAX_SEEDS;
+  return { seeds: seeds.slice(0, MS_MAX_SEEDS), invalid, capped, total: seeds.length };
+}
+
+const seedProfileMetrics = (rep, id) => { const s = rep.summaries[id]; return { winRate: s.winRate, wipeRate: s.wipeRate, avgFinalDepth: s.avgFinalDepth, avgLootProxy: s.avgLootProxy, bossReadyRate: s.bossReadyRate, avgBossReadyDepth: s.avgBossReadyDepth }; };
+// 한 seed의 baseline/variant 리포트 → 컴팩트 결과(프로필별 base/var/diff/target + WATCH lens).
+function buildSeedResult(seed, baseRep, varRep) {
+  const profiles = {};
+  EXPEDITION_ORDER.forEach((id) => {
+    const b = seedProfileMetrics(baseRep, id), v = seedProfileMetrics(varRep, id);
+    const diff = { win: subN(v.winRate, b.winRate), depth: subN(v.avgFinalDepth, b.avgFinalDepth), loot: subN(v.avgLootProxy, b.avgLootProxy), bossReady: subN(v.bossReadyRate, b.bossReadyRate), bossReadyDepth: subN(v.avgBossReadyDepth, b.avgBossReadyDepth) };
+    const r = GUIDE_RANGES[id];
+    const targetRange = r ? { lo: r[0], hi: r[1], winRate: v.winRate, inRange: v.winRate != null && v.winRate >= r[0] && v.winRate <= r[1] } : null;
+    profiles[id] = { baseline: b, variant: v, diff, targetRange };
+  });
+  const lensFinal = {};
+  [...WATCH_JOBS].forEach((j) => {
+    const b = baseRep.lensSeat.final.find((s) => s.job === j), v = varRep.lensSeat.final.find((s) => s.job === j);
+    if (!b || !v) return;
+    lensFinal[j] = { name: jobName(j), baseClear: b.clearRatePresent, varClear: v.clearRatePresent, dClear: subN(v.clearRatePresent, b.clearRatePresent), basePresent: b.presentCount, varPresent: v.presentCount };
+  });
+  return { seed, profiles, lensFinal };
+}
+// seedResults → 집계(프로필 평균 diff / target pass count / WATCH 평균 변화 top6).
+function finalizeMultiSeed(seeds, runs, overrides, seedResults) {
+  const aggregateDiffs = {}, targetRangePassCounts = {};
+  EXPEDITION_ORDER.forEach((id) => {
+    const diffs = seedResults.map((sr) => sr.profiles[id].diff);
+    aggregateDiffs[id] = { win: meanOf(diffs.map((d) => d.win)), depth: meanOf(diffs.map((d) => d.depth)), loot: meanOf(diffs.map((d) => d.loot)), bossReady: meanOf(diffs.map((d) => d.bossReady)), bossReadyDepth: meanOf(diffs.map((d) => d.bossReadyDepth)) };
+    const tr = GUIDE_RANGES[id];
+    const pass = seedResults.filter((sr) => sr.profiles[id].targetRange && sr.profiles[id].targetRange.inRange).length;
+    targetRangePassCounts[id] = { pass, total: seedResults.length, lo: tr ? tr[0] : null, hi: tr ? tr[1] : null };
+  });
+  const jobAgg = {};
+  seedResults.forEach((sr) => { for (const j in sr.lensFinal) { const e = sr.lensFinal[j]; if (e.dClear == null) continue; const a = (jobAgg[j] = jobAgg[j] || { name: e.name, ds: [], bp: [], vp: [] }); a.ds.push(e.dClear); a.bp.push(e.basePresent); a.vp.push(e.varPresent); } });
+  const watchFinalLensTopChanges = Object.entries(jobAgg).map(([job, a]) => ({ job, name: a.name, meanDClear: meanOf(a.ds), seeds: a.ds.length, avgBasePresent: meanOf(a.bp), avgVarPresent: meanOf(a.vp) }))
+    .filter((x) => x.meanDClear != null).sort((a, b) => Math.abs(b.meanDClear) - Math.abs(a.meanDClear)).slice(0, 6);
+  return { seeds, runsPerProfile: runs, profiles: EXPEDITION_ORDER.slice(), statOverrideSummary: overrides ? describeOverrides(overrides) : [], seedResults, aggregateDiffs, targetRangePassCounts, watchFinalLensTopChanges, generatedAt: new Date().toISOString() };
+}
+
+// ★Multi-Seed 핵심 엔진 — seed마다 기존 Compare 경로(runExpeditionAll + buildReport) 반복. export = Node 검증용.
+export async function runMultiSeedCompare({ seeds, runs, overrides = null, onProgress, shouldCancel } = {}) {
+  const list = Array.isArray(seeds) ? seeds : [];
+  const seedResults = [];
+  let cancelled = false;
+  for (let i = 0; i < list.length; i++) {
+    if (shouldCancel && shouldCancel()) { cancelled = true; break; }
+    const seed = list[i];
+    const baseRep = buildReport(await runExpeditionAll({ seed, runs, overrides: null }), { seed, runs, overrides: null });
+    if (shouldCancel && shouldCancel()) { cancelled = true; break; }
+    const varRep = buildReport(await runExpeditionAll({ seed, runs, overrides }), { seed, runs, overrides: overrides ? cloneOv(overrides) : null });
+    seedResults.push(buildSeedResult(seed, baseRep, varRep));
+    if (onProgress) onProgress(i + 1, list.length, seed);
+  }
+  const data = finalizeMultiSeed(list.slice(0, seedResults.length), runs, overrides, seedResults);
+  data.cancelled = cancelled;
+  return data;
+}
+
+// 사람이 읽는 Multi-Seed 요약 텍스트(export = Node 검증용).
+export function buildMultiSeedSummary(ms = lastMultiSeed) {
+  if (!ms || !ms.seedResults || !ms.seedResults.length) return null;
+  const L = [];
+  L.push("[Expedition Observatory Multi-Seed Experiment Summary]");
+  L.push("phase: " + TOOL_PHASE);
+  L.push("generated: " + (ms.generatedAt || new Date().toISOString()));
+  L.push(`seeds: ${ms.seeds.join(", ")}  (${ms.seeds.length} seeds)`);
+  L.push("runs/profile: " + ms.runsPerProfile);
+  L.push("profiles: " + ms.profiles.map((id) => EXPEDITIONS[id].label).join(", "));
+  L.push("override(Variant): " + (ms.statOverrideSummary && ms.statOverrideSummary.length ? ms.statOverrideSummary.join(" · ") : "없음(=Baseline)"));
+
+  L.push("", "[seed별 Baseline/Variant/Diff]");
+  ms.seedResults.forEach((sr) => {
+    L.push(`seed ${sr.seed}:`);
+    EXPEDITION_ORDER.forEach((id) => {
+      const p = sr.profiles[id];
+      const tr = p.targetRange ? ` [목표 ${Math.round(p.targetRange.lo * 100)}~${Math.round(p.targetRange.hi * 100)}%: ${pctT(p.variant.winRate)} ${p.targetRange.inRange ? "✓" : (p.variant.winRate < p.targetRange.lo ? "↓" : "↑")}]` : "";
+      L.push(`  ${EXPEDITIONS[id].label}: base ${pctT(p.baseline.winRate)}/wipe ${pctT(p.baseline.wipeRate)} → var ${pctT(p.variant.winRate)}/${pctT(p.variant.wipeRate)} | Δwin ${ppT(p.diff.win)} depth ${dn1T(p.diff.depth)} 전리품지표 ${dn1T(p.diff.loot)} bossReady ${ppT(p.diff.bossReady)} bossReadyDepth ${dn1T(p.diff.bossReadyDepth)}${tr}`);
+    });
+  });
+
+  L.push("", "[프로필별 평균 Diff (seed 전체 평균)]");
+  EXPEDITION_ORDER.forEach((id) => {
+    const a = ms.aggregateDiffs[id], t = ms.targetRangePassCounts[id];
+    L.push(`- ${EXPEDITIONS[id].label}: Δwin ${ppT(a.win)}, Δdepth ${dn1T(a.depth)}, Δ전리품지표 ${dn1T(a.loot)}, ΔbossReady ${ppT(a.bossReady)} | 목표 ${Math.round(t.lo * 100)}~${Math.round(t.hi * 100)}% pass ${t.pass}/${t.total}`);
+  });
+
+  L.push("", "[목표 범위 pass 집계]");
+  EXPEDITION_ORDER.forEach((id) => { const t = ms.targetRangePassCounts[id]; L.push(`- ${EXPEDITIONS[id].label}(${Math.round(t.lo * 100)}~${Math.round(t.hi * 100)}%): ${t.pass}/${t.total} seeds in range`); });
+
+  L.push("", "[주요 직업 변화 (WATCH · Final lens present clearRate, seed 평균 |Δ| 상위 6)]");
+  if (ms.watchFinalLensTopChanges.length) ms.watchFinalLensTopChanges.forEach((w) => L.push(`* ${w.name}: 평균 Δ ${ppT(w.meanDClear)} (${w.seeds} seeds, present avg ${n1T(w.avgBasePresent)}→${n1T(w.avgVarPresent)})`));
+  else L.push("* (표본 부족 — seed별 표 참고)");
+
+  L.push("", "해석 주의:");
+  L.push("- 같은 seed 비교는 동일 난수표 기반이지만 전투 결과 변화 후 런 분기가 달라질 수 있어 완전한 1:1 리플레이는 아닙니다.");
+  L.push("- Loot Proxy(전리품 지표)는 실제 획득 아이템 개수가 아니라 dev-only 런 가치 지표입니다.");
+  L.push("- Multi-Seed 결과도 밸런스 확정이 아니라 방향성 후보 관측용입니다(seed 수가 적으면 우연일 수 있음).");
+  L.push("- Seed Finder는 sandbox override를 적용하지 않는 코드 기본값 기준 자연 주회 탐색입니다.");
+  if (ms.cancelled) L.push("", "※ 사용자 취소로 일부 seed만 실행됨.");
+  return L.join("\n");
+}
+
+/* ── Multi-Seed UI ── */
+function readMsRuns() { const r = parseInt(($("eo-ms-runs") || {}).value, 10); return (Number.isNaN(r) || r < 1) ? 100 : Math.min(500, r); }
+const trMark = (tr) => tr ? (tr.inRange ? `<span class="eo-tag hi">✓ ${Math.round(tr.lo*100)}~${Math.round(tr.hi*100)}%</span>` : `<span class="eo-tag lo">${tr.winRate < tr.lo ? "↓" : "↑"} ${Math.round(tr.lo*100)}~${Math.round(tr.hi*100)}%</span>`) : "—";
+function renderMultiSeed(ms) {
+  const el = $("eo-ms-out"); if (!el) return;
+  if (!ms || !ms.seedResults.length) { el.innerHTML = `<div class="eo-meta">결과 없음.</div>`; return; }
+  const ovList = ms.statOverrideSummary;
+  // seed별 표
+  const seedRows = ms.seedResults.map((sr) => EXPEDITION_ORDER.map((id, i) => {
+    const p = sr.profiles[id];
+    return `<tr>${i === 0 ? `<td class="txt" rowspan="${EXPEDITION_ORDER.length}"><b>${sr.seed}</b></td>` : ""}<td class="txt">${esc(EXPEDITIONS[id].label)}</td><td>${fmtPct(p.baseline.winRate)}/${fmtPct(p.baseline.wipeRate)}</td><td>${fmtPct(p.variant.winRate)}/${fmtPct(p.variant.wipeRate)}</td><td>${delta(p.diff.depth)}</td><td>${delta(p.diff.loot)}</td><td>${deltaPct(p.diff.bossReady)}</td><td>${delta(p.diff.bossReadyDepth)}</td><td class="txt">${trMark(p.targetRange)}</td></tr>`;
+  }).join("")).join("");
+  // 집계: 프로필 평균 diff + target pass
+  const aggRows = EXPEDITION_ORDER.map((id) => {
+    const a = ms.aggregateDiffs[id], t = ms.targetRangePassCounts[id];
+    return `<tr><td class="txt">${esc(EXPEDITIONS[id].label)}</td><td>${deltaPct(a.win)}</td><td>${delta(a.depth)}</td><td>${delta(a.loot)}</td><td>${deltaPct(a.bossReady)}</td><td>${t.pass}/${t.total} <span class="eo-meta">(${Math.round(t.lo*100)}~${Math.round(t.hi*100)}%)</span></td></tr>`;
+  }).join("");
+  const watchRows = ms.watchFinalLensTopChanges.length
+    ? ms.watchFinalLensTopChanges.map((w) => `<tr><td class="txt">${esc(w.name)}</td><td>${deltaPct(w.meanDClear)}</td><td>${w.seeds}</td><td>${fmt1(w.avgBasePresent)}→${fmt1(w.avgVarPresent)}</td></tr>`).join("")
+    : `<tr><td colspan="4" class="eo-meta">표본 부족 — seed별 표 참고</td></tr>`;
+  el.innerHTML = `<div class="eo-note"><b>seeds:</b> ${ms.seeds.join(", ")} (${ms.seeds.length}) · <b>runs/프로필:</b> ${ms.runsPerProfile} · <b>override:</b> ${ovList.length ? esc(ovList.join(" · ")) : "없음(=Baseline)"}${ms.cancelled ? ' · <span class="eo-tag lo">일부 취소됨</span>' : ""}</div>
+    <div class="eo-line"><b>seed별 Baseline→Variant</b> <span class="eo-meta">win/wipe · Δdepth · Δ전리품 지표 · ΔbossReady · ΔbossReadyDepth · 목표</span></div>
+    <div class="eo-tablewrap"><table><thead><tr><th class="txt">seed</th><th class="txt">profile</th><th>base win/wipe</th><th>var win/wipe</th><th>Δdepth</th><th title="Loot Proxy — dev 임시 지표">Δ전리품 지표</th><th>ΔbossReady</th><th>ΔbossRDepth</th><th class="txt">목표</th></tr></thead><tbody>${seedRows}</tbody></table></div>
+    <div class="eo-line"><b>프로필별 평균 Diff + 목표 pass</b> <span class="eo-meta">seed ${ms.seeds.length}개 평균</span></div>
+    <div class="eo-tablewrap"><table><thead><tr><th class="txt">profile</th><th>평균 Δwin</th><th>평균 Δdepth</th><th title="Loot Proxy">평균 Δ전리품 지표</th><th>평균 ΔbossReady</th><th>목표 pass</th></tr></thead><tbody>${aggRows}</tbody></table></div>
+    <div class="eo-line"><b>WATCH 직업 변화 (Final lens · seed 평균 Δ present clearRate · 상위 6)</b></div>
+    <div class="eo-tablewrap"><table><thead><tr><th class="txt">직업</th><th>평균 Δ승률</th><th>seeds</th><th>present avg B→V</th></tr></thead><tbody>${watchRows}</tbody></table></div>`;
+}
+
+async function runMultiSeed() {
+  if (running || msRunning) return;
+  const status = $("eo-ms-status");
+  const parsed = parseSeedList(($("eo-ms-seeds") || {}).value);
+  if (!parsed.seeds.length) { status.textContent = "유효한 seed가 없습니다 — 예: 401,402 (양의 정수, 쉼표/공백 구분)."; return; }
+  const runs = readMsRuns();
+  const overrides = cloneOv(sandbox);
+  const notes = [];
+  if (parsed.invalid) notes.push(`숫자 아닌 값 ${parsed.invalid}개 무시`);
+  if (parsed.capped) notes.push(`최대 ${MS_MAX_SEEDS}개까지 — 앞 ${MS_MAX_SEEDS}개만 사용`);
+  if (!hasActiveOverrides(overrides)) notes.push("override 없음 — Variant=Baseline(diff 0). Sandbox에서 수치를 먼저 바꾸세요");
+  msRunning = true; msCancel = false; setRunningUI(true);
+  const runBtn = $("eo-ms-run"), cancelBtn = $("eo-ms-cancel");
+  if (runBtn) runBtn.disabled = true; if (cancelBtn) cancelBtn.disabled = false;
+  const heavy = parsed.seeds.length * runs * 2;
+  status.textContent = `Multi-Seed 실행 중… (seed ${parsed.seeds.length}개 × ${runs}런 × baseline+variant ≈ ${heavy}×4프로필)${notes.length ? " · " + notes.join(" · ") : ""}`;
+  try {
+    const ms = await runMultiSeedCompare({
+      seeds: parsed.seeds, runs, overrides,
+      onProgress: (done, total, seed) => { status.textContent = `Multi-Seed… seed ${seed} 완료 (${done}/${total})`; },
+      shouldCancel: () => msCancel,
+    });
+    lastMultiSeed = ms;
+    renderMultiSeed(ms);
+    status.textContent = `Multi-Seed 완료 — seed ${ms.seeds.join(",")} · 프로필당 ${runs}런${ms.cancelled ? " (일부 취소)" : ""}${notes.length ? " · " + notes.join(" · ") : ""}`;
+    $("eo-multiseed").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } catch (e) {
+    status.textContent = "에러: " + (e && e.message); console.error(e);
+  } finally { msRunning = false; setRunningUI(false); if (runBtn) runBtn.disabled = false; if (cancelBtn) cancelBtn.disabled = true; }
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -1426,6 +1612,27 @@ export function initExpeditionObservatory() {
   if (expToggle) expToggle.addEventListener("click", () => {
     const ta = $("eo-exp-text"); if (!ta) return;
     if (!ta.value) { ta.value = buildExperimentSummary() || "먼저 Baseline / Variant(또는 Compare)를 실행하세요."; }
+    ta.style.display = (ta.style.display === "none" || !ta.style.display) ? "block" : "none";
+  });
+
+  // ── Phase 3A — Multi-Seed Experiment Queue ──
+  const msRun = $("eo-ms-run"); if (msRun) msRun.addEventListener("click", runMultiSeed);
+  const msCancelBtn = $("eo-ms-cancel"); if (msCancelBtn) msCancelBtn.addEventListener("click", () => { msCancel = true; });
+  const msCopy = $("eo-ms-copy");
+  if (msCopy) msCopy.addEventListener("click", async () => {   // 2D fallback 구조 재사용
+    const status = $("eo-ms-copy-status"), ta = $("eo-ms-text");
+    const txt = buildMultiSeedSummary();
+    if (!txt) { if (status) status.textContent = "먼저 Run Multi-Seed Compare를 실행하세요."; return; }
+    if (ta) { ta.value = txt; ta.style.display = "block"; }
+    let ok = false;
+    try { await navigator.clipboard.writeText(txt); ok = true; }
+    catch (e) { try { ta.focus(); ta.select(); ok = document.execCommand("copy"); } catch (e2) { ok = false; } }
+    if (status) status.textContent = ok ? "Multi-Seed 요약을 클립보드에 복사했습니다." : "클립보드 실패 — 아래 칸에서 직접 선택해 복사하세요(텍스트는 표시됨).";
+  });
+  const msToggle = $("eo-ms-toggle");
+  if (msToggle) msToggle.addEventListener("click", () => {
+    const ta = $("eo-ms-text"); if (!ta) return;
+    if (!ta.value) { ta.value = buildMultiSeedSummary() || "먼저 Run Multi-Seed Compare를 실행하세요."; }
     ta.style.display = (ta.style.display === "none" || !ta.style.display) ? "block" : "none";
   });
 }

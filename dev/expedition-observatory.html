@@ -95,6 +95,14 @@
     .eo-exp-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
     #eo-exp-status { font-size: 11px; color: #9fb8cc; }
     .eo-exp-ta { width: 100%; min-height: 200px; max-height: 420px; background: #0e141b; color: #cfe0ee; border: 1px solid #34434f; border-radius: 8px; padding: 9px 11px; font-size: 11.5px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; margin: 4px 0 8px; resize: vertical; white-space: pre; overflow: auto; }
+    /* Phase 3A — Multi-Seed Experiment Queue */
+    #eo-ms-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #11161d; border: 1px solid #2c3a46; border-radius: 10px; padding: 10px; margin: 8px 0; }
+    #eo-ms-controls label { font-size: 11px; color: #8aa0b2; margin-right: 3px; }
+    #eo-ms-controls input[type="number"] { width: 70px; }
+    #eo-ms-controls input { background: #1b232c; color: #e7f0f7; border: 1px solid #34434f; border-radius: 8px; padding: 6px 8px; font-size: 13px; }
+    #eo-ms-controls input#eo-ms-seeds { width: 190px; max-width: 60vw; }
+    .eo-ms-copyrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 2px; }
+    #eo-ms-copy-status { font-size: 11px; color: #9fb8cc; }
   </style>
 </head>
 <body>
@@ -129,6 +137,25 @@
         <span id="eo-exp-status" class="eo-meta">Baseline·Variant(또는 Compare) 실행 후 복사하세요.</span>
       </div>
       <textarea id="eo-exp-text" class="eo-exp-ta" readonly placeholder="실험 요약이 여기에 표시됩니다 (길면 내부 스크롤 — 클립보드 실패 시 여기서 직접 선택/복사)" style="display:none"></textarea>
+    </section>
+
+    <section id="eo-multiseed">
+      <h3>다중 Seed 실험 큐 (Multi-Seed Experiment Queue) <span class="eo-meta">· Phase 3A — 같은 Variant를 여러 seed에서 반복 비교</span></h3>
+      <div class="eo-note">같은 Variant(현재 <b>Stat Override</b> 값)를 여러 seed에서 반복 비교해, <b>단일 seed 우연인지 방향성인지</b> 확인하는 dev-only 관측 도구입니다. Variant는 위 Nara Sandbox의 현재 override를 그대로 사용합니다(여기서 따로 편집하지 않음) — 먼저 Sandbox에서 수치를 바꾼 뒤 실행하세요. <b>※ 무거운 실행:</b> seed수 × runs × (Baseline+Variant) × 4프로필 — seed/런을 크게 잡으면 오래 걸립니다(최대 5 seeds 권장).</div>
+      <div id="eo-ms-controls">
+        <span><label>seed 목록</label><input id="eo-ms-seeds" type="text" value="401,402" placeholder="401,402 (쉼표/공백/줄바꿈, 최대 5개)" /></span>
+        <span><label>runs/프로필</label><input id="eo-ms-runs" type="number" value="100" /></span>
+        <button type="button" id="eo-ms-run" class="eo-btn">Run Multi-Seed Compare ▶</button>
+        <button type="button" id="eo-ms-cancel" class="eo-btn ghost" disabled>취소</button>
+        <span id="eo-ms-status" class="eo-meta">seed 목록(예: 401,402)과 runs를 정한 뒤 실행하세요. Variant=현재 Sandbox override.</span>
+      </div>
+      <div id="eo-ms-out"></div>
+      <div class="eo-ms-copyrow">
+        <button type="button" id="eo-ms-copy" class="eo-btn">Copy Multi-Seed Summary ▶</button>
+        <button type="button" id="eo-ms-toggle" class="eo-btn ghost">요약 보기/접기</button>
+        <span id="eo-ms-copy-status" class="eo-meta">Run Multi-Seed Compare 실행 후 복사하세요.</span>
+      </div>
+      <textarea id="eo-ms-text" class="eo-exp-ta" readonly placeholder="Multi-Seed 요약이 여기에 표시됩니다 (길면 내부 스크롤 — 클립보드 실패 시 여기서 직접 선택/복사)" style="display:none"></textarea>
     </section>
 
     <section id="eo-summary"><div class="eo-empty">A. Expedition Summary — 실행 대기 중</div></section>
