@@ -8,6 +8,8 @@ import { REWARDS, rewardById, REWARD_MAX_LEVEL } from "../data/rewards.js";
 // Deep Reward Pool 01 — 심층 탐험형 보상 + 고갈 fallback. active만 등장(scaffold/idea는 Dev 카탈로그 전용). 영구스탯/레벨업 없음.
 import { DEEP_REWARDS, deepRewardById, activeDeepRewards } from "../data/deepRewards.js";
 import { saveFootprint } from "../data/footprints.js";
+// Return & Loot Core 01 — 런 중 "들고 있는" 전리품 후보(감정 코어 · 전투 스탯 효과 없음 · 영구 경제 아님).
+import { rollLootCandidate } from "../data/loot.js";
 // Discovery Codex Foundation 01 — 안전한 진행도 기록 훅(headless 주회 중엔 호출 안 함). 전투 계산/수치 불변.
 import { recordRunResult, recordMonstersDefeated } from "./progression.js";
 import { renderGame, playActionFx, playStatusTickFx, playSupportFx, playStatusApplyFx, playActorFx, clearFxLayer, setFxSuppressed, setRenderSuppressed } from "../ui/render.js";
@@ -260,6 +262,7 @@ export function resetBattle() {
   gameState.run.deepRewardOffered = 0;     // 심층 보상 제시 수(dev)
   gameState.run.deepRewardTaken = 0;       // 심층 보상 선택 수(dev)
   gameState.run.rewardNoCandidateError = 0; // 보상 후보 0개 에러(항상 0이 정상 · dev)
+  gameState.run.carriedLoot = []; // Return & Loot Core 01 — 새 런 시작 시 들고 있던 전리품 초기화
   gameState.screen = "battle";
 
   // Fusion Flow 01: 런 시작 배치 복원(합체/영입으로 바뀐 formation을 초기화).
@@ -2424,6 +2427,9 @@ function applyFinish(outcome) {
     // Stage Persistence 01 — 승리 시점의 파티 HP를 저장(생존=현재 HP, 기절=ko). 다음 전투로 이월된다.
     //   danger(깊은 수풀)는 아래에서 일찍 return하므로 캡처는 분기 전에 한 번만 수행한다.
     capturePartyHp();
+    // Return & Loot Core 01 — 전투 승리 시 낮은 확률로 전리품을 "주워서 들고 간다"(아직 확정 소유 아님).
+    //   ★headless(주회/Auto Run/Balance Lab) 제외 → dev 도구 동작/요약 무영향. 기존 보상/영입/합체/쉼터 흐름은 건드리지 않는다.
+    if (!headlessRun) maybeFindLoot();
     // Run Structure 01A: 정예 전투 승리 시 보스 열쇠 획득(보스문이 다음 여정 선택지로 열린다).
     if (gameState.run.currentRouteType === "elite") {
       gameState.run.bossKeys += 1;
@@ -2473,6 +2479,22 @@ function applyFinish(outcome) {
     pushLog("모험 실패... ▶ 다시 시작");
   }
   renderGame(gameState);
+}
+
+// Return & Loot Core 01 — 전투 승리 시 전리품 발견 시도(감정 코어).
+//   ★전투 스탯 효과 없음 · 영구 재화/상점/메타 성장 아님 · battle event schema/payload 무확장(런 상태 carriedLoot만 변경).
+//   1런 0~3개 체감: 확률 30% + 보유 상한 3. 기존 본게임 RNG와 동일하게 Math.random 사용.
+const LOOT_FIND_CHANCE = 0.3; // 전투 승리당 발견 확률
+const LOOT_CARRY_CAP = 3;     // 한 런에 들고 갈 수 있는 전리품 수(0~3개 체감 상한)
+function maybeFindLoot() {
+  const run = gameState.run;
+  if (!Array.isArray(run.carriedLoot)) run.carriedLoot = [];
+  if (run.carriedLoot.length >= LOOT_CARRY_CAP) return;
+  if (Math.random() >= LOOT_FIND_CHANCE) return;
+  const loot = rollLootCandidate(run.depth || 0, run.carriedLoot.map((l) => l.id));
+  if (!loot) return;
+  run.carriedLoot.push(loot);
+  pushLog(`전리품을 주웠다 — ${loot.name} (아직 들고 있는 중).`);
 }
 
 // Run Footprints 01 — 현재 런 요약 1건 저장(클리어/실패/포기 공용). 파티 구성은 formation(슬롯→직업) 기준,

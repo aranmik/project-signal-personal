@@ -6,7 +6,8 @@ import { REWARDS, rewardById, REWARD_MAX_LEVEL } from "../data/rewards.js";
 // Deep Reward Pool 01 — 심층 보상 표시(태그/문구). active만 플레이 등장(scaffold/idea는 Dev 카탈로그 전용).
 import { deepRewardById } from "../data/deepRewards.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
-import { SLOT_ORDER, SLOT_NAMES, partySizeOf, LAYOUT_PREVIEW_CASES } from "../core/state.js";
+import { SLOT_ORDER, SLOT_NAMES, partySizeOf, LAYOUT_PREVIEW_CASES, getRunLootSummary } from "../core/state.js";
+import { lootTierLabel } from "../data/loot.js";
 import { avatarSpec, avatarFigureHTML, CODEX_ENTRIES, CODEX_STATUS_LABEL } from "../data/avatars.js";
 import { loadFootprints, footprintLine, footprintTimeText, footprintsToTSV, resultLabel } from "../data/footprints.js";
 // Discovery Codex Foundation 01 — 도감(유물/몬스터/발견현황) 정적 데이터 + 플레이어 진행도(읽기 전용 표시).
@@ -1019,6 +1020,8 @@ function renderResultOverlay(state) {
       titleEl.textContent = "모험 실패";
       restartBtn.textContent = "다시 시작";
     }
+    // Return & Loot Core 01 — 결과 카드에 "가져온 전리품"(클리어) / "잃어버린 전리품"(전멸) 영역.
+    renderResultLoot(state, result);
     // Run Footprints 01 — 결과 카드 하단에 직전 발자취 1줄(방금 저장된 최신 기록).
     const fpEl = document.getElementById("result-footprint");
     if (fpEl) {
@@ -1030,6 +1033,41 @@ function renderResultOverlay(state) {
   } else {
     overlay.hidden = true;
   }
+}
+
+// Return & Loot Core 01 — 결과 화면 전리품 영역(read-only 요약 기반). 클리어=가져온 / 전멸=잃어버린.
+//   #result-loot 컨테이너만 채운다(작은 칩 — 390px 대응). 전리품이 없으면 짧은 빈 상태 문구.
+function renderResultLoot(state, result) {
+  const el = document.getElementById("result-loot");
+  if (!el) return;
+  const s = getRunLootSummary(state.run);
+  if (result === "clear") {
+    const items = s.securedLoot;
+    el.innerHTML = items.length
+      ? `<div class="rl-head rl-head--won">가져온 전리품 <span class="rl-count">${items.length}</span></div>`
+        + `<div class="rl-list">${items.map((l) => lootChipHTML(l, false)).join("")}</div>`
+        + `<div class="rl-note">숲 밖으로 가져왔다.</div>`
+      : `<div class="rl-empty">가져온 전리품은 없지만, 숲의 길은 조금 더 선명해졌다.</div>`;
+  } else { // defeat
+    const items = s.lostLoot;
+    el.innerHTML = items.length
+      ? `<div class="rl-head rl-head--lost">잃어버린 전리품 <span class="rl-count">${items.length}</span></div>`
+        + `<div class="rl-list">${items.map((l) => lootChipHTML(l, true)).join("")}</div>`
+        + `<div class="rl-note rl-note--lost">들고 있던 것을 숲에 두고 왔다. 욕심은 흔적만 남겼다.</div>`
+      : `<div class="rl-empty">잃어버린 전리품은 없었다. 하지만 숲은 이번 모험을 삼켜 버렸다.</div>`;
+  }
+}
+
+// Return & Loot Core 01 — 전리품 칩 1개(이름 + tier 라벨 + 발견 심도). flavor는 title 툴팁.
+function lootChipHTML(loot, lost) {
+  const tier = loot.tier || "common";
+  const depth = loot.foundAtDepth ? ` · 심도 ${loot.foundAtDepth}` : "";
+  const title = (loot.flavor || "") + (loot.foundAtDepth ? ` (심도 ${loot.foundAtDepth})` : "");
+  return `<span class="rl-chip rl-chip--${tier}${lost ? " rl-chip--lost" : ""}" title="${title}">`
+    + `<span class="rl-tier">${lootTierLabel(tier)}</span>`
+    + `<span class="rl-name">${loot.name}</span>`
+    + `<span class="rl-depth">${depth}</span>`
+    + `</span>`;
 }
 
 // Run Footprints 01 — 발자취 패널 목록 채우기(최신 먼저). main.js가 패널을 열 때 호출한다.

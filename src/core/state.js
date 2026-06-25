@@ -397,6 +397,9 @@ export const gameState = {
     // Fusion Moment 01: 합체 결과 화면용(직전 합체 정보) / 영입 화면 문맥(fusion=빈자리 보충, expand=4인 확장)
     lastFusion: null,
     recruitContext: null,
+    // Return & Loot Core 01 — 런 중 "들고 있는" 전리품(아직 확정 소유 아님). 귀환 성공=가져옴 / 전멸=잃음.
+    //   battle.js resetBattle에서 [] 초기화, 전투 승리 시 낮은 확률로 push. 전투 스탯 효과 없음(감정 코어).
+    carriedLoot: [],
   },
 
   party: createInitialParty(),
@@ -423,3 +426,21 @@ export const gameState = {
     "Phase 7: 성장 선택 구조 완료.",
   ],
 };
+
+// Return & Loot Core 01 — 결과 화면/요약용 read-only 전리품 요약(상태 변경 없음).
+//   런이 클리어(귀환 성공)면 carried = secured, 전멸이면 carried = lost로 본다. 그 외엔 carried만.
+//   ★battle event schema/payload와 무관(런 상태 carriedLoot + run.result에서 파생). raw 로그 덤프 아님.
+export function getRunLootSummary(run = gameState.run) {
+  const carried = Array.isArray(run && run.carriedLoot) ? run.carriedLoot.slice() : [];
+  const result = run && run.result;
+  const secured = result === "clear" ? carried.slice() : [];
+  const lost = result === "defeat" ? carried.slice() : [];
+  return {
+    carriedLoot: carried,
+    securedLoot: secured,
+    lostLoot: lost,
+    lootFoundCount: carried.length,
+    lootSecuredCount: secured.length,
+    lootLostCount: lost.length,
+  };
+}
