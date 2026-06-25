@@ -181,8 +181,8 @@
     </section>
 
     <section id="eo-director">
-      <h3>Current Director Snapshot <span class="eo-meta">· depth+alertness+route → encounter pressure (dev-only · 밸런스 변경 없음)</span></h3>
-      <div class="eo-note">현재 <b>depth+alertness+route</b>가 어떤 encounter pressure(적 수 / 조합 / 스탯 램프 / 정예·보스)를 만들고 있는지 보여주는 dev-only 스냅샷입니다. <b>실제 밸런스 변경 없음</b> — Forest Director(routes.js)의 기존 함수를 read-only로 호출해 표시합니다. encounter 생성은 <b>deterministic</b>(같은 depth/route/경계도면 seed 무관 동일). ※다음 단계 <b>Depth Band Director</b>의 선행 "지도"일 뿐, 밴드 시스템은 여기서 구현하지 않습니다.</div>
+      <h3>Current Director Snapshot <span class="eo-meta">· depth+alertness+route → encounter pressure + pressure band(파형) (dev-only 관측)</span></h3>
+      <div class="eo-note">현재 <b>depth+alertness+route</b>가 어떤 encounter pressure(적 수 / 조합 / 스탯 램프 / 정예·보스)와 <b>pressure band(숲의 호흡 파형)</b>를 만들고 있는지 보여주는 dev-only 스냅샷입니다. 이 패널 자체는 read-only(밸런스 미변경) — Forest Director(routes.js)의 함수를 호출해 표시합니다. <b>Depth Band Director 01</b>로 routes.js에 5단계 pressure band가 추가되어, friction 적 수(d6~9 ±1)·역할 조직화만 작게 보정합니다(raw HP/ATK·기본 스탯·boss=BOSS_FLOOR 무변경). encounter+band 생성은 <b>deterministic</b>(같은 depth/route/경계도면 seed 무관 동일·band=seed 0 깊이 파형).</div>
       <div id="eo-dir-controls">
         <span><label>route</label><select id="eo-dir-route">
           <option value="normal">새싹 숲길(normal)</option>

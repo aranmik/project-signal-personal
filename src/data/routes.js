@@ -270,6 +270,80 @@ export function combatDirectorTag(routeType, depth, alertness, party4Reached) {
   return t;
 }
 
+/* =========================================================
+   Depth Band Director 01 — Forest Pressure Wave 01.
+   "심도는 계속 조금씩 어려워지는 계단이 아니라, 숨 고르기와 긴장이 번갈아 오는 숲의 호흡이어야 한다."
+   현재 director(적 수/스탯/조합) 위에 5단계 pressure band(아주쉬움~아주어려움) 파형을 얹는다 —
+   작고 되돌리기 쉬운 레이어. ★raw HP/ATK multiplier·기본 스탯·파티 수 스케일링은 건드리지 않는다.
+   band가 바꾸는 것: ① d6~9 friction 적 수 완충(±1) ② 역할 조합 조직화 정도(기존 directorRoles 경계도 레버 재사용).
+   ★deterministic: 같은 (route, depth, alertness[, seed])면 항상 같은 band. Math.random 미사용(state 무오염).
+   ========================================================= */
+export const PRESSURE_BANDS = [
+  { id: "veryEasy", label: "아주 쉬움" },
+  { id: "easy",     label: "쉬움" },
+  { id: "normal",   label: "평이" },
+  { id: "hard",     label: "어려움" },
+  { id: "veryHard", label: "아주 어려움" },
+];
+// 기본 분포(누적): 아주쉬움 3% / 쉬움 30% / 평이 40% / 어려움 25% / 아주어려움 2%.
+//   고정 확률로 박지 않고 bandHardShift로 depth+alertness+route에 따라 어려운 쪽으로 자연 이동(아래).
+const BAND_BASE_CUM = [0.03, 0.33, 0.73, 0.98, 1.0];
+const BAND_ROUTE_CODE = { normal: 1, ally: 2, bond: 3, danger: 4, elite: 5, boss: 6, rest: 7 };
+const BAND_RUNWAY_MIN = 6, BAND_RUNWAY_MAX = 9; // d6~9 런웨이(초중반 붕괴 좌표) — 적 수 완충 집중 구간
+// band → ordinary combat 보정(작고 되돌리기 쉬움). roleAlertDelta=조직화(directorRoles 경계도 보정), runwayCountDelta=d6~9 friction 적 수.
+//   ★veryHard는 이번 단계에서 일반 전투 스파이크 금지 → hard와 동일한 기계 효과(rare label만). 고압 스파이크는 미래(Omen/Monster House 등)로.
+const BAND_MOD = {
+  veryEasy: { roleAlertDelta: -2, runwayCountDelta: -1 },
+  easy:     { roleAlertDelta: -1, runwayCountDelta: -1 },
+  normal:   { roleAlertDelta: 0,  runwayCountDelta: 0 },
+  hard:     { roleAlertDelta: 1,  runwayCountDelta: 0 },
+  veryHard: { roleAlertDelta: 1,  runwayCountDelta: 0 },
+};
+// 결정적 의사난수 0..1 — Math.random 미사용·state 무오염. 같은 입력=같은 값. seed 없으면 0(심도 파형 기준).
+function bandNoise(seed, depth, routeType, alertness) {
+  let h = ((seed >>> 0) + 0x9e3779b9) | 0;
+  h = Math.imul(h ^ (depth + 1), 0x85ebca6b);
+  h = Math.imul(h ^ ((BAND_ROUTE_CODE[routeType] || 0) + 0x165667b1), 0xc2b2ae35);
+  h = Math.imul(h ^ ((alertness || 0) + 1), 0x27d4eb2f);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+// depth+alertness+route가 분포를 "어려운 쪽"으로 미는 정도(상한 cap). cap 덕분에 후반/고경계에도 easy/veryEasy가 사라지지 않는다(쉬어가기 보존).
+function bandHardShift(depth, alertness, routeType, isElite) {
+  let s = Math.min(0.14, Math.max(0, (depth || 1) - 8) * 0.012) + Math.min(0.08, (alertness || 0) * 0.016);
+  if (routeType === "danger") s += 0.06;
+  if (isElite) s += 0.05;
+  return Math.min(0.24, s);
+}
+// 결정적 pressure band. boss는 BOSS_FLOOR라 파형 미적용(label만). 반환은 표시/적용 공용(roleAlertDelta·runwayCountDelta는 적용 가능 형태로 게이트됨).
+export function pressureBand(routeType, depth, alertness, seed = 0) {
+  const isBoss = routeType === "boss", isElite = routeType === "elite";
+  if (isBoss) return { id: "normal", label: "평이", roleAlertDelta: 0, runwayCountDelta: 0, inRunway: false, applied: false, noise: 0, shift: 0, reason: "보스=BOSS_FLOOR (파형 미적용 · label만)" };
+  const a = alertness || 0;
+  const noise = bandNoise(seed, depth, routeType, a);
+  const shift = bandHardShift(depth, a, routeType, isElite);
+  const v = Math.max(0, Math.min(0.999999, noise + shift));
+  let idx = BAND_BASE_CUM.findIndex((c) => v < c); if (idx < 0) idx = PRESSURE_BANDS.length - 1;
+  const b = PRESSURE_BANDS[idx], mod = BAND_MOD[b.id];
+  const inRunway = depth >= BAND_RUNWAY_MIN && depth <= BAND_RUNWAY_MAX;
+  const friction = routeType === "normal" || routeType === "ally" || routeType === "bond";
+  const runwayCountDelta = (inRunway && friction) ? mod.runwayCountDelta : 0; // danger/elite·런웨이 밖은 적 수 완충 안 함(정체성 유지)
+  return {
+    id: b.id, label: b.label, roleAlertDelta: mod.roleAlertDelta, runwayCountDelta, inRunway, applied: true,
+    noise: Math.round(noise * 1000) / 1000, shift: Math.round(shift * 1000) / 1000,
+    reason: `noise ${noise.toFixed(2)} + shift ${shift.toFixed(2)} → ${b.label}` + (runwayCountDelta ? ` · d6~9 적 수 ${runwayCountDelta}` : "") + (mod.roleAlertDelta ? ` · 조직화 ${mod.roleAlertDelta > 0 ? "+" : ""}${mod.roleAlertDelta}` : ""),
+  };
+}
+// band 적용 유효 경계도(조직화) — directorRoles 입력 보정용. clamp [0, MAX_ALERTNESS]. 적 수/스탯은 안 건드린다.
+export function bandAdjustedAlertness(alertness, band) {
+  return Math.max(0, Math.min(MAX_ALERTNESS, (alertness || 0) + ((band && band.roleAlertDelta) || 0)));
+}
+// band runway 적 수 완충을 역할 배열에 적용(friction·d6~9에서만 -1, 최소 2 보장). danger/elite/런웨이밖은 그대로.
+export function applyBandRunwayCount(roles, band) {
+  if (!band || !band.runwayCountDelta) return roles;
+  return roles.slice(0, Math.max(2, roles.length + band.runwayCountDelta));
+}
+
 // Run Structure 01C — 심도 분위기: 심도가 깊어질수록 "숲의 온도/공기"가 바뀐다(읽힘용).
 //   Beginner Theme Clear Feel 01 — 25~35 정석 구간은 평온 유지, 분위기는 36+에서만 바뀐다.
 //   1~35 기본 / 36+ 위협 / 46+ 분노. tier=전장·패널 class hook, label=문구. "보스를 오래 미룬 대가"를

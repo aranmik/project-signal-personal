@@ -5,6 +5,8 @@ import {
   ELITE_POOL, BOSS_ENCOUNTER,
   bossFury, bossReadinessPressure, bossMenace, ROLE_ACTOR, FRONT_ROLES, effectiveAlertness,
   directorScale, directorCount, directorRoles, eliteEscortCount, BOSS_FLOOR,
+  // Depth Band Director 01 — Forest Pressure Wave: 적 수/스탯 직접 변경 없이 조직화·d6~9 적 수만 band로 완충.
+  pressureBand, bandAdjustedAlertness, applyBandRunwayCount,
 } from "../data/routes.js";
 
 // Boss Early Challenge Pressure 01 — 현재 배치(formation)의 채워진 슬롯 수 = 파티 인원.
@@ -205,9 +207,11 @@ export function createRouteEnemies(routeType, run) {
   if (routeType === "elite") {
     // Forest Director 01 — 정예 최소 품질선: "정예 1 + 소형 최소 3"(낮은 심도/경계도라도 빈약하지 않게).
     //   호위 수는 eliteEscortCount(floor), 역할 구성은 directorRoles(경계도 조직화)로 채운다.
+    // Depth Band Director 01 — 정예는 호위 수(floor)·코어를 그대로 두고, band는 호위 "조직화"만 보정한다(적 수 완충 없음).
+    const eliteBand = pressureBand("elite", depth, alertness, run.bandSeed || 0);
     const eliteSpec = ELITE_POOL[(run.bossKeys || 0) % ELITE_POOL.length][0];
     const escCount = eliteEscortCount(depth, alertness);
-    const rolePool = directorRoles("normal", depth, alertness);
+    const rolePool = directorRoles("normal", depth, bandAdjustedAlertness(alertness, eliteBand));
     const escort = [];
     for (let i = 0; escort.length < escCount; i++) escort.push(rolePool[i % rolePool.length] || (escort.length % 2 ? "ranged" : "melee"));
     const specs = [eliteSpec, ...escort.map((r) => ROLE_ACTOR[r])];
@@ -219,7 +223,10 @@ export function createRouteEnemies(routeType, run) {
 
   // normal / danger / ally / bond — 마찰 전투. 적 수=directorCount(밴드), 조합=directorRoles(경계도), 스탯=directorScale.
   //   danger의 "위험" 정체성은 적 수 +1(directorCount) + stat 프리미엄(+12% HP / +1 atk)으로 유지.
-  const roles = directorRoles(routeType, depth, alertness);
+  // Depth Band Director 01 — pressure band(숲의 호흡): 역할 조직화 + d6~9 friction 적 수만 완충한다.
+  //   ★적 수 floor 2 보장 · directorScale/raw HP/ATK · 기본 스탯 · danger +1수/프리미엄은 그대로(band가 안 건드림).
+  const band = pressureBand(routeType, depth, alertness, run.bandSeed || 0);
+  const roles = applyBandRunwayCount(directorRoles(routeType, depth, bandAdjustedAlertness(alertness, band)), band);
   const specs = roles.map((r) => ROLE_ACTOR[r]);
   const slots = assignSlotsByFront(roles.map((r) => FRONT_ROLES.has(r)));
   const dscale = routeType === "danger" ? { hp: scale.hp * 1.12, atk: scale.atk } : scale;

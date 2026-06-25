@@ -32,6 +32,8 @@ import { depthBand, BOSS_MENACE, BOSS_FLOOR } from "../data/routes.js";
 import {
   DEPTH_BANDS, directorCount, directorScale, directorRoles, eliteEscortCount, combatDirectorTag,
   ROUTE_TYPES, bossFury, bossReadinessPressure, bossMenace, effectiveAlertness, MAX_ALERTNESS, ROLE_ACTOR, depthScale,
+  // Depth Band Director 01 — Forest Pressure Wave: 결정적 pressure band(파형) 표시 연동(read-only).
+  pressureBand, PRESSURE_BANDS,
 } from "../data/routes.js";
 
 /* ── 이름/포맷 ───────────────────────────────────────────────────── */
@@ -1816,23 +1818,28 @@ function dirPressureKey(score, isBoss) {
 }
 
 // 한 (route, depth, alertness) 조합의 스냅샷 — 실제 createRouteEnemies를 호출해 적 수/이름/HP/ATK를 읽는다.
+// ROLE_ACTOR 역참조(생성 적 type → 역할). band 반영된 실제 조합을 읽기 위함.
+const DIR_ACTOR_ROLE = { bear: "tank", fox: "melee", bird: "ranged", dewslime: "support", lamb: "healer" };
 function dirSnapshot(routeType, depth, alertness, scn = {}) {
   const rt = ROUTE_TYPES[routeType] || ROUTE_TYPES.normal;
   const run = dirRun({ depth, alertness, party4: scn.party4 !== false, bossKeys: scn.bossKeys ?? 2, fusionCount: scn.fusionCount ?? 2, partySize: scn.partySize ?? 4 });
   const effAlert = effectiveAlertness(run);
-  const band = depthBand(depth);
+  const dband = depthBand(depth);
   const scale = directorScale(depth);
   const isCombat = rt.kind !== "rest";
   const isElite = routeType === "elite";
   const isBoss = routeType === "boss";
   const tag = combatDirectorTag(routeType, depth, effAlert, run.party4Reached);
+  // Depth Band Director 01 — 게임과 동일하게 seed 0(깊이 파형 고정). createRouteEnemies도 run.bandSeed 미설정 → seed 0.
+  const pband = pressureBand(routeType, depth, effAlert, 0);
   let enemies = [];
   if (isCombat) { try { enemies = createRouteEnemies(routeType, run) || []; } catch (e) { enemies = []; } }
   const perEnemy = enemies.map((u) => ({ name: u.name || u.type, type: u.type, hp: u.maxHp, atk: u.atk }));
   const totalHp = enemies.reduce((s, u) => s + (u.maxHp || 0), 0);
   const totalAtk = enemies.reduce((s, u) => s + (u.atk || 0), 0);
-  const count = enemies.length;
-  const roles = isCombat && !isBoss ? directorRoles(isElite ? "normal" : routeType, depth, effAlert) : [];
+  const count = enemies.length; // band-applied 실제 생성 적 수
+  const rawCount = (isCombat && !isBoss && !isElite) ? directorCount(routeType, depth) : null; // friction raw(밴드 전) 적 수
+  const roles = perEnemy.map((e) => DIR_ACTOR_ROLE[e.type]).filter(Boolean); // band 반영된 실제 역할 조합(코어 제외)
   const score = isCombat ? dirPressureScore(routeType, count, scale, isElite, isBoss) : 0;
   const pressKey = isCombat ? dirPressureKey(score, isBoss) : null;
   let bossInfo = null;
@@ -1845,17 +1852,30 @@ function dirSnapshot(routeType, depth, alertness, scn = {}) {
   }
   return {
     routeType, label: rt.title, hud: rt.hud, kind: rt.kind, isCombat, isElite, isBoss,
-    depth, band: { id: band.id, label: band.label }, alertness, effAlert,
+    depth, band: { id: dband.id, label: dband.label }, alertness, effAlert,
     scaleHp: Math.round(scale.hp * 100) / 100, scaleAtk: Math.round(scale.atk * 100) / 100,
-    count, names: perEnemy.map((e) => e.name), pool: [...new Set(perEnemy.map((e) => e.type))],
+    count, rawCount, names: perEnemy.map((e) => e.name), pool: [...new Set(perEnemy.map((e) => e.type))],
     perEnemy, totalHp, totalAtk, roles, roleText: roles.map((r) => DIR_ROLE_LABEL[r] || r).join("·"),
     tag, score, pressure: pressKey, bossInfo,
     dangerPremium: routeType === "danger" ? "+12% HP · +1 ATK" : null,
     eliteEscort: isElite ? eliteEscortCount(depth, effAlert) : null,
+    // Depth Band Director 01 — pressure band(파형) 표시 + 효과 요약.
+    bandId: pband.id, bandLabel: pband.label, bandRoleAlertDelta: pband.roleAlertDelta, bandRunwayCountDelta: pband.runwayCountDelta,
+    bandApplied: pband.applied, bandReason: pband.reason,
+    bandCountEffect: (rawCount != null) ? count - rawCount : 0, // friction: band가 줄인 적 수(0 또는 -1)
   };
 }
 
 const dirPressCell = (key) => key ? `<span class="eo-press eo-press--${DIR_PRESS[key].c}">${DIR_PRESS[key].ko}</span>` : "—";
+// Depth Band Director 01 — pressure band(파형) 표시: 라벨 칩 + band가 준 효과(적 수/조직화).
+const DIR_BAND_C = { veryEasy: "vlo", easy: "lo", normal: "no", hard: "hi", veryHard: "vhi" };
+const dirBandCell = (s) => {
+  if (!s.isCombat || !s.bandApplied) return s.isBoss ? `<span class="eo-meta">파형 미적용</span>` : "—";
+  const eff = [];
+  if (s.bandRunwayCountDelta) eff.push(`적수${s.bandRunwayCountDelta}`);
+  if (s.bandRoleAlertDelta) eff.push(`조직${s.bandRoleAlertDelta > 0 ? "+" : ""}${s.bandRoleAlertDelta}`);
+  return `<span class="eo-press eo-press--${DIR_BAND_C[s.bandId] || "no"}">${esc(s.bandLabel)}</span>${eff.length ? ` <span class="eo-meta">${eff.join("·")}</span>` : ""}`;
+};
 const dirCombatLabel = (s) => s.isCombat ? (s.isBoss ? "보스" : s.isElite ? "정예" : s.routeType === "danger" ? "위험" : "일반") : "비전투(정비)";
 
 function readDirInputs() {
@@ -1882,6 +1902,7 @@ function dirDepthRampRows() {
     if (prev && s.count > prev.count) note.push(`적 수 ↑${s.count - prev.count}`);
     if (prev && s.scaleHp > prev.scaleHp) note.push("HP스케일 ↑");
     if (prev && s.isCombat && prev.isCombat && s.score < prev.score - 0.001) note.push("↓ 직전보다 낮음(쉬울 수 있음)");
+    if (s.bandCountEffect) note.push(`band 적 수 완충 ${s.bandCountEffect}`);
     if (s.eliteEscort != null) note.push(`정예 호위 ${s.eliteEscort}`);
     const hi = d >= 5 && d <= 9;
     rows.push({ s, note: note.join(" · "), hi });
@@ -1902,34 +1923,42 @@ function renderDirectorSnapshot() {
     <td><b>${s.depth}</b></td><td class="txt">B${s.band.id} ${esc(s.band.label)}</td><td class="txt">${dirCombatLabel(s)}</td>
     <td>${s.isCombat ? s.count : "—"}</td><td class="txt">${s.isCombat ? esc(s.names.join(", ")) : "—"}</td>
     <td>×${s.scaleHp}</td><td>×${s.scaleAtk}</td><td>${s.isCombat ? s.totalHp : "—"}</td><td>${s.isCombat ? s.totalAtk : "—"}</td>
-    <td>${dirPressCell(s.pressure)}</td><td class="txt">${esc(note)}</td></tr>`).join("");
-  const t1 = `<div class="eo-line"><b>① Depth 램프 — ${esc(routeLabel)}</b> <span class="eo-meta">depth ${st.depthMin}~${st.depthMax} · 경계도 ${st.alertness}${st.party4 ? "" : " · pre-party4(잠복)"} · 심도 5~9 강조</span></div>
-    <div class="eo-tablewrap"><table><thead><tr><th>depth</th><th class="txt">밴드</th><th class="txt">전투</th><th>적 수</th><th class="txt">풀(생성)</th><th>HP×</th><th>ATK×</th><th>총HP</th><th>총ATK</th><th>pressure</th><th class="txt">note</th></tr></thead><tbody>${rampRows}</tbody></table></div>`;
+    <td>${dirPressCell(s.pressure)}</td><td class="txt">${dirBandCell(s)}</td><td class="txt">${esc(note)}</td></tr>`).join("");
+  const t1 = `<div class="eo-line"><b>① Depth 램프 — ${esc(routeLabel)}</b> <span class="eo-meta">depth ${st.depthMin}~${st.depthMax} · 경계도 ${st.alertness}${st.party4 ? "" : " · pre-party4(잠복)"} · 심도 5~9 강조 · band=파형 레이어</span></div>
+    <div class="eo-tablewrap"><table><thead><tr><th>depth</th><th class="txt">밴드</th><th class="txt">전투</th><th>적 수</th><th class="txt">풀(생성)</th><th>HP×</th><th>ATK×</th><th>총HP</th><th>총ATK</th><th>pressure</th><th class="txt">band(파형)</th><th class="txt">note</th></tr></thead><tbody>${rampRows}</tbody></table></div>`;
   // 표 2 — focus depth에서 route 비교
   const cmp = DIR_ROUTES.map((rt) => dirSnapshot(rt, st.focusDepth, st.alertness, { party4: st.party4 }));
   const cmpRows = cmp.map((s) => `<tr>
     <td class="txt"><b>${esc(s.label)}</b> <span class="eo-meta">${s.routeType}</span></td><td class="txt">${dirCombatLabel(s)}</td>
     <td>${s.isCombat ? s.count : "—"}</td><td class="txt">${s.isCombat ? esc(s.pool.join(", ")) : "정비/회복"}</td>
     <td>${s.isCombat ? "×" + s.scaleHp : "—"}</td><td>${s.isCombat ? "×" + s.scaleAtk : "—"}</td>
-    <td>${s.isCombat ? s.totalHp : "—"}</td><td>${s.isCombat ? s.totalAtk : "—"}</td><td>${dirPressCell(s.pressure)}</td>
+    <td>${s.isCombat ? s.totalHp : "—"}</td><td>${s.isCombat ? s.totalAtk : "—"}</td><td>${dirPressCell(s.pressure)}</td><td class="txt">${dirBandCell(s)}</td>
     <td class="txt">${esc((s.tag || []).join(" "))}${s.dangerPremium ? " · " + esc(s.dangerPremium) : ""}${s.isBoss ? ` · BOSS_FLOOR ${s.bossInfo.floorHp}/${s.bossInfo.floorAtk}` : ""}</td></tr>`).join("");
   const t2 = `<div class="eo-line"><b>② Route 비교 — 심도 ${st.focusDepth}</b> <span class="eo-meta">경계도 ${st.alertness} · 각 route가 같은 심도에서 만드는 압력</span></div>
-    <div class="eo-tablewrap"><table><thead><tr><th class="txt">route</th><th class="txt">전투</th><th>적 수</th><th class="txt">풀</th><th>HP×</th><th>ATK×</th><th>총HP</th><th>총ATK</th><th>pressure</th><th class="txt">tag/특수</th></tr></thead><tbody>${cmpRows}</tbody></table></div>`;
+    <div class="eo-tablewrap"><table><thead><tr><th class="txt">route</th><th class="txt">전투</th><th>적 수</th><th class="txt">풀</th><th>HP×</th><th>ATK×</th><th>총HP</th><th>총ATK</th><th>pressure</th><th class="txt">band</th><th class="txt">tag/특수</th></tr></thead><tbody>${cmpRows}</tbody></table></div>`;
   // 표 3 — focus depth + 선택 route에서 경계도 sweep
   const sweep = [];
   for (let a = 0; a <= MAX_ALERTNESS; a++) sweep.push(dirSnapshot(st.route === "rest" || st.route === "boss" ? "normal" : st.route, st.focusDepth, a, { party4: st.party4 }));
-  const sweepRows = sweep.map((s) => `<tr><td><b>${s.alertness}</b></td><td>${s.effAlert}</td><td>${s.count}</td><td class="txt">${esc(s.roleText)}</td><td>${s.totalHp}</td><td>${s.totalAtk}</td><td>${dirPressCell(s.pressure)}</td></tr>`).join("");
+  const sweepRows = sweep.map((s) => `<tr><td><b>${s.alertness}</b></td><td>${s.effAlert}</td><td>${s.count}</td><td class="txt">${esc(s.roleText)}</td><td>${s.totalHp}</td><td>${s.totalAtk}</td><td>${dirPressCell(s.pressure)}</td><td class="txt">${dirBandCell(s)}</td></tr>`).join("");
   const sweepRoute = (st.route === "rest" || st.route === "boss") ? "normal" : st.route;
-  const t3 = `<div class="eo-line"><b>③ 경계도 sweep — ${esc((ROUTE_TYPES[sweepRoute] || {}).title || sweepRoute)} · 심도 ${st.focusDepth}</b> <span class="eo-meta">경계도는 적 수를 늘리지 않고 "역할 조합"만 두껍게 한다 — 확인용</span></div>
-    <div class="eo-tablewrap"><table><thead><tr><th>경계도</th><th>유효</th><th>적 수</th><th class="txt">역할 조합</th><th>총HP</th><th>총ATK</th><th>pressure</th></tr></thead><tbody>${sweepRows}</tbody></table></div>`;
+  const t3 = `<div class="eo-line"><b>③ 경계도 sweep — ${esc((ROUTE_TYPES[sweepRoute] || {}).title || sweepRoute)} · 심도 ${st.focusDepth}</b> <span class="eo-meta">경계도는 적 수를 늘리지 않고 "역할 조합"만 두껍게 한다 + band(파형) 보정 — 확인용</span></div>
+    <div class="eo-tablewrap"><table><thead><tr><th>경계도</th><th>유효</th><th>적 수</th><th class="txt">역할 조합</th><th>총HP</th><th>총ATK</th><th>pressure</th><th class="txt">band</th></tr></thead><tbody>${sweepRows}</tbody></table></div>`;
   // 관측 메모(5~9 구간)
   const d5to9 = [];
   for (let d = 5; d <= 9; d++) d5to9.push(dirSnapshot(st.route, d, st.alertness, { party4: st.party4 }));
   const countStep = d5to9.find((s, i) => i > 0 && s.count > d5to9[i - 1].count);
   const noteText = `심도 5~9 구간: 적 수 ${d5to9[0].count}→${d5to9[d5to9.length - 1].count}` + (countStep ? ` (심도 ${countStep.depth}에서 적 수 step ↑)` : "") + `, HP스케일 ×${d5to9[0].scaleHp}→×${d5to9[d5to9.length - 1].scaleHp}. 적 수 step(밴드 경계 d9)과 스탯 step(d7)이 어긋나 있어, party 4인 완성 전(pre-party4=잠복 경계도)이면 이 구간이 초중반 붕괴 좌표가 되기 쉽다.`;
-  const legend = `<div class="eo-note"><b>estimated pressure</b>(dev 관측용 · 실제 전투 결과/확정 판정 아님) = 적 수 × HP 스케일 (+ danger ×1.12 · 정예 코어 +4 · 보스=BOSS_FLOOR라 매우높음 고정). 라벨: ${Object.values(DIR_PRESS).map((p) => p.ko).join(" / ")}. <b>encounter 생성은 deterministic</b> — 같은 depth/route/경계도면 seed와 무관하게 동일합니다(이 자체가 관측 결과).</div>`;
+  // band 분포(선택 route depth 범위) + d6~9 friction 적 수 완충 목록
+  const bandDist = {};
+  ramp.forEach(({ s }) => { if (s.isCombat) bandDist[s.bandId] = (bandDist[s.bandId] || 0) + 1; });
+  const bandDistText = PRESSURE_BANDS.map((b) => `${b.label} ${bandDist[b.id] || 0}`).join(" / ");
+  const runwayBuffered = ramp.filter(({ s }) => s.bandCountEffect).map(({ s }) => `d${s.depth}(${s.bandLabel} 적수${s.bandCountEffect})`);
+  const legend = `<div class="eo-note"><b>estimated pressure</b>(dev 관측용 · 실제 전투 결과/확정 판정 아님) = 적 수 × HP 스케일 (+ danger ×1.12 · 정예 코어 +4 · 보스=BOSS_FLOOR라 매우높음 고정). 라벨: ${Object.values(DIR_PRESS).map((p) => p.ko).join(" / ")}.
+    <br><b>band(파형)</b> = Depth Band Director 01 — 숲의 호흡. 5단계(${PRESSURE_BANDS.map((b) => b.label).join("/")})·deterministic(같은 depth/route/경계도면 동일·seed 0 깊이 파형). band는 <b>적 수/스탯을 크게 안 흔들고</b>, ① d6~9 friction 적 수 ±1 완충 ② 역할 조직화(조직±N)만 보정. boss=파형 미적용. encounter 생성은 deterministic.</div>`;
   el.innerHTML = legend + t1 + t2 + t3
-    + `<div class="eo-note"><b>관측 메모</b> ${esc(noteText)} ${st.party4 ? "" : "<b>(현재 pre-party4: 유효 경계도가 잠복돼 조합은 단순하지만, 4인 미완성 자체가 위험)</b>"}</div>`;
+    + `<div class="eo-note"><b>관측 메모</b> ${esc(noteText)} ${st.party4 ? "" : "<b>(현재 pre-party4: 유효 경계도가 잠복돼 조합은 단순하지만, 4인 미완성 자체가 위험)</b>"}
+      <br><b>band 분포</b>(${esc(routeLabel)} d${st.depthMin}~${st.depthMax}): ${esc(bandDistText)}.
+      <br><b>d6~9 적 수 완충</b>: ${runwayBuffered.length ? esc(runwayBuffered.join(" · ")) : "이 구간에서 완충된 friction 전투 없음(현재 band 분포 기준)"} — 쉬움/아주쉬움 band가 뜬 friction 전투만 d9 적 수 step을 −1 완충(평이/어려움은 현재 유지).</div>`;
 }
 
 // Copy — 사람이 읽는 Summary. export = Node 검증(DOM 없으면 기본 dirState 사용).
@@ -1939,13 +1968,20 @@ export function buildDirectorSummaryText() {
   const routeLabel = (ROUTE_TYPES[st.route] || {}).title || st.route;
   L.push("[Current Director Snapshot — Depth+Alertness Encounter Pressure]");
   L.push("generated: " + new Date().toISOString());
-  L.push("seed: " + st.seed + " (※Forest Director encounter는 deterministic — seed가 결과를 바꾸지 않음)");
+  L.push("seed: " + st.seed + " (※Forest Director encounter + pressure band는 deterministic — band는 seed 0 깊이 파형 고정, seed가 결과를 바꾸지 않음)");
   L.push("depth range: " + st.depthMin + "~" + st.depthMax + " · 경계도(alertness): " + st.alertness + " · " + (st.party4 ? "post-party4" : "pre-party4(잠복 경계도)"));
   L.push("focus route: " + routeLabel + " (" + st.route + ") · focus depth: " + st.focusDepth);
-  L.push("", `[Route 비교 @ 심도 ${st.focusDepth}] (combat / 적 수 / 총HP / pressure)`);
-  DIR_ROUTES.forEach((rt) => { const s = dirSnapshot(rt, st.focusDepth, st.alertness, { party4: st.party4 }); L.push(`* ${s.label}(${rt}): ${dirCombatLabel(s)} / ${s.isCombat ? s.count + "마리" : "비전투"} / 총HP ${s.isCombat ? s.totalHp : "—"} / pressure ${s.isCombat ? DIR_PRESS[s.pressure].ko : "—"}`); });
-  L.push("", `[Depth 램프 @ ${routeLabel}] (depth: 적 수 ×HP스케일 → pressure)`);
-  dirDepthRampRows().forEach(({ s }) => { if (s.isCombat) L.push(`* d${s.depth}(B${s.band.id}): ${s.count}마리 ×${s.scaleHp}HP/×${s.scaleAtk}ATK · 총HP ${s.totalHp} → ${DIR_PRESS[s.pressure].ko}`); else L.push(`* d${s.depth}: 비전투(정비)`); });
+  L.push("", `[Route 비교 @ 심도 ${st.focusDepth}] (combat / 적 수 / 총HP / pressure / band)`);
+  DIR_ROUTES.forEach((rt) => { const s = dirSnapshot(rt, st.focusDepth, st.alertness, { party4: st.party4 }); L.push(`* ${s.label}(${rt}): ${dirCombatLabel(s)} / ${s.isCombat ? s.count + "마리" : "비전투"} / 총HP ${s.isCombat ? s.totalHp : "—"} / pressure ${s.isCombat ? DIR_PRESS[s.pressure].ko : "—"} / band ${s.isCombat ? s.bandLabel : "—"}`); });
+  L.push("", `[Depth 램프 @ ${routeLabel}] (depth: 적 수 ×HP스케일 → pressure · band)`);
+  const rampForBand = dirDepthRampRows();
+  rampForBand.forEach(({ s }) => { if (s.isCombat) L.push(`* d${s.depth}(B${s.band.id}): ${s.count}마리 ×${s.scaleHp}HP/×${s.scaleAtk}ATK · 총HP ${s.totalHp} → ${DIR_PRESS[s.pressure].ko} · band ${s.bandLabel}${s.bandCountEffect ? `(적수${s.bandCountEffect})` : ""}${s.bandRoleAlertDelta ? `(조직${s.bandRoleAlertDelta > 0 ? "+" : ""}${s.bandRoleAlertDelta})` : ""}`); else L.push(`* d${s.depth}: 비전투(정비)`); });
+  const bDist = {}; rampForBand.forEach(({ s }) => { if (s.isCombat) bDist[s.bandId] = (bDist[s.bandId] || 0) + 1; });
+  const bufList = rampForBand.filter(({ s }) => s.bandCountEffect).map(({ s }) => `d${s.depth}(${s.bandLabel} ${s.bandCountEffect})`);
+  L.push("", `[band(파형) — Depth Band Director 01]`);
+  L.push("* 분포(" + routeLabel + " d" + st.depthMin + "~" + st.depthMax + "): " + PRESSURE_BANDS.map((b) => `${b.label} ${bDist[b.id] || 0}`).join(" / "));
+  L.push("* d6~9 적 수 완충(쉬움/아주쉬움 friction만 −1): " + (bufList.length ? bufList.join(" · ") : "현재 band 분포 기준 없음"));
+  L.push("* band 효과 범위: friction 적 수 ±1(d6~9) + 역할 조직화 ±N. raw HP/ATK·기본 스탯·danger 프리미엄·boss=BOSS_FLOOR는 무변경. 아주어려움=이번엔 일반 전투 스파이크 금지(rare label).");
   const d59 = []; for (let d = 5; d <= 9; d++) d59.push(dirSnapshot(st.route, d, st.alertness, { party4: st.party4 }));
   L.push("", "[심도 5~9 관측 메모]");
   L.push(`* 적 수 ${d59[0].count}→${d59[d59.length - 1].count} · HP스케일 ×${d59[0].scaleHp}→×${d59[d59.length - 1].scaleHp} (적 수 step=밴드경계 d9 / 스탯 step=d7로 어긋남)`);
@@ -1958,14 +1994,19 @@ export function buildDirectorSummaryText() {
 export function buildDirectorJSON() {
   readDirInputs();
   const st = dirState;
-  const lite = (s) => ({ route: s.routeType, label: s.label, combat: dirCombatLabel(s), count: s.isCombat ? s.count : 0, pool: s.pool, scaleHp: s.scaleHp, scaleAtk: s.scaleAtk, totalHp: s.totalHp, totalAtk: s.totalAtk, pressure: s.pressure, tag: s.tag, band: s.band, effAlert: s.effAlert, roles: s.roles, eliteEscort: s.eliteEscort, bossFloor: s.isBoss ? { hp: s.bossInfo.floorHp, atk: s.bossInfo.floorAtk } : null });
+  const lite = (s) => ({ route: s.routeType, label: s.label, combat: dirCombatLabel(s), count: s.isCombat ? s.count : 0, rawCount: s.rawCount, pool: s.pool, scaleHp: s.scaleHp, scaleAtk: s.scaleAtk, totalHp: s.totalHp, totalAtk: s.totalAtk, pressure: s.pressure, tag: s.tag, depthBand: s.band, effAlert: s.effAlert, roles: s.roles, eliteEscort: s.eliteEscort, bossFloor: s.isBoss ? { hp: s.bossInfo.floorHp, atk: s.bossInfo.floorAtk } : null,
+    pressureBand: { id: s.bandId, label: s.bandLabel, roleAlertDelta: s.bandRoleAlertDelta, runwayCountDelta: s.bandRunwayCountDelta, countEffect: s.bandCountEffect, applied: s.bandApplied } });
+  const rampRows = dirDepthRampRows();
+  const bandDist = {}; rampRows.forEach(({ s }) => { if (s.isCombat) bandDist[s.bandId] = (bandDist[s.bandId] || 0) + 1; });
   return JSON.stringify({
-    tool: "current-director-snapshot", note: "dev-only 관측값 · 실제 밸런스/저장 무관 · encounter 생성 deterministic(seed 무관)",
+    tool: "current-director-snapshot", note: "dev-only 관측값 · 실제 밸런스/저장 무관 · encounter+pressure band 생성 deterministic(band=seed 0 깊이 파형). pressure band는 friction 적 수 ±1(d6~9)·역할 조직화만 보정 — raw HP/ATK·기본 스탯 무변경.",
     generatedAt: new Date().toISOString(),
     inputs: { ...st },
-    depthRamp: dirDepthRampRows().map(({ s, note, hi }) => ({ ...lite(s), depth: s.depth, note, highlight: hi })),
+    pressureBands: PRESSURE_BANDS,
+    bandDistribution: bandDist,
+    depthRamp: rampRows.map(({ s, note, hi }) => ({ ...lite(s), depth: s.depth, note, highlight: hi })),
     routeComparison: DIR_ROUTES.map((rt) => ({ ...lite(dirSnapshot(rt, st.focusDepth, st.alertness, { party4: st.party4 })), depth: st.focusDepth })),
-    alertnessSweep: (() => { const out = []; const r = (st.route === "rest" || st.route === "boss") ? "normal" : st.route; for (let a = 0; a <= MAX_ALERTNESS; a++) { const s = dirSnapshot(r, st.focusDepth, a, { party4: st.party4 }); out.push({ alertness: a, effAlert: s.effAlert, count: s.count, roles: s.roles, totalHp: s.totalHp, totalAtk: s.totalAtk, pressure: s.pressure }); } return out; })(),
+    alertnessSweep: (() => { const out = []; const r = (st.route === "rest" || st.route === "boss") ? "normal" : st.route; for (let a = 0; a <= MAX_ALERTNESS; a++) { const s = dirSnapshot(r, st.focusDepth, a, { party4: st.party4 }); out.push({ alertness: a, effAlert: s.effAlert, count: s.count, roles: s.roles, totalHp: s.totalHp, totalAtk: s.totalAtk, pressure: s.pressure, band: s.bandId }); } return out; })(),
   }, null, 0);
 }
 
