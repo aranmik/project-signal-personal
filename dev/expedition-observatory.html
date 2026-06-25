@@ -103,6 +103,16 @@
     #eo-ms-controls input#eo-ms-seeds { width: 190px; max-width: 60vw; }
     .eo-ms-copyrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 2px; }
     #eo-ms-copy-status { font-size: 11px; color: #9fb8cc; }
+    /* Current Director Snapshot 01 — depth/alertness/route encounter pressure 관측 패널 */
+    #eo-dir-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #11161d; border: 1px solid #2c3a46; border-radius: 10px; padding: 10px; margin: 8px 0; }
+    #eo-dir-controls label { font-size: 11px; color: #8aa0b2; margin-right: 3px; }
+    #eo-dir-controls input[type="number"] { width: 58px; background: #1b232c; color: #e7f0f7; border: 1px solid #34434f; border-radius: 8px; padding: 6px 8px; font-size: 13px; }
+    #eo-dir-controls select { background: #1b232c; color: #e7f0f7; border: 1px solid #34434f; border-radius: 8px; padding: 6px 8px; font-size: 13px; }
+    .eo-press { display: inline-block; font-size: 10px; font-weight: 800; border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+    .eo-press--vlo { background: #16302a; color: #7fd1a8; } .eo-press--lo { background: #1b3326; color: #a7d8b0; }
+    .eo-press--no { background: #21303d; color: #9fc4dd; } .eo-press--hi { background: #3a2a1a; color: #e6c578; }
+    .eo-press--vhi { background: #3a1f22; color: #f0a0a0; }
+    tr.eo-dhi td { background: rgba(220, 170, 110, .10); }
   </style>
 </head>
 <body>
@@ -168,6 +178,45 @@
       </div>
       <div id="eo-ol-out"><div class="eo-empty">One Loot Failure Breakdown — Baseline / Variant 실행 대기 중</div></div>
       <textarea id="eo-ol-text" class="eo-exp-ta" readonly placeholder="One Loot Breakdown 요약이 여기에 표시됩니다 (클립보드 실패 시 여기서 직접 선택/복사)" style="display:none"></textarea>
+    </section>
+
+    <section id="eo-director">
+      <h3>Current Director Snapshot <span class="eo-meta">· depth+alertness+route → encounter pressure (dev-only · 밸런스 변경 없음)</span></h3>
+      <div class="eo-note">현재 <b>depth+alertness+route</b>가 어떤 encounter pressure(적 수 / 조합 / 스탯 램프 / 정예·보스)를 만들고 있는지 보여주는 dev-only 스냅샷입니다. <b>실제 밸런스 변경 없음</b> — Forest Director(routes.js)의 기존 함수를 read-only로 호출해 표시합니다. encounter 생성은 <b>deterministic</b>(같은 depth/route/경계도면 seed 무관 동일). ※다음 단계 <b>Depth Band Director</b>의 선행 "지도"일 뿐, 밴드 시스템은 여기서 구현하지 않습니다.</div>
+      <div id="eo-dir-controls">
+        <span><label>route</label><select id="eo-dir-route">
+          <option value="normal">새싹 숲길(normal)</option>
+          <option value="ally">동료의 흔적(ally)</option>
+          <option value="bond">결속의 공터(bond)</option>
+          <option value="danger">깊은 수풀(danger)</option>
+          <option value="elite">현자의 가지(elite)</option>
+          <option value="rest">이슬 쉼터(rest)</option>
+          <option value="boss">새싹 왕의 문(boss)</option>
+        </select></span>
+        <span><label>depth</label><input id="eo-dir-dmin" type="number" value="1" /> ~ <input id="eo-dir-dmax" type="number" value="20" /></span>
+        <span><label>경계도</label><input id="eo-dir-alert" type="number" value="3" min="0" max="5" /></span>
+        <span><label>focus depth</label><input id="eo-dir-focus" type="number" value="7" /></span>
+        <span><label>seed</label><input id="eo-dir-seed" type="number" value="401" /></span>
+        <label><input id="eo-dir-pre4" type="checkbox" /> pre-party4</label>
+        <button type="button" id="eo-dir-run" class="eo-btn">Snapshot 갱신 ▶</button>
+      </div>
+      <div id="eo-dir-presets" class="eo-sb-presets">
+        <button type="button" class="eo-btn ghost eo-sb-mini" data-dir-preset="early">early(1~8/경계1)</button>
+        <button type="button" class="eo-btn ghost eo-sb-mini" data-dir-preset="mid">mid(9~13/경계3)</button>
+        <button type="button" class="eo-btn ghost eo-sb-mini" data-dir-preset="late">late(14~20/경계5)</button>
+        <button type="button" class="eo-btn ghost eo-sb-mini" data-dir-preset="lowAlert">low alert(0)</button>
+        <button type="button" class="eo-btn ghost eo-sb-mini" data-dir-preset="highAlert">high alert(5)</button>
+        <button type="button" class="eo-btn ghost eo-sb-mini" data-dir-preset="pre4">pre-party4</button>
+        <button type="button" class="eo-btn ghost eo-sb-mini" data-dir-preset="post4">post-party4</button>
+      </div>
+      <div id="eo-dir-out"></div>
+      <div class="eo-ms-copyrow">
+        <button type="button" id="eo-dir-copy-sum" class="eo-btn">Copy Director Snapshot Summary ▶</button>
+        <button type="button" id="eo-dir-copy-json" class="eo-btn ghost">Copy Director Snapshot JSON ▶</button>
+        <button type="button" id="eo-dir-toggle" class="eo-btn ghost">텍스트 보기/접기</button>
+        <span id="eo-dir-copy-status" class="eo-meta"></span>
+      </div>
+      <textarea id="eo-dir-text" class="eo-exp-ta" readonly placeholder="Director Snapshot Summary / JSON이 여기에 표시됩니다 (클립보드 실패 시 직접 선택/복사)" style="display:none"></textarea>
     </section>
 
     <section id="eo-summary"><div class="eo-empty">A. Expedition Summary — 실행 대기 중</div></section>
