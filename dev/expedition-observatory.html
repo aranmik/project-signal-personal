@@ -113,6 +113,38 @@
     .eo-press--no { background: #21303d; color: #9fc4dd; } .eo-press--hi { background: #3a2a1a; color: #e6c578; }
     .eo-press--vhi { background: #3a1f22; color: #f0a0a0; }
     tr.eo-dhi td { background: rgba(220, 170, 110, .10); }
+    /* Band Observatory 01 — controls + dev-only lightweight charts(외부 라이브러리 없음) */
+    #eo-bo-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #11161d; border: 1px solid #2c3a46; border-radius: 10px; padding: 10px; margin: 8px 0; }
+    #eo-bo-controls label { font-size: 11px; color: #8aa0b2; margin-right: 3px; }
+    #eo-bo-controls input[type="number"] { width: 64px; background: #1b232c; color: #e7f0f7; border: 1px solid #34434f; border-radius: 8px; padding: 6px 8px; font-size: 13px; }
+    #eo-bo-controls select { background: #1b232c; color: #e7f0f7; border: 1px solid #34434f; border-radius: 8px; padding: 6px 8px; font-size: 13px; }
+    .eo-chart { background: #11161d; border: 1px solid #243039; border-radius: 10px; padding: 9px 11px; margin: 8px 0; }
+    .eo-chart-h { font-size: 12px; font-weight: 700; color: #ecd9bc; margin-bottom: 6px; }
+    .eo-svg { width: 100%; height: auto; display: block; }
+    .eo-bar-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; font-size: 11px; }
+    .eo-bar-lab { width: 60px; flex: none; color: #cfe0ee; text-align: right; }
+    .eo-bar-track { flex: 1; min-width: 60px; height: 14px; background: #0e141b; border-radius: 4px; overflow: hidden; display: flex; }
+    .eo-bar-fill { height: 100%; border-radius: 4px; }
+    .eo-seg { height: 100%; display: inline-block; }
+    .eo-bar-val { width: 150px; flex: none; color: #9fb3c4; font-size: 10px; text-align: left; }
+    .eo-bo-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; font-size: 10px; color: #9fb3c4; }
+    .eo-bo-leg { display: inline-flex; align-items: center; gap: 3px; }
+    .eo-seg-dot { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+    .eo-obar-wrap { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+    .eo-obar { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+    .eo-obar-bars { display: flex; align-items: flex-end; gap: 2px; height: 56px; }
+    .eo-mini { width: 12px; height: 56px; background: #0e141b; border-radius: 2px; display: flex; align-items: flex-end; }
+    .eo-mini-fill { width: 100%; border-radius: 2px; min-height: 1px; }
+    .eo-obar-lab { font-size: 10px; color: #cfe0ee; text-align: center; line-height: 1.2; }
+    .eo-strip { margin: 6px 0; }
+    .eo-strip-h { font-size: 11.5px; margin-bottom: 3px; }
+    .eo-strip-row { display: flex; flex-wrap: wrap; gap: 3px; }
+    .eo-strip-cell { font-size: 9px; border: 1px solid; border-radius: 4px; padding: 2px 4px; color: #e7f0f7; white-space: nowrap; line-height: 1.15; text-align: center; }
+    .eo-strip-cell b { font-size: 9.5px; }
+    .eo-bo-tl { background: #0e141b; border: 1px solid #243039; border-radius: 8px; padding: 7px 9px; margin: 6px 0; }
+    .eo-bo-tlh { font-size: 11.5px; margin-bottom: 3px; }
+    .eo-bo-steps { display: flex; flex-wrap: wrap; gap: 4px; }
+    .eo-bo-step { font-size: 10px; background: #1a2433; border: 1px solid #2c3a4a; border-radius: 5px; padding: 1px 5px; white-space: nowrap; color: #cfe0ee; }
   </style>
 </head>
 <body>
@@ -217,6 +249,42 @@
         <span id="eo-dir-copy-status" class="eo-meta"></span>
       </div>
       <textarea id="eo-dir-text" class="eo-exp-ta" readonly placeholder="Director Snapshot Summary / JSON이 여기에 표시됩니다 (클립보드 실패 시 직접 선택/복사)" style="display:none"></textarea>
+    </section>
+
+    <section id="eo-band-observatory">
+      <h3>Band Observatory <span class="eo-meta">· Pressure Band Run Lens 01 — band이 런에서 만든 호흡 (dev-only · 상관 관측)</span></h3>
+      <div class="eo-note">여러 런을 헤드리스로 돌려 <b>pressure band가 런의 어느 구간에서 숨 고르기/긴장/붕괴/귀환을 만들었는지</b>를 그래프+표로 봅니다. <b>밴드를 튜닝하지 않습니다</b> — 밴드/encounter/스탯/보상/loot 로직 무변경, deterministic pressureBand 재계산만(state.js/routes.js 미변경). <b>표는 검증용, 그래프는 나라가 숲의 호흡을 보는 창</b>입니다. 표/그래프는 <b>원인 확정이 아니라 상관 관측</b>이며 clearRate 튜닝 도구가 아닙니다. <b>d6~9</b>가 runway focus 구간. 색은 좋음/나쁨이 아니라 <b>압력 강도(완화→고압)</b>.</div>
+      <div id="eo-bo-controls">
+        <span><label>seed</label><input id="eo-bo-seed" type="number" value="405" /></span>
+        <span><label>runs</label><input id="eo-bo-runs" type="number" value="100" /></span>
+        <span><label>프로필</label><select id="eo-bo-profile">
+          <option value="bossRush">최단 귀환</option>
+          <option value="oneLoot" selected>1전리품 귀환</option>
+          <option value="collector">회수 귀환</option>
+          <option value="greed">욕심 전멸</option>
+        </select></span>
+        <span><label>route</label><select id="eo-bo-route">
+          <option value="all">all</option>
+          <option value="normal">새싹 숲길</option>
+          <option value="ally">동료의 흔적</option>
+          <option value="bond">결속의 공터</option>
+          <option value="danger">깊은 수풀</option>
+          <option value="elite">현자의 가지</option>
+          <option value="boss">보스</option>
+        </select></span>
+        <span><label>결과</label><select id="eo-bo-outcome"><option value="all">all</option><option value="clear">clear</option><option value="defeat">defeat</option></select></span>
+        <button type="button" id="eo-bo-run" class="eo-btn">Run Band Lens ▶</button>
+        <button type="button" id="eo-bo-cancel" class="eo-btn ghost" disabled>취소</button>
+        <span id="eo-bo-status" class="eo-meta">seed/runs/프로필을 정한 뒤 실행하세요. (route/결과 필터는 실행 후 즉시 재집계)</span>
+      </div>
+      <div id="eo-bo-out"></div>
+      <div class="eo-ms-copyrow">
+        <button type="button" id="eo-bo-copy-sum" class="eo-btn">Copy Band Observatory Summary ▶</button>
+        <button type="button" id="eo-bo-copy-json" class="eo-btn ghost">Copy Band Observatory JSON ▶</button>
+        <button type="button" id="eo-bo-toggle" class="eo-btn ghost">텍스트 보기/접기</button>
+        <span id="eo-bo-copy-status" class="eo-meta"></span>
+      </div>
+      <textarea id="eo-bo-text" class="eo-exp-ta" readonly placeholder="Band Observatory Summary / JSON이 여기에 표시됩니다 (클립보드 실패 시 직접 선택/복사)" style="display:none"></textarea>
     </section>
 
     <section id="eo-summary"><div class="eo-empty">A. Expedition Summary — 실행 대기 중</div></section>

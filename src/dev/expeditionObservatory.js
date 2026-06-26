@@ -267,6 +267,26 @@ export function applyCombatOverrides(ov) {
   });
 }
 
+// Band Observatory 01 — per-encounter band 캡처(gated). captureBands=true일 때만 rec.encounters에 적재.
+//   ★band은 deterministic이라 state.js/routes.js 변경 없이 pressureBand로 재계산(게임이 실제 쓴 값과 동일).
+//   기존 run path(Baseline/Variant/Multi-Seed 등)는 captureBands=false → push 0·동작 무변경.
+let captureBands = false;
+function captureEncounter(rec, route, depth, wasBossReady, lootProxy, treasureProxy) {
+  const eAlert = effectiveAlertness(gameState.run);
+  const pb = pressureBand(route, depth, eAlert, gameState.run.bandSeed || 0);
+  const party = partyJobIds();
+  const rtg = roleTagsOf(party);
+  rec.encounters.push({
+    step: rec.battleCount, depth, route, alertness: eAlert, band: pb.id,
+    bandCountDelta: pb.runwayCountDelta, bandRoleDelta: pb.roleAlertDelta,
+    enemyCount: (gameState.enemies || []).length,
+    rawCount: (route === "boss" || route === "elite") ? null : directorCount(route, depth),
+    partySize: party.length, hasHealer: !!rtg.healer, hasTank: !!rtg.tank, hasAoE: !!rtg.aoe, hasShield: !!rtg.shield,
+    lootProxy, treasureProxy, wasBossReady, isBoss: route === "boss", isElite: route === "elite",
+    friction: route === "normal" || route === "ally" || route === "bond",
+  });
+}
+
 function playExpedition(profile, runIndex, seed, overrides) {
   const loot = { dangerRoute: 0, elite: 0, bossKey: 0, deepReward: 0, discovery: 0, postBossReadyGreed: 0 };
   const rec = {
@@ -278,7 +298,7 @@ function playExpedition(profile, runIndex, seed, overrides) {
     postBossReadyDepth: 0,
     jobsSeen: new Set(), finalParty: [], bossParty: [], deathParty: [], postBossReadyJobs: new Set(),
     rewardsTaken: new Set(), deepRewardsTaken: new Set(),
-    path: [], notableEvents: [],
+    path: [], notableEvents: [], encounters: [], // encounters = Band Observatory 01 per-encounter 캡처(captureBands일 때만 채움)
     hpAtDeath: null, partySizeAtDeath: null, alertnessAtDeath: 0, routeBeforeWipe: "",
   };
   let pendingRoute = "normal", lootTotal = 0, sinceFusion = null;
@@ -313,6 +333,7 @@ function playExpedition(profile, runIndex, seed, overrides) {
       if (wasBossReady && route !== "boss") battleJobs.forEach((j) => rec.postBossReadyJobs.add(j));
       const keysBefore = gameState.run.bossKeys || 0;
       rec.battleCount += 1; rec.path.push(ROUTE_TOKEN[route] || "B");
+      if (captureBands) captureEncounter(rec, route, depth, wasBossReady, lootTotal, treasure()); // Band Observatory 01 — per-encounter band 적재(gated)
       applyCombatOverrides(overrides); // Nara Sandbox — per-battle 클론에만 적용(템플릿 무변경). null이면 no-op.
       const ok = runHeadlessBattle();
       if (!ok) { rec.result = "incomplete"; rec.path.push("TIMEOUT"); break; }
@@ -2023,6 +2044,249 @@ function applyDirPreset(name) {
   renderDirectorSnapshot();
 }
 
+/* ════════════════════════════════════════════════════════════════
+   Band Observatory 01 — Pressure Band Run Lens 01.
+   "밴드를 튜닝하지 않는다. 밴드가 런의 어느 구간에서 숨 고르기/긴장/붕괴/귀환을 만들었는지 보여준다."
+   여러 런을 헤드리스로 돌려(captureBands) per-encounter band를 모아 분포·d6~9 runway·outcome 상관·route×band·타임라인으로 본다.
+   ★dev-only 관측 — 밴드/encounter/스탯/보상/loot/route 로직 일절 변경 없음(deterministic pressureBand 재계산만).
+   ★band↔outcome는 상관 관측이지 원인 확정/밸런스 결론이 아니다.
+   ════════════════════════════════════════════════════════════════ */
+const BAND_IDS = PRESSURE_BANDS.map((b) => b.id);
+const bandKo = (id) => (DIR_PRESS[id] ? DIR_PRESS[id].ko : id);
+const bandChip = (id, isBoss) => isBoss ? `<span class="eo-meta">미적용</span>` : `<span class="eo-press eo-press--${(DIR_PRESS[id] || { c: "no" }).c}">${bandKo(id)}</span>`;
+const boRouteLabel = (rt) => (ROUTE_TYPES[rt] || {}).title || rt;
+let boRunning = false, boCancel = false, lastBandRecords = null, lastBandReport = null;
+
+async function runBandLens({ seed, runs, profileId, onProgress, shouldCancel }) {
+  const snap = snapshotState();
+  const out = [];
+  captureBands = true;
+  try {
+    setHeadlessRun(true);
+    if (gameState.dev) gameState.dev.immortal = false;
+    const useSeed = seed != null && !Number.isNaN(seed);
+    if (useSeed) installSeed(seed);
+    for (let i = 0; i < runs; i++) {
+      if (shouldCancel && shouldCancel()) break;
+      out.push(playExpedition(EXPEDITIONS[profileId], i, useSeed ? seed : 0, null));
+      if (i % 20 === 19) { if (onProgress) onProgress(i + 1); await yieldUI(); }
+    }
+  } finally { captureBands = false; setHeadlessRun(false); restoreRandom(); restoreState(snap); }
+  return out;
+}
+
+// per-encounter를 run 문맥과 함께 평탄화(route/outcome 필터 적용).
+function flattenBandEncounters(runs, routeFilter) {
+  const flat = [];
+  runs.forEach((r, ri) => {
+    const enc = r.encounters || []; const last = enc.length - 1;
+    enc.forEach((e, ei) => { if (routeFilter === "all" || e.route === routeFilter) flat.push(Object.assign({ ri, ei, last, runResult: r.result, runCleared: r.cleared, runWiped: r.wiped, runBoss: r.bossAttempted, runTreasure: r.treasureTotal || 0 }, e)); });
+  });
+  return flat;
+}
+
+export function buildBandReport(records, opts = {}) {
+  const routeFilter = opts.routeFilter || "all", outcomeFilter = opts.outcomeFilter || "all";
+  const runs = records.filter((r) => outcomeFilter === "all" || (outcomeFilter === "clear" ? r.cleared : r.wiped));
+  const flat = flattenBandEncounters(runs, routeFilter);
+  const clearEnc = flat.filter((e) => e.runCleared).length, failEnc = flat.filter((e) => e.runWiped).length;
+  const isWipeEnc = (e) => e.runWiped && e.ei === e.last;
+  // A. Band Distribution
+  const bandDist = BAND_IDS.map((id) => {
+    const es = flat.filter((e) => e.band === id && !e.isBoss);
+    return { band: id, n: es.length, share: rate(es.length, flat.length), avgDepth: mean(es.map((e) => e.depth)), avgEnemy: mean(es.map((e) => e.enemyCount)), avgParty: mean(es.map((e) => e.partySize)), avgLoot: mean(es.map((e) => e.treasureProxy)), wipeAt: es.filter(isWipeEnc).length, clearShare: rate(es.filter((e) => e.runCleared).length, clearEnc), failShare: rate(es.filter((e) => e.runWiped).length, failEnc) };
+  });
+  // B. d6~9 Runway Lens
+  const runway = flat.filter((e) => e.depth >= 6 && e.depth <= 9 && !e.isBoss);
+  const runwayByBand = BAND_IDS.map((id) => {
+    const es = runway.filter((e) => e.band === id); if (!es.length) return null;
+    const withRaw = es.filter((e) => e.rawCount != null); // raw vs 적수 비교는 같은 모집단(elite=rawCount 없음 제외)
+    return { band: id, n: es.length, avgRaw: mean(withRaw.map((e) => e.rawCount)), avgEnemy: mean(withRaw.map((e) => e.enemyCount)), buffered: es.filter((e) => e.bandCountDelta < 0).length, avgParty: mean(es.map((e) => e.partySize)), healerRate: rate(es.filter((e) => e.hasHealer).length, es.length), tankRate: rate(es.filter((e) => e.hasTank).length, es.length), wipeAt: es.filter(isWipeEnc).length, pre4: es.filter((e) => e.partySize < 4).length };
+  }).filter(Boolean);
+  const runwaySamples = runway.slice(0, 16).map((e) => ({ depth: e.depth, route: e.route, alertness: e.alertness, band: e.band, rawCount: e.rawCount, enemyCount: e.enemyCount, partySize: e.partySize, hasHealer: e.hasHealer, hasTank: e.hasTank, lootProxy: e.treasureProxy, wipe: isWipeEnc(e), outcome: e.runResult }));
+  // C. Outcome by Band (상관 관측)
+  const outcomeByBand = BAND_IDS.map((id) => {
+    const touched = runs.filter((r) => (r.encounters || []).some((e) => e.band === id && !e.isBoss));
+    return { band: id, runsTouched: touched.length, wipeAt: flat.filter((e) => e.band === id && !e.isBoss && isWipeEnc(e)).length, within1: flat.filter((e) => e.band === id && !e.isBoss && e.runWiped && (e.last - e.ei) <= 1).length, within2: flat.filter((e) => e.band === id && !e.isBoss && e.runWiped && (e.last - e.ei) <= 2).length, oneLootReturn: touched.filter((r) => r.cleared && (r.treasureTotal || 0) >= 1).length, clears: touched.filter((r) => r.cleared).length, bossAtt: touched.filter((r) => r.bossAttempted).length };
+  });
+  // D. Route × Band Matrix
+  const routeMatrix = DIR_ROUTES.map((rt) => {
+    const es = flattenBandEncounters(runs, "all").filter((e) => e.route === rt);
+    const dist = {}; BAND_IDS.forEach((id) => dist[id] = es.filter((e) => e.band === id).length);
+    return { route: rt, label: boRouteLabel(rt), combat: (ROUTE_TYPES[rt] || {}).kind !== "rest", n: es.length, dist, avgEnemy: mean(es.map((e) => e.enemyCount)), wipeAdj: rate(es.filter(isWipeEnc).length, es.length), avgLoot: mean(es.map((e) => e.treasureProxy)) };
+  });
+  // E. Timeline samples
+  const samples = pickBandSamples(runs);
+  // 차트용: depth wave(depth별 평균 band index 0~4 + 평균 적수) / d6~9 depth별 band 분포
+  const BAND_IDX = {}; BAND_IDS.forEach((id, i) => BAND_IDX[id] = i);
+  const nonBoss = flat.filter((e) => !e.isBoss);
+  const maxD = Math.min(30, nonBoss.reduce((m, e) => Math.max(m, e.depth), 1));
+  const depthWave = [];
+  for (let d = 1; d <= maxD; d++) { const es = nonBoss.filter((e) => e.depth === d); if (es.length) depthWave.push({ depth: d, n: es.length, avgBandIdx: mean(es.map((e) => BAND_IDX[e.band])), avgEnemy: mean(es.map((e) => e.enemyCount)) }); }
+  const runwayByDepth = [6, 7, 8, 9].map((d) => { const es = runway.filter((e) => e.depth === d); const wr = es.filter((e) => e.rawCount != null); const dist = {}; BAND_IDS.forEach((id) => dist[id] = es.filter((e) => e.band === id).length); return { depth: d, n: es.length, dist, avgEnemy: mean(wr.map((e) => e.enemyCount)), avgRaw: mean(wr.map((e) => e.rawCount)), wipeAt: es.filter(isWipeEnc).length, pre4: es.filter((e) => e.partySize < 4).length }; });
+  return { meta: { total: runs.length, clears: runs.filter((r) => r.cleared).length, wipes: runs.filter((r) => r.wiped).length, bossAtt: runs.filter((r) => r.bossAttempted).length, routeFilter, outcomeFilter, flatCount: flat.length, runwayCount: runway.length }, bandDist, runwayByBand, runwaySamples, outcomeByBand, routeMatrix, samples, depthWave, runwayByDepth };
+}
+
+function pickBandSamples(runs) {
+  const cands = [
+    ["첫 전멸 런", runs.find((r) => r.wiped)],
+    ["첫 1전리품 귀환 런", runs.find((r) => r.cleared && (r.treasureTotal || 0) >= 1)],
+    ["d6~9 붕괴 런", runs.find((r) => r.wiped && r.deathDepth >= 6 && r.deathDepth <= 9)],
+    ["d6~9 통과(생존) 런", runs.find((r) => !r.wiped && (r.encounters || []).some((e) => e.depth > 9))],
+    ["보스문 전 붕괴 런", runs.find((r) => r.wiped && r.bossReadyDepth > 0 && !r.bossAttempted)],
+    ["첫 클리어 런", runs.find((r) => r.cleared)],
+  ].filter(([, r]) => r);
+  const seen = new Set(), out = [];
+  cands.forEach(([label, r]) => { const key = r.seed + ":" + r.runIndex; if (!seen.has(key)) { seen.add(key); out.push({ label, result: r.result, deathDepth: r.deathDepth, bossReadyDepth: r.bossReadyDepth, steps: (r.encounters || []).slice(0, 16).map((e) => ({ step: e.step, depth: e.depth, route: e.route, alertness: e.alertness, band: e.band, isBoss: e.isBoss, enemyCount: e.enemyCount, partySize: e.partySize, hasHealer: e.hasHealer, lootProxy: e.treasureProxy, wasBossReady: e.wasBossReady })) }); } });
+  return out.slice(0, 6);
+}
+
+function readBandInputs() {
+  const num = (id, def) => { const v = parseInt(($(id) && $(id).value) || "", 10); return Number.isFinite(v) ? v : def; };
+  return {
+    seed: num("eo-bo-seed", 405), runs: Math.max(1, Math.min(400, num("eo-bo-runs", 100))),
+    profileId: ($("eo-bo-profile") && $("eo-bo-profile").value) || "oneLoot",
+    routeFilter: ($("eo-bo-route") && $("eo-bo-route").value) || "all",
+    outcomeFilter: ($("eo-bo-outcome") && $("eo-bo-outcome").value) || "all",
+  };
+}
+
+// ── dev-only lightweight 차트(외부 라이브러리 없음·HTML/CSS/SVG만). 색=압력 강도(완화→고압 cool→warm), 좋음/나쁨 아님. ──
+const BAND_FILL = { veryEasy: "#6fcf97", easy: "#a7d8b0", normal: "#8fb8d6", hard: "#e6b65c", veryHard: "#dd8a5a" };
+function chartBandDist(bandDist) {
+  const maxN = Math.max(1, ...bandDist.map((b) => b.n));
+  const rows = bandDist.map((b) => `<div class="eo-bar-row"><span class="eo-bar-lab">${bandKo(b.band)}</span><span class="eo-bar-track"><span class="eo-bar-fill" style="width:${Math.round(b.n / maxN * 100)}%;background:${BAND_FILL[b.band]}"></span></span><span class="eo-bar-val">${b.n} · ${fmtPct(b.share)}</span></div>`).join("");
+  return `<div class="eo-chart"><div class="eo-chart-h">① Band 분포 <span class="eo-meta">전체 encounter 등장 — 한쪽 쏠림 / veryHard 과다 확인</span></div>${rows}</div>`;
+}
+function chartDepthWave(wave) {
+  if (!wave.length) return "";
+  const W = 600, H = 132, pad = 26;
+  const xs = (i) => pad + (wave.length === 1 ? 0 : i / (wave.length - 1) * (W - pad * 2));
+  const ys = (v) => H - pad - (Math.max(0, Math.min(4, v)) / 4) * (H - pad * 2);
+  const pts = wave.map((w, i) => `${xs(i).toFixed(1)},${ys(w.avgBandIdx).toFixed(1)}`).join(" ");
+  const dots = wave.map((w, i) => `<circle cx="${xs(i).toFixed(1)}" cy="${ys(w.avgBandIdx).toFixed(1)}" r="2.4" fill="#eef6ff"><title>d${w.depth} 평균band ${w.avgBandIdx.toFixed(2)} 적${w.avgEnemy.toFixed(1)}</title></circle>`).join("");
+  const i6 = wave.findIndex((w) => w.depth >= 6), i9last = (() => { let x = -1; wave.forEach((w, i) => { if (w.depth <= 9) x = i; }); return x; })();
+  const shade = (i6 >= 0 && i9last >= i6) ? `<rect x="${xs(i6).toFixed(1)}" y="${pad}" width="${Math.max(2, xs(i9last) - xs(i6)).toFixed(1)}" height="${H - pad * 2}" fill="rgba(220,170,110,.12)"/>` : "";
+  const xlab = wave.map((w, i) => (i % Math.max(1, Math.ceil(wave.length / 10)) === 0 || i === wave.length - 1) ? `<text x="${xs(i).toFixed(1)}" y="${H - 6}" font-size="10" fill="#6f8497" text-anchor="middle">${w.depth}</text>` : "").join("");
+  const ylab = [[0, "완화"], [2, "평이"], [4, "고압"]].map(([v, t]) => `<text x="3" y="${(ys(v) + 3).toFixed(1)}" font-size="9" fill="#6f8497">${t}</text>`).join("");
+  const grid = [0, 2, 4].map((v) => `<line x1="${pad}" y1="${ys(v).toFixed(1)}" x2="${W - pad}" y2="${ys(v).toFixed(1)}" stroke="#243039" stroke-width="0.6"/>`).join("");
+  return `<div class="eo-chart"><div class="eo-chart-h">② Depth Pressure Wave <span class="eo-meta">depth별 평균 band(0 완화~4 고압) — 계단이 아니라 "숲의 파형"인지 (음영=d6~9)</span></div><svg viewBox="0 0 ${W} ${H}" class="eo-svg" preserveAspectRatio="xMidYMid meet">${grid}${shade}<polyline points="${pts}" fill="none" stroke="#e6c89a" stroke-width="1.8"/>${dots}${xlab}${ylab}</svg></div>`;
+}
+function chartRunway(byDepth) {
+  const rows = byDepth.map((d) => {
+    const total = d.n || 1;
+    const seg = BAND_IDS.map((id) => d.dist[id] ? `<span class="eo-seg" style="width:${(d.dist[id] / total * 100).toFixed(1)}%;background:${BAND_FILL[id]}" title="${bandKo(id)} ${d.dist[id]}"></span>` : "").join("");
+    return `<div class="eo-bar-row"><span class="eo-bar-lab">d${d.depth}</span><span class="eo-bar-track eo-bar-stack">${seg}</span><span class="eo-bar-val">적 ${fmt1(d.avgEnemy)}${d.avgRaw ? `/raw ${fmt1(d.avgRaw)}` : ""} · 전멸 ${d.wipeAt} · pre4 ${d.pre4} · n${d.n}</span></div>`;
+  }).join("");
+  return `<div class="eo-chart"><div class="eo-chart-h">③ d6~9 Runway Focus <span class="eo-meta">★핵심 — depth별 band 구성(색=압력)·평균 적수(band 후/raw)·전멸직전·pre4. "항상 벽" vs "숨 고르기"</span></div>${rows}<div class="eo-bo-legend">${BAND_IDS.map((id) => `<span class="eo-bo-leg"><span class="eo-seg-dot" style="background:${BAND_FILL[id]}"></span>${bandKo(id)}</span>`).join("")}</div></div>`;
+}
+function chartOutcome(obb) {
+  const cols = [["within1", "#dd8a5a", "다음1내 전멸"], ["within2", "#e6b65c", "다음2내 전멸"], ["oneLootReturn", "#6fcf97", "1전리품귀환"], ["clears", "#8fb8d6", "clear"]];
+  const rows = obb.filter((b) => b.runsTouched > 0).map((b) => {
+    const bars = cols.map(([k, c, lab]) => `<span class="eo-mini" title="${lab} ${b[k]}/${b.runsTouched} (${fmtPct(rate(b[k], b.runsTouched))})"><span class="eo-mini-fill" style="height:${Math.round(rate(b[k], b.runsTouched) * 100)}%;background:${c}"></span></span>`).join("");
+    return `<div class="eo-obar"><div class="eo-obar-bars">${bars}</div><div class="eo-obar-lab">${bandKo(b.band)}<br><span class="eo-meta">n${b.runsTouched}</span></div></div>`;
+  }).join("");
+  return `<div class="eo-chart"><div class="eo-chart-h">④ Outcome by Band <span class="eo-meta">★상관 관측(원인 아님) — band 등장 런 中 비율</span></div><div class="eo-obar-wrap">${rows || "<span class='eo-meta'>데이터 없음</span>"}</div><div class="eo-bo-legend">${cols.map(([, c, lab]) => `<span class="eo-bo-leg"><span class="eo-seg-dot" style="background:${c}"></span>${lab}</span>`).join("")}</div></div>`;
+}
+function chartTimelineStrip(samples) {
+  const blocks = samples.map((s) => {
+    const chips = s.steps.map((e) => `<span class="eo-strip-cell" style="background:${e.isBoss ? "rgba(110,85,58,.35)" : BAND_FILL[e.band] + "33"};border-color:${e.isBoss ? "#6e553a" : BAND_FILL[e.band]}" title="d${e.depth} ${esc(boRouteLabel(e.route))} ${e.isBoss ? "보스(파형 미적용)" : bandKo(e.band)} · 적 ${e.enemyCount} · 파티 ${e.partySize} · 전리품 ${e.lootProxy} · ${e.hasHealer ? "힐O" : "힐X"}${e.wasBossReady ? " · 보스문" : ""}"><b>d${e.depth}</b><span class="eo-meta">${e.isBoss ? "B" : bandKo(e.band).slice(0, 1)}·${e.enemyCount}/${e.partySize}</span></span>`).join("");
+    return `<div class="eo-strip"><div class="eo-strip-h"><b>${esc(s.label)}</b> <span class="eo-meta">${esc(s.result)}${s.deathDepth ? " · 전멸 d" + s.deathDepth : ""}${s.bossReadyDepth ? " · 보스문 d" + s.bossReadyDepth : ""}</span></div><div class="eo-strip-row">${chips || "<span class='eo-meta'>encounter 없음</span>"}</div></div>`;
+  }).join("");
+  return `<div class="eo-chart"><div class="eo-chart-h">⑤ Run Timeline Band Strip <span class="eo-meta">대표 런의 depth 순서 band 띠 — 칸=d{심도} {band}·적수/파티 (hover 상세)</span></div>${blocks || "<div class='eo-meta'>샘플 없음</div>"}</div>`;
+}
+
+function renderBandObservatory() {
+  const el = $("eo-bo-out");
+  if (!el) return;
+  if (!lastBandRecords) { el.innerHTML = `<div class="eo-empty">Run Band Lens 를 눌러 런을 돌리면 band 호흡 관측이 표시됩니다.</div>`; return; }
+  const inp = readBandInputs();
+  const rep = buildBandReport(lastBandRecords, { routeFilter: inp.routeFilter, outcomeFilter: inp.outcomeFilter });
+  lastBandReport = rep;
+  const m = rep.meta;
+  const head = `<div class="eo-line"><b>${esc(EXPEDITIONS[lastBandRecords.profileId] ? EXPEDITIONS[lastBandRecords.profileId].label : inp.profileId)}</b> <span class="eo-meta">seed ${lastBandRecords.seed} · ${lastBandRecords.length}런 · route:${inp.routeFilter} · outcome:${inp.outcomeFilter} — 표시 ${m.total}런 / clear ${m.clears} / wipe ${m.wipes} / boss시도 ${m.bossAtt} · encounter ${m.flatCount}</span></div>`;
+  // A
+  const aRows = rep.bandDist.map((b) => `<tr><td class="txt">${bandChip(b.band)}</td><td>${b.n}</td><td>${fmtPct(b.share)}</td><td>${fmt1(b.avgDepth)}</td><td>${fmt1(b.avgEnemy)}</td><td>${fmt1(b.avgParty)}</td><td>${fmt1(b.avgLoot)}</td><td>${b.wipeAt}</td><td>${fmtPct(b.clearShare)}</td><td>${fmtPct(b.failShare)}</td></tr>`).join("");
+  const tA = `<div class="eo-line"><b>A. Band Distribution</b> <span class="eo-meta">전체 encounter 기준 · veryHard가 과도한지 확인</span></div>
+    <div class="eo-tablewrap"><table><thead><tr><th class="txt">band</th><th>n</th><th>비율</th><th>평균depth</th><th>평균적수</th><th>평균파티</th><th>평균전리품*</th><th>wipe직전</th><th>clear런中</th><th>fail런中</th></tr></thead><tbody>${aRows}</tbody></table></div>`;
+  // B
+  const bRows = rep.runwayByBand.map((b) => `<tr><td class="txt">${bandChip(b.band)}</td><td>${b.n}</td><td>${fmt1(b.avgRaw)}</td><td>${fmt1(b.avgEnemy)}</td><td>${b.buffered}</td><td>${fmt1(b.avgParty)}</td><td>${fmtPct(b.healerRate)}</td><td>${b.pre4}</td><td>${b.wipeAt}</td></tr>`).join("");
+  const bSamp = rep.runwaySamples.map((e) => `<tr class="${e.wipe ? "eo-dhi" : ""}"><td>${e.depth}</td><td class="txt">${esc(boRouteLabel(e.route))}</td><td>${e.alertness}</td><td class="txt">${bandChip(e.band)}</td><td>${e.rawCount == null ? "—" : e.rawCount}</td><td>${e.enemyCount}</td><td>${e.partySize}</td><td class="txt">${e.hasHealer ? "힐" : "—"}${e.hasTank ? "·탱" : ""}</td><td>${e.lootProxy}</td><td class="txt">${e.wipe ? "전멸" : esc(e.outcome)}</td></tr>`).join("");
+  const tB = `<div class="eo-line"><b>B. d6~9 Runway Lens</b> <span class="eo-meta">★핵심 — band가 d6~9에서 숨 고르기/억까를 만드는지(raw=director 적 수, 적수=band 적용 후)</span></div>
+    <div class="eo-tablewrap"><table><thead><tr><th class="txt">band</th><th>n</th><th>평균raw</th><th>평균적수</th><th>완충된 수</th><th>평균파티</th><th>힐러율</th><th>pre4(파티&lt;4)</th><th>wipe직전</th></tr></thead><tbody>${bRows}</tbody></table></div>
+    <div class="eo-line"><span class="eo-meta">d6~9 샘플 encounter(최대 16):</span></div>
+    <div class="eo-tablewrap"><table><thead><tr><th>depth</th><th class="txt">route</th><th>경계</th><th class="txt">band</th><th>raw</th><th>적수</th><th>파티</th><th class="txt">역할</th><th>전리품*</th><th class="txt">결과</th></tr></thead><tbody>${bSamp}</tbody></table></div>`;
+  // C
+  const cRows = rep.outcomeByBand.map((b) => `<tr><td class="txt">${bandChip(b.band)}</td><td>${b.runsTouched}</td><td>${b.wipeAt}</td><td>${b.within1}</td><td>${b.within2}</td><td>${b.oneLootReturn}</td><td>${b.clears}</td><td>${b.bossAtt}</td></tr>`).join("");
+  const tC = `<div class="eo-line"><b>C. Outcome by Band</b> <span class="eo-meta">★상관 관측(원인 확정 아님) — band가 등장한 런과 결과의 관계</span></div>
+    <div class="eo-tablewrap"><table><thead><tr><th class="txt">band</th><th>등장 런</th><th>이 band서 전멸</th><th>다음1내 전멸</th><th>다음2내 전멸</th><th>1전리품귀환</th><th>clear</th><th>boss시도</th></tr></thead><tbody>${cRows}</tbody></table></div>`;
+  // D
+  const dRows = rep.routeMatrix.map((r) => `<tr><td class="txt"><b>${esc(r.label)}</b> <span class="eo-meta">${r.route}</span></td><td class="txt">${r.combat ? "전투" : "비전투"}</td><td>${r.n}</td><td class="txt">${BAND_IDS.map((id) => r.dist[id] ? `${bandKo(id).slice(0, 2)}${r.dist[id]}` : "").filter(Boolean).join(" ") || "—"}</td><td>${r.n ? fmt1(r.avgEnemy) : "—"}</td><td>${r.n ? fmtPct(r.wipeAdj) : "—"}</td><td>${r.n ? fmt1(r.avgLoot) : "—"}</td></tr>`).join("");
+  const tD = `<div class="eo-line"><b>D. Route × Band Matrix</b> <span class="eo-meta">danger 정체성·non-combat(쉼터=0 encounter) 확인</span></div>
+    <div class="eo-tablewrap"><table><thead><tr><th class="txt">route</th><th class="txt">전투</th><th>n</th><th class="txt">band 분포</th><th>평균적수</th><th>wipe근접률</th><th>전리품*</th></tr></thead><tbody>${dRows}</tbody></table></div>`;
+  // E
+  const eBlocks = rep.samples.map((s) => {
+    const chips = s.steps.map((e) => `<span class="eo-bo-step" title="${esc(boRouteLabel(e.route))} 경계${e.alertness} 적${e.enemyCount} 파티${e.partySize}${e.hasHealer ? " 힐O" : " 힐X"}${e.wasBossReady ? " 보스문" : ""}">d${e.depth} ${e.isBoss ? "보스" : bandKo(e.band).slice(0, 2)}<span class="eo-meta">·${e.enemyCount}/${e.partySize}</span></span>`).join("");
+    return `<div class="eo-bo-tl"><div class="eo-bo-tlh"><b>${esc(s.label)}</b> <span class="eo-meta">${esc(s.result)}${s.deathDepth ? " · 전멸 d" + s.deathDepth : ""}${s.bossReadyDepth ? " · 보스문 d" + s.bossReadyDepth : ""}</span></div><div class="eo-bo-steps">${chips || "<span class='eo-meta'>encounter 없음</span>"}</div></div>`;
+  }).join("");
+  const tE = `<div class="eo-line"><b>E. Run Timeline Samples</b> <span class="eo-meta">런의 "이야기"로 band 호흡 읽기 — 각 칩 = d{심도} {band} ·적수/파티</span></div>${eBlocks || "<div class='eo-meta'>샘플 없음</div>"}`;
+  const note = `<div class="eo-note"><b>Band Observatory</b> — 밴드와 런 결과의 <b>관계</b>를 보는 dev-only 관측 장비입니다. <b>원인 확정이 아니라 상관 관측</b>이며, clearRate를 맞추는 튜닝 도구가 아니라 <b>숲의 호흡</b>을 읽는 도구입니다. d6~9는 runway focus 구간. 그래프/칩 색은 좋음/나쁨이 아니라 <b>압력 강도(완화→고압)</b>입니다. *전리품=dev loot proxy(treasure 집계·헤드리스라 실 carriedLoot 아님).</div>`;
+  const charts = chartBandDist(rep.bandDist) + chartDepthWave(rep.depthWave) + chartRunway(rep.runwayByDepth) + chartOutcome(rep.outcomeByBand) + chartTimelineStrip(rep.samples);
+  el.innerHTML = note + head
+    + `<div class="eo-line"><b>📈 그래프 — 나라가 숲의 호흡을 보는 창</b> <span class="eo-meta">관측용 · 밸런스 결론 아님</span></div>` + charts
+    + `<div class="eo-line"><b>📋 상세 표 — 루다/렌 검증용</b></div>` + tA + tB + tC + tD + tE;
+}
+
+// Copy — Summary(사람) / JSON(parse). export = Node 검증.
+export function buildBandSummaryText(rep = lastBandReport, rec = lastBandRecords) {
+  if (!rep || !rec) return null;
+  const L = [];
+  L.push("[Band Observatory — Pressure Band Run Lens 01]");
+  L.push("generated: " + new Date().toISOString());
+  L.push(`실행: ${EXPEDITIONS[rec.profileId] ? EXPEDITIONS[rec.profileId].label : rec.profileId} · seed ${rec.seed} · ${rec.length}런 (route:${rep.meta.routeFilter} / outcome:${rep.meta.outcomeFilter})`);
+  L.push(`표시 런 ${rep.meta.total} · clear ${rep.meta.clears} · wipe ${rep.meta.wipes} · boss시도 ${rep.meta.bossAtt} · encounter ${rep.meta.flatCount}`);
+  L.push("", "[A. Band 분포] (band: n / 비율 / 평균적수 / wipe직전)");
+  rep.bandDist.forEach((b) => L.push(`* ${bandKo(b.band)}: ${b.n} / ${fmtPct(b.share)} / 적수 ${fmt1(b.avgEnemy)} / wipe직전 ${b.wipeAt}`));
+  L.push("", `[B. d6~9 Runway] (band: n / 평균raw→적수 / 완충수 / 힐러율 / wipe직전) — runway encounter ${rep.meta.runwayCount}`);
+  rep.runwayByBand.forEach((b) => L.push(`* ${bandKo(b.band)}: ${b.n} / raw ${fmt1(b.avgRaw)}→적수 ${fmt1(b.avgEnemy)} / 완충 ${b.buffered} / 힐러 ${fmtPct(b.healerRate)} / wipe직전 ${b.wipeAt} / pre4 ${b.pre4}`));
+  L.push("", "[C. Outcome by Band] (상관 관측 — band: 등장런 / 이band서전멸 / clear / boss시도)");
+  rep.outcomeByBand.forEach((b) => L.push(`* ${bandKo(b.band)}: 등장 ${b.runsTouched} / 전멸 ${b.wipeAt} / 1전리품귀환 ${b.oneLootReturn} / clear ${b.clears} / boss ${b.bossAtt}`));
+  L.push("", "[D. Route × Band] (route: n / 평균적수 / wipe근접률)");
+  rep.routeMatrix.forEach((r) => L.push(`* ${r.label}(${r.route}): ${r.combat ? "전투" : "비전투"} ${r.n} / 적수 ${r.n ? fmt1(r.avgEnemy) : "—"} / wipe근접 ${r.n ? fmtPct(r.wipeAdj) : "—"}`));
+  L.push("", "[E. 타임라인 샘플]");
+  rep.samples.forEach((s) => L.push(`* ${s.label}(${s.result}): ` + s.steps.map((e) => `d${e.depth}${e.isBoss ? "보스" : bandKo(e.band).slice(0, 2)}`).join(" ")));
+  L.push("", "주의: 이 결과는 band와 outcome의 상관 관측이며, 원인 확정이나 밸런스 결론이 아닙니다.");
+  L.push("주의: Band Observatory 01은 dev-only 관측 장비이며, 밴드 로직을 변경하지 않습니다.");
+  return L.join("\n");
+}
+export function buildBandJSON(rep = lastBandReport, rec = lastBandRecords) {
+  if (!rep || !rec) return JSON.stringify({ tool: "band-observatory", note: "no data — run first" }, null, 0);
+  return JSON.stringify({
+    tool: "band-observatory", note: "dev-only 관측 · band↔outcome 상관(원인/밸런스 결론 아님) · 밴드 로직 무변경 · *loot=dev proxy",
+    generatedAt: new Date().toISOString(),
+    inputs: { seed: rec.seed, runs: rec.length, profile: rec.profileId, routeFilter: rep.meta.routeFilter, outcomeFilter: rep.meta.outcomeFilter },
+    bandDistribution: rep.bandDist, depthWave: rep.depthWave, runwayLens: { byBand: rep.runwayByBand, byDepth: rep.runwayByDepth, samples: rep.runwaySamples }, outcomeByBand: rep.outcomeByBand, routeBandMatrix: rep.routeMatrix, timelineSamples: rep.samples,
+    warnings: ["band↔outcome는 상관 관측이며 원인 확정/밸런스 결론이 아닙니다.", "Band Observatory 01은 dev-only 관측 장비이며 밴드 로직을 변경하지 않습니다.", "전리품 수치는 dev loot proxy(treasure 집계)이며 헤드리스라 실제 carriedLoot가 아닙니다."],
+  }, null, 0);
+}
+
+async function runBandObservatoryUI() {
+  if (boRunning || running) return;
+  boRunning = true; boCancel = false;
+  const status = $("eo-bo-status"), btn = $("eo-bo-run"), cancel = $("eo-bo-cancel");
+  if (btn) btn.disabled = true; if (cancel) cancel.disabled = false; setRunningUI(true);
+  const inp = readBandInputs();
+  try {
+    if (status) status.textContent = `Band Lens 실행 중… (${EXPEDITIONS[inp.profileId].label} · seed ${inp.seed} · ${inp.runs}런)`;
+    const records = await runBandLens({ seed: inp.seed, runs: inp.runs, profileId: inp.profileId, onProgress: (d) => { if (status) status.textContent = `Band Lens ${d}/${inp.runs}런…`; }, shouldCancel: () => boCancel });
+    records.seed = inp.seed; records.profileId = inp.profileId; // 메타 부착(배열에)
+    lastBandRecords = records;
+    renderBandObservatory();
+    if (status) status.textContent = `Band Lens 완료 — ${records.length}런 (seed ${inp.seed} · ${EXPEDITIONS[inp.profileId].label})${boCancel ? " · 취소됨" : ""}`;
+  } catch (e) { if (status) status.textContent = "에러: " + (e && e.message); console.error(e); }
+  finally { boRunning = false; if (btn) btn.disabled = false; if (cancel) cancel.disabled = true; setRunningUI(false); }
+}
+
 export function initExpeditionObservatory() {
   $("eo-run100").addEventListener("click", () => runObservatory(100, "baseline"));
   $("eo-run300").addEventListener("click", () => runObservatory(300, "baseline"));
@@ -2050,6 +2314,22 @@ export function initExpeditionObservatory() {
   const dirToggle = $("eo-dir-toggle");
   if (dirToggle) dirToggle.addEventListener("click", () => { const ta = $("eo-dir-text"); if (!ta) return; ta.style.display = (ta.style.display === "none" || !ta.style.display) ? "block" : "none"; });
   if ($("eo-dir-out")) renderDirectorSnapshot(); // 기본 스냅샷 즉시 표시
+
+  // ── Band Observatory 01 (Pressure Band Run Lens) ──
+  const boRun = $("eo-bo-run"); if (boRun) boRun.addEventListener("click", runBandObservatoryUI);
+  const boCancelBtn = $("eo-bo-cancel"); if (boCancelBtn) boCancelBtn.addEventListener("click", () => { boCancel = true; });
+  ["eo-bo-route", "eo-bo-outcome"].forEach((id) => { const e = $(id); if (e) e.addEventListener("change", () => { if (lastBandRecords) renderBandObservatory(); }); });
+  const boCopy = (build, label) => async () => {
+    const status = $("eo-bo-copy-status"), ta = $("eo-bo-text");
+    const txt = build(); if (!txt) { if (status) status.textContent = "먼저 Run Band Lens를 실행하세요."; return; }
+    if (ta) { ta.value = txt; ta.style.display = "block"; }
+    let ok = false; try { await navigator.clipboard.writeText(txt); ok = true; } catch (e) { try { ta.focus(); ta.select(); ok = document.execCommand("copy"); } catch (e2) { ok = false; } }
+    if (status) status.textContent = ok ? `${label} 복사됨.` : "클립보드 실패 — 아래 칸에서 직접 선택해 복사하세요(텍스트는 표시됨).";
+  };
+  const bcs = $("eo-bo-copy-sum"); if (bcs) bcs.addEventListener("click", boCopy(buildBandSummaryText, "Band Observatory Summary"));
+  const bcj = $("eo-bo-copy-json"); if (bcj) bcj.addEventListener("click", boCopy(buildBandJSON, "Band Observatory JSON"));
+  const boToggle = $("eo-bo-toggle"); if (boToggle) boToggle.addEventListener("click", () => { const ta = $("eo-bo-text"); if (!ta) return; ta.style.display = (ta.style.display === "none" || !ta.style.display) ? "block" : "none"; });
+  if ($("eo-bo-out")) renderBandObservatory(); // 초기 빈 상태
 
   // Phase 1.5 — Seat Value lens 탭 전환(재실행 없이 캐시된 리포트로 즉시 재렌더).
   $("eo-seat").addEventListener("click", (e) => {
