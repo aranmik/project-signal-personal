@@ -1946,6 +1946,14 @@ export function playSupportFx({ casterInstanceId, text, kind, heals = [], guardI
 const actingUnits = new Set();
 
 // battle.js에서 행동 발생 시 호출 (전투 계산과 분리된 FX 이벤트)
+// Hit Effect Identity 01 — Role Tint Foundation 01. sourceUnitId(직업 id) → 역할 fx 토큰.
+//   combatRoleOf 반환(tank/melee/ranged/support/healer/null)을 그대로 토큰으로, null/미지는 neutral fallback.
+//   ★battle event schema 무확장(payload의 기존 sourceUnitId만 읽음)·색 hook만(피해 숫자 색/heal 가독성 불변).
+function fxRoleOf(jobId) {
+  const r = combatRoleOf(jobId);
+  return (r === "tank" || r === "melee" || r === "ranged" || r === "support" || r === "healer") ? r : "neutral";
+}
+
 export function playActionFx(event) {
   if (fxSuppressed) return; // Dev Balance Lab 01 — 헤드리스 sim 중 표시 생략
   // Job Grammar 01: kind = 직업 행동 분류(strike/protect/snipe/heal/attack).
@@ -1965,6 +1973,7 @@ export function playActionFx(event) {
     fy: rawFrac.fy + (BODY_MID_FRAC.fy - rawFrac.fy) * START_BODY_BIAS,
   };
   const variant = actionLineVariant(lineType, kind);
+  const fxRole = fxRoleOf(sourceUnitId); // Hit Effect Identity 01 — 역할 틴트 토큰(기존 payload만 읽음)
 
   // 좌표는 .unit wrap rect 기준 → acting scale(자식 .fig-react)에 영향받지 않음(안정)
   // Basic Action Breath 01: 시작점 = 공격자 몸통(srcFrac), 도착점 = 대상 테두리 중
@@ -2011,13 +2020,13 @@ export function playActionFx(event) {
     // Action Line Visibility 01 — 시작점 pulse로 "이 actor가 행동선의 출발점"을 1회 번쩍(과하지 않게).
     //   Combat Grammar Follow-up 01 — noLine(광역 폭발 등)은 선/시작펄스 생략하고 도착 hit(펄스/숫자/반응)만 남긴다.
     if (!noLine) {
-      spawnStartPulse(layer, s, variant);
-      spawnLine(layer, s, t, lineType, kind, variant);
+      spawnStartPulse(layer, s, variant, fxRole);
+      spawnLine(layer, s, t, lineType, kind, variant, fxRole);
     }
-    spawnPulse(layer, t, isHeal);
+    spawnPulse(layer, t, isHeal, fxRole);
     // First Class Expansion 01: 피해/회복 0(상태 부여형 스킬: 중독 등)은 숫자 생략.
     // Combat Grammar Foundation 01: numberVariant(crit 등)로 피해 숫자 규격 분기.
-    if (amount > 0) spawnNumber(layer, tn, targetInstanceId, isHeal, amount, numberVariant);
+    if (amount > 0) spawnNumber(layer, tn, targetInstanceId, isHeal, amount, numberVariant, undefined, fxRole);
     reactUnit(targetInstanceId, isHeal);
   };
   setTimeout(fire, lead + delayExtra);
@@ -2591,17 +2600,18 @@ const MAX_FX_NUMBERS = 8;
 
 // Action Line Visibility 01 — 행동선 시작점 ring(actor 출발점 신호). variant 색 공통(currentColor).
 //   작게(16px)·짧게(0.42s) — 숫자/HP바/피격 FX를 가리지 않고, MAX에서도 라인과 함께 떠 시작점이 흐려지지 않게.
-function spawnStartPulse(layer, s, variant) {
+function spawnStartPulse(layer, s, variant, fxRole) {
   if (!s) return;
   const el = document.createElement("span");
   el.className = `fx-startpulse fx-var--${variant || "normal"}`;
+  if (fxRole) el.dataset.fxRole = fxRole; // Hit Effect Identity 01 — 역할 hook(현재 시각 변화는 임팩트 펄스 중심)
   el.style.left = `${s.x}px`;
   el.style.top = `${s.y}px`;
   el.addEventListener("animationend", () => el.remove());
   layer.appendChild(el);
 }
 
-function spawnLine(layer, s, t, lineType, kind, variant) {
+function spawnLine(layer, s, t, lineType, kind, variant, fxRole) {
   // 상한 초과 시 가장 오래된 선 제거(읽힘 우선, 화면이 무너지지 않게)
   const lines = layer.querySelectorAll(".fx-svg");
   if (lines.length >= MAX_FX_LINES) lines[0].remove();
@@ -2629,6 +2639,7 @@ function spawnLine(layer, s, t, lineType, kind, variant) {
   const v = variant || actionLineVariant(lineType, kind);
   svg.setAttribute("class", `fx-svg fx-svg--${lineType} fx-var--${v}`);
   if (kind) svg.dataset.kind = kind; // Job Grammar 01 — 직업 행동 분류 hook(시각 변화 없음)
+  if (fxRole) svg.dataset.fxRole = fxRole; // Hit Effect Identity 01 — 역할 hook(선 색은 lineType 유지, role은 미래 확장용)
   svg.setAttribute("width", w);
   svg.setAttribute("height", h);
   svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
@@ -2766,9 +2777,10 @@ function makeNS(tag, attrs, innerHTML) {
   return el;
 }
 
-function spawnPulse(layer, t, isHeal) {
+function spawnPulse(layer, t, isHeal, fxRole) {
   const p = document.createElement("span");
   p.className = `fx-pulse${isHeal ? " fx-pulse--heal" : ""}`;
+  if (fxRole) p.dataset.fxRole = fxRole; // Hit Effect Identity 01 — 역할 틴트(임팩트 펄스 = "터지는 모양" 주 신호. heal 펄스는 CSS에서 제외).
   p.style.left = `${t.x}px`;
   p.style.top = `${t.y}px`;
   p.addEventListener("animationend", () => p.remove());
@@ -2807,7 +2819,7 @@ function damageNumberClass(isHeal, variant) {
   return "fx-number--dmg";
 }
 
-function spawnNumber(layer, t, targetInstanceId, isHeal, amount, variant, tag) {
+function spawnNumber(layer, t, targetInstanceId, isHeal, amount, variant, tag, fxRole) {
   // FX Density Guard 01: 숫자 상한 초과 시 가장 오래된 것 제거(MAX/다수전 누적 방지)
   const nums = layer.querySelectorAll(".fx-number");
   if (nums.length >= MAX_FX_NUMBERS) nums[0].remove();
@@ -2821,6 +2833,7 @@ function spawnNumber(layer, t, targetInstanceId, isHeal, amount, variant, tag) {
 
   const n = document.createElement("span");
   n.className = `fx-number ${damageNumberClass(isHeal, variant)}`;
+  if (fxRole) n.dataset.fxRole = fxRole; // Hit Effect Identity 01 — 역할 hook만(숫자 색=damageNumberClass 유지·가독성 보호)
   const sign = isHeal ? "+" : "-";
   if (tag) {
     // 향후 특수 피해(관통/분쇄/처형) — 빨강 숫자에 짧은 텍스트 태그가 붙는 구조.
