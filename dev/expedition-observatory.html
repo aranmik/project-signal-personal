@@ -145,6 +145,23 @@
     .eo-bo-tlh { font-size: 11.5px; margin-bottom: 3px; }
     .eo-bo-steps { display: flex; flex-wrap: wrap; gap: 4px; }
     .eo-bo-step { font-size: 10px; background: #1a2433; border: 1px solid #2c3a4a; border-radius: 5px; padding: 1px 5px; white-space: nowrap; color: #cfe0ee; }
+    /* Observation Sheet Index 01 — 시트북 안내/네비게이션(dev-only 텍스트 · 관측 로직과 무관) */
+    .eo-sheetbook { background: linear-gradient(180deg, #141d28, #10151c); border: 1px solid #2c3a46; border-radius: 12px; padding: 12px 14px; margin: 12px 0; }
+    .eo-sheetbook h2 { font-size: 14px; color: #ecd9bc; margin: 0 0 3px; }
+    .eo-sheetbook .eo-sb-lead { font-size: 11px; color: #9fb3c4; margin: 0 0 8px; line-height: 1.5; }
+    .eo-sheet-row { display: flex; gap: 9px; padding: 6px 0; border-top: 1px solid #1f2832; }
+    .eo-sheet-row:first-of-type { border-top: none; padding-top: 2px; }
+    .eo-sheet-ico { font-size: 16px; flex: none; width: 22px; text-align: center; }
+    .eo-sheet-body { font-size: 11px; color: #c7d6e2; line-height: 1.5; }
+    .eo-sheet-body b { color: #eef6ff; }
+    .eo-sheet-give { color: #7fd1a8; }
+    .eo-sheet-warn { color: #e6c578; }
+    .eo-guide { font-size: 11px; line-height: 1.55; color: #b9cad8; background: #0f141b; border-left: 3px solid #3a5168; border-radius: 6px; padding: 6px 10px; margin: 4px 0 6px; }
+    .eo-guide b { color: #ecd9bc; }
+    .eo-guide .eo-guide-give b { color: #7fd1a8; }
+    .eo-profile-help, .eo-copy-help { font-size: 10.5px; line-height: 1.55; color: #9fb3c4; background: #11161d; border: 1px solid #243039; border-radius: 8px; padding: 7px 10px; margin: 6px 0; }
+    .eo-profile-help b, .eo-copy-help b { color: #e6c89a; }
+    .eo-copy-help code { background: #161e26; color: #9fc4dd; padding: 1px 5px; border-radius: 4px; font-size: 10px; }
   </style>
 </head>
 <body>
@@ -167,6 +184,18 @@
       <span id="eo-status">seed를 고르고 “100런 실행”을 눌러 시작하세요.</span>
     </div>
 
+    <section id="eo-sheet-index" class="eo-sheetbook">
+      <h2>📒 관측 시트 인덱스 (Observation Sheet Index)</h2>
+      <p class="eo-sb-lead">관측소는 도구 더미가 아니라 <b>숲을 읽는 시트북</b>입니다. 아래로 내려가며 목적별 시트를 봅니다. 전부 <b>dev-only 관측</b> — 밸런스 결론이 아닙니다.</p>
+      <div class="eo-sheet-row"><span class="eo-sheet-ico">🎛</span><span class="eo-sheet-body"><b>실험 조절판 — Nara Sandbox</b> · dev 전용 임시 스탯 override A/B. 영웅/몬스터/보스 수치를 잠깐 바꿔 같은 seed로 비교. <span class="eo-sheet-give">유키에게:</span> 보통 줄 것 없음. <span class="eo-sheet-warn">밸런스 결론 아님.</span></span></div>
+      <div class="eo-sheet-row"><span class="eo-sheet-ico">🗺</span><span class="eo-sheet-body"><b>숲 압력 지도 — Current Director Snapshot</b> · route/depth/경계도/seed에서 숲이 만들 압력을 미리 보는 설계도. d6~9 압력 · route별 적 수/HP×/ATK×/band. <span class="eo-sheet-give">유키에게:</span> 설정값 + 스크린샷 (Copy Summary 성격 아님).</span></div>
+      <div class="eo-sheet-row"><span class="eo-sheet-ico">💓</span><span class="eo-sheet-body"><b>밴드 심전도 — Band Observatory</b> · 100런 단위로 pressure band ↔ 결과의 상관을 보는 관측. 분포 · d6~9 Runway · Outcome by Band · Route×Band · Timeline. <span class="eo-sheet-give">유키에게:</span> 프로필/seed/runs 보이게 + Copy Summary (더 깊으면 Copy JSON). <span class="eo-sheet-warn">원인 확정 아님 · 상관 관측.</span></span></div>
+      <div class="eo-sheet-row"><span class="eo-sheet-ico">🩺</span><span class="eo-sheet-body"><b>전체 건강검진 — A. Expedition Summary</b> · 맨 위 <b>100/300런 실행</b> 결과(4프로필의 clearRate · 전멸 · 보스 시도 · 전리품 지표 한눈에). <span class="eo-sheet-give">유키에게:</span> 「요약 복사」.</span></div>
+      <div class="eo-sheet-row"><span class="eo-sheet-ico">🔬</span><span class="eo-sheet-body"><b>런 부검 — Timeline / Run Samples</b> · 특정 런이 어디서 왜 무너졌는지 step으로 본다 (Band Observatory ⑤ Timeline + 아래 E. Run Samples). <span class="eo-sheet-give">유키에게:</span> seed/profile + 타임라인.</span></div>
+      <p class="eo-sb-lead" style="margin:8px 0 0">처음이라면 <b>💓 밴드 심전도</b>를 <code style="color:#9fc4dd">1전리품 귀환 / seed 401 / 100런 / route all / 결과 all</code>로 돌린 뒤 <b>Copy Summary</b>를 유키에게 보내면 됩니다.</p>
+    </section>
+
+    <div class="eo-guide"><b>🎛 실험 조절판 (Nara Sandbox)</b><br><b>무엇을 보는가:</b> 영웅/몬스터/보스 수치를 임시로 바꿔 같은 seed로 A/B 비교(dev override·본게임 수치 불변). <br><b>언제 쓰는가:</b> "이 수치를 바꾸면 어떻게 될까?"를 빠르게 보고 싶을 때. <br><span class="eo-guide-give"><b>유키에게 줄 것:</b></span> 보통 줄 것 없음 — 밸런스 결론이 아니라 실험 중간값입니다.</div>
     <section id="eo-sandbox"></section>
     <section id="eo-compare"></section>
 
@@ -215,6 +244,7 @@
     <section id="eo-director">
       <h3>Current Director Snapshot <span class="eo-meta">· depth+alertness+route → encounter pressure + pressure band(파형) (dev-only 관측)</span></h3>
       <div class="eo-note">현재 <b>depth+alertness+route</b>가 어떤 encounter pressure(적 수 / 조합 / 스탯 램프 / 정예·보스)와 <b>pressure band(숲의 호흡 파형)</b>를 만들고 있는지 보여주는 dev-only 스냅샷입니다. 이 패널 자체는 read-only(밸런스 미변경) — Forest Director(routes.js)의 함수를 호출해 표시합니다. <b>Depth Band Director 01</b>로 routes.js에 5단계 pressure band가 추가되어, friction 적 수(d6~9 ±1)·역할 조직화만 작게 보정합니다(raw HP/ATK·기본 스탯·boss=BOSS_FLOOR 무변경). encounter+band 생성은 <b>deterministic</b>(같은 depth/route/경계도면 seed 무관 동일·band=seed 0 깊이 파형).</div>
+      <div class="eo-guide"><b>🗺 숲 압력 지도</b><br><b>무엇을 보는가:</b> 특정 route/depth/경계도/seed에서 숲이 만들 encounter 압력(적 수 · HP× · ATK× · band)을 전투 없이 미리 봅니다. <br><b>언제 쓰는가:</b> "d6~9가 왜 벽인지", "route별 압력이 어떻게 다른지", "band 파형이 계단인지" 볼 때. <br><span class="eo-guide-give"><b>유키에게 줄 것:</b></span> 설정값(route/depth/경계도) + 스크린샷 — 여긴 Copy Summary 성격이 아닙니다.</div>
       <div id="eo-dir-controls">
         <span><label>route</label><select id="eo-dir-route">
           <option value="normal">새싹 숲길(normal)</option>
@@ -254,6 +284,7 @@
     <section id="eo-band-observatory">
       <h3>Band Observatory <span class="eo-meta">· Pressure Band Run Lens 01 — band이 런에서 만든 호흡 (dev-only · 상관 관측)</span></h3>
       <div class="eo-note">여러 런을 헤드리스로 돌려 <b>pressure band가 런의 어느 구간에서 숨 고르기/긴장/붕괴/귀환을 만들었는지</b>를 그래프+표로 봅니다. <b>밴드를 튜닝하지 않습니다</b> — 밴드/encounter/스탯/보상/loot 로직 무변경, deterministic pressureBand 재계산만(state.js/routes.js 미변경). <b>표는 검증용, 그래프는 나라가 숲의 호흡을 보는 창</b>입니다. 표/그래프는 <b>원인 확정이 아니라 상관 관측</b>이며 clearRate 튜닝 도구가 아닙니다. <b>d6~9</b>가 runway focus 구간. 색은 좋음/나쁨이 아니라 <b>압력 강도(완화→고압)</b>.</div>
+      <div class="eo-guide"><b>💓 밴드 심전도</b><br><b>무엇을 보는가:</b> 100런 단위로 pressure band와 결과(전멸 / 귀환 / 클리어)의 관계를 봅니다. <br><b>언제 쓰는가:</b> "어디서 죽는지", "d6~9가 아직 절벽인지", "욕심 플레이가 어디서 터지는지" 볼 때. <br><span class="eo-guide-give"><b>유키에게 줄 것:</b></span> 프로필 / seed / runs가 보이는 상태에서 <b>Copy Summary</b>를 복사 (더 깊은 분석은 Copy JSON).</div>
       <div id="eo-bo-controls">
         <span><label>seed</label><input id="eo-bo-seed" type="number" value="405" /></span>
         <span><label>runs</label><input id="eo-bo-runs" type="number" value="100" /></span>
@@ -277,6 +308,8 @@
         <button type="button" id="eo-bo-cancel" class="eo-btn ghost" disabled>취소</button>
         <span id="eo-bo-status" class="eo-meta">seed/runs/프로필을 정한 뒤 실행하세요. (route/결과 필터는 실행 후 즉시 재집계)</span>
       </div>
+      <div class="eo-profile-help"><b>프로필이란?</b> 같은 숲을 어떤 성향으로 도는지입니다 — <b>최단 귀환</b>: 가능한 빨리 빠져나오는 안전 기준 · <b>1전리품 귀환</b>: 현재 표준 건강검진 기준(처음엔 이걸로) · <b>회수 귀환</b>: 어느 정도 챙겨서 나오는 수확 기준 · <b>욕심 전멸</b>: ★실제 플레이 추천이 아니라, 욕심냈을 때 <b>어디서 무너지는지(사망 지점)</b>를 모으는 스트레스 기준.</div>
+      <div class="eo-copy-help"><b>유키에게 무엇을 줄까?</b> · 처음 볼 때 <code>1전리품 귀환 / seed 401 / 100런 / route all / 결과 all</code> → <b>Copy Summary</b> · 욕심 분석 <code>욕심 전멸 / seed 401 / 100런 / route all / 결과 all</code> → <b>Copy Summary</b> · 더 깊은 분석은 <b>Copy JSON</b>.</div>
       <div id="eo-bo-out"></div>
       <div class="eo-ms-copyrow">
         <button type="button" id="eo-bo-copy-sum" class="eo-btn">Copy Band Observatory Summary ▶</button>
@@ -287,6 +320,7 @@
       <textarea id="eo-bo-text" class="eo-exp-ta" readonly placeholder="Band Observatory Summary / JSON이 여기에 표시됩니다 (클립보드 실패 시 직접 선택/복사)" style="display:none"></textarea>
     </section>
 
+    <div class="eo-guide"><b>🩺 전체 건강검진 (A. Expedition Summary 외 표)</b><br><b>무엇을 보는가:</b> 맨 위 <b>100/300런 실행</b> 결과 — 4프로필의 clearRate · 전멸 · 보스 시도 · 전리품 지표를 한눈에(아래 A~E 표 / 직업 Seat / 효과 가치 / Run Samples 포함). <br><b>언제 쓰는가:</b> "지금 숲 전체 건강이 어떤지" 큰 그림을 볼 때. <br><span class="eo-guide-give"><b>유키에게 줄 것:</b></span> 상단 「요약 복사」(런 부검은 아래 E. Run Samples / 밴드 심전도 ⑤ Timeline).</div>
     <section id="eo-summary"><div class="eo-empty">A. Expedition Summary — 실행 대기 중</div></section>
     <section id="eo-party"></section>
     <section id="eo-seat"></section>
