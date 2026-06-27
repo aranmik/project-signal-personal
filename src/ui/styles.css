@@ -1593,6 +1593,35 @@ body {
   35%  { opacity: 1; transform: scale(1.25); }
   100% { opacity: 0; transform: scale(0.7); }
 }
+/* Mage Shockwave Hanabi 01 — AoE Firework Presence 01:
+   마도/현자 광역 발동 시 중앙에서 "한 번 크게 숨을 터뜨리는" 폭죽 링.
+   청보라 글로우(box-shadow) + 금빛 윤곽(border)의 crisp 링이 짧고 선명하게 외곽으로 퍼진다.
+   채움이 아니라 투명한 윤곽 링 → 화면을 덮지 않고, 피해 숫자(머리 위)도 가리지 않는다.
+   기존 보라 spread/dome/hit 위에 "한 번 크게 터졌다"는 인상만 더한다(per-target hit/숫자는 그대로 뒤따름).
+   --aoe-r = 적 진영을 덮는 도달 반경(spawnAoeSpread가 주입). width 18 → scale(aoe-r/9)면 지름 ≈ 2·aoe-r. */
+.fx-hanabi-ring {
+  position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px;
+  border-radius: 50%;
+  border: 3px solid rgba(248, 226, 150, 0.95);   /* 금빛 윤곽 */
+  box-shadow: 0 0 24px rgba(168, 140, 236, 0.68), inset 0 0 11px rgba(214, 196, 255, 0.65); /* 청보라 글로우 */
+  opacity: 0; pointer-events: none; z-index: 4;
+  animation: fx-hanabi-ring 0.56s cubic-bezier(.16,.74,.3,1) forwards;
+}
+@keyframes fx-hanabi-ring {
+  0%   { opacity: 0;    transform: scale(0.5); }
+  14%  { opacity: 1;    }                        /* 팟! — 중앙에서 선명하게 켜진다 */
+  70%  { opacity: 0.5;  }                        /* 외곽으로 퍼지는 동안 윤곽 유지(밀려나가는 압력) */
+  100% { opacity: 0;    transform: scale(calc(var(--aoe-r, 140px) / 9)); }
+}
+/* 약한 잔향 링(폭죽 여운) — 한 박자 늦게 한 번 더 밀려나간다(가늘고 옅게, 청보라 쪽). */
+.fx-hanabi-ring--echo {
+  border-width: 1.5px;
+  border-color: rgba(214, 196, 255, 0.82);
+  filter: opacity(0.6);
+}
+/* MAX/2x 배속에서 잔상 누적 없이 더 짧고 선명하게(기존 AoE 배속 override 문법과 동일 특이도). */
+#battle-field[data-fast="1"] .fx-hanabi-ring { animation-duration: 0.44s; }
+#battle-field[data-speed="MAX"] .fx-hanabi-ring { animation-duration: 0.34s; }
 /* Mage AoE Presence 01 — 광역 폭발 시 전장 작은 흔들림(꽈광). 폭발 순간 한 번만(triggerFieldShake가 클래스 토글). */
 @keyframes fx-field-shake {
   0%, 100% { transform: translate(0, 0); }
@@ -1633,6 +1662,8 @@ body {
 }
 @media (prefers-reduced-motion: reduce) {
   .fx-gather, .fx-aoe-spread, .fx-scope, .fx-markburst, .fx-blast-core, .fx-aoe-dome, .fx-aoe-hit { animation-duration: 0.01s; }
+  /* Mage Shockwave Hanabi 01 — 신규 폭죽 링/잔향도 reduced-motion에서 사실상 비활성(즉시 정리). */
+  .fx-hanabi-ring { animation-duration: 0.01s; }
   #battle-field.fx-field-shake { animation: none; }
 }
 

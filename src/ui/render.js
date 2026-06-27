@@ -2210,6 +2210,22 @@ function spawnAoeSpread(casterInstanceId, enemyIds) {
   dome.style.setProperty("--aoe-r", `${maxR + 30}px`);
   dome.addEventListener("animationend", () => dome.remove());
   layer.appendChild(dome);
+  // Mage Shockwave Hanabi 01 — AoE Firework Presence 01: 중앙에서 "한 번 크게 숨을 터뜨리는" 폭죽 링.
+  //   기존 보라 spread/dome 위에 청보라 글로우 + 금빛 윤곽의 crisp 링 1개(+한 박자 늦은 약한 잔향 1개)를 더해,
+  //   다수전에서 "전장이 한 번 크게 터졌다"는 인상을 준다. 채움 플래시가 아니라 윤곽 링이라 화면을 덮지 않고,
+  //   짧고 선명하게 외곽으로 퍼진다(transform/opacity 중심). per-target hit/피해 숫자는 그대로 뒤따른다.
+  //   ★마도/현자 광역 전용 — spawnAoeSpread는 battle.js에서 마도/현자 burst(charge→release)에서만 호출된다
+  //    (일반 ranged/melee엔 부착 안 됨). 신규 DOM은 광역 1회당 2개(ring+echo)·animationend로 정리.
+  [0, 110].forEach((delay, i) => {
+    const ring = document.createElement("span");
+    ring.className = "fx-hanabi-ring" + (i === 1 ? " fx-hanabi-ring--echo" : "");
+    ring.style.left = `${c.x}px`;
+    ring.style.top = `${c.y}px`;
+    ring.style.setProperty("--aoe-r", `${maxR}px`);
+    if (delay) ring.style.animationDelay = `${delay}ms`;
+    ring.addEventListener("animationend", () => ring.remove());
+    layer.appendChild(ring);
+  });
   // Mage AoE Presence 01 — 적별 동시 피격 펄스: "모두에게 동시에 맞았다"가 눈에 읽히게(코어 폭발 직후 거의 동시 + 미세 stagger).
   pts.forEach((p, i) => {
     const hit = document.createElement("span");
