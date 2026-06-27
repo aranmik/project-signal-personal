@@ -2134,6 +2134,8 @@ export function playActionFx(event) {
     // Combat Grammar Foundation 01: numberVariant(crit 등)로 피해 숫자 규격 분기.
     if (amount > 0) spawnNumber(layer, tn, targetInstanceId, isHeal, amount, numberVariant, undefined, fxRole);
     reactUnit(targetInstanceId, isHeal);
+    // First Class Presence 01 — paladin/bard/rogue만 source 아바타 주변 presence(helper가 3직업 self-gate·chained 제외).
+    if (!chained) spawnFirstClassPresence(sourceInstanceId, sourceUnitId);
   };
   setTimeout(fire, lead + delayExtra);
 }
@@ -2165,6 +2167,47 @@ function spawnBodyPresence(targetInstanceId, variant, opts = {}) {
     el.style.top = `${p.y}px`;
     el.addEventListener("animationend", () => el.remove());
     layer.appendChild(el);
+  }
+}
+
+// ── First Class Presence 01 — Paladin/Bard/Rogue Body Cue Probe ──────────────
+//   FCR02의 작은 ::before signature보다 한 단계 더 "source 아바타 주변 presence"로. 나라님이 직접 언급한 3직업만(좁은 probe).
+//   paladin=아바타를 감싸는 금빛 오오라 / bard=캐릭터 옆 뾰로롱 음표(♪♫) / rogue=짧은 암습 잔상. ★target hit가 아니라 source 중심.
+//   기존 fx-layer·unitPoint·animationend 패턴 재사용(Status Presence 01 spawnBodyPresence와 분리 — poison/speed CSS 무침범).
+//   ★battle event/payload 무확장(sourceUnitId/sourceInstanceId만)·강도는 2차(성황/무희/검성)보다 작고 짧게.
+//   MAX 누적 방지: 3직업만 self-gate · source별 220ms 쓰로틀 · 1행동당 1~2 DOM · 짧은 duration · chained 제외(호출부).
+const FCP_PRESENCE_JOBS = { paladin: 1, bard: 1, rogue: 1 };
+const fcpLastSpawn = new Map(); // sourceInstanceId → 마지막 spawn 시각(연속 표시 완화)
+function spawnFirstClassPresence(sourceInstanceId, jobId) {
+  if (fxSuppressed) return; // 헤드리스 sim 생략
+  if (!sourceInstanceId || !FCP_PRESENCE_JOBS[jobId]) return; // paladin/bard/rogue만
+  if (dyingUnits.has(sourceInstanceId) || cleanedDead.has(sourceInstanceId)) return;
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  const c = unitPoint(sourceInstanceId, { fx: 0.5, fy: 0.46 }, field.getBoundingClientRect()); // source 아바타 몸통 중앙
+  if (!c) return;
+  const now = (typeof performance !== "undefined" ? performance.now() : Date.now());
+  if (now - (fcpLastSpawn.get(sourceInstanceId) || 0) < 220) return; // 빠른 연타/체인 중복 완화
+  fcpLastSpawn.set(sourceInstanceId, now);
+  const mk = (extraCls, dx, dy, text) => {
+    const el = document.createElement("span");
+    el.className = `fx-presence fx-presence--${jobId}${extraCls ? " " + extraCls : ""}`;
+    el.dataset.fxPresence = jobId;
+    if (text) el.textContent = text;
+    el.style.left = `${c.x + (dx || 0)}px`;
+    el.style.top = `${c.y + (dy || 0)}px`;
+    el.addEventListener("animationend", () => el.remove());
+    layer.appendChild(el);
+  };
+  if (jobId === "paladin") {
+    mk("", 0, 0);                                  // 감싸는 금빛 오오라 shell 1개
+  } else if (jobId === "bard") {
+    mk("fx-note-pop", -15, -6, "♪");          // 좌측 음표 ♪
+    mk("fx-note-pop fx-presence--b", 15, -11, "♫"); // 우측 음표 ♫(지연·하늘빛 변주)
+  } else if (jobId === "rogue") {
+    mk("fx-rogue-afterimage", -3, 0);              // 암습 잔상 1
+    mk("fx-rogue-afterimage fx-presence--b", 5, 1); // 스치는 잔상 2(지연)
   }
 }
 

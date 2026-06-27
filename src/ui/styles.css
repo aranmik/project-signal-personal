@@ -1764,6 +1764,59 @@ body {
   .fx-presence--poison, .fx-presence--speed { animation-duration: 0.01s; }
 }
 
+/* First Class Presence 01 — Paladin/Bard/Rogue Body Cue Probe.
+   FCR02 ::before signature 위에, 나라님이 언급한 3직업만 "source 아바타 주변" presence를 얕게 얹는다(probe).
+   ★기존 .fx-presence base(opacity:0·z-index:3) 재사용 — poison/speed 변종과 분리(무침범). 강도: 2차(성황/무희/검성)보다 작고 짧게.
+   짧은 DOM FX(1~2개/행동·source별 220ms 쓰로틀·chained 제외)·animationend 정리·MAX 누적 완화. */
+/* paladin — 아바타를 감싸는 금빛 오오라 shell(성황 fx-aura 92px보다 작은 54px). heal mint 무침범(금빛). */
+.fx-presence--paladin {
+  width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(248, 222, 140, 0.28) 0 38%, rgba(245, 205, 120, 0.15) 60%, transparent 76%);
+  border: 1.5px solid rgba(248, 224, 150, 0.5);
+  box-shadow: 0 0 16px rgba(246, 212, 130, 0.42), inset 0 0 14px rgba(248, 222, 150, 0.28);
+  animation: fx-fcp-paladin 0.8s ease-out forwards;
+}
+@keyframes fx-fcp-paladin {
+  0%   { opacity: 0;    transform: scale(0.6); }
+  30%  { opacity: 0.95; transform: scale(1); }
+  100% { opacity: 0;    transform: scale(1.12); }   /* 아바타를 잠깐 감쌌다 옅게 퍼지며 사라짐 */
+}
+/* bard — 캐릭터 좌우에서 올라오는 작은 음표(♪♫) "뾰로롱". 무희 finale처럼 파티 전체를 감싸지 않음(source 옆 1~2개). */
+.fx-presence--bard {
+  width: auto; height: auto; margin: 0;
+  font-size: 14px; line-height: 1; font-weight: 700;
+  color: rgba(232, 186, 236, 0.96);
+  text-shadow: 0 0 6px rgba(214, 150, 235, 0.6), 0 1px 2px rgba(0, 0, 0, 0.5);
+  animation: fx-fcp-note 0.7s ease-out forwards;
+}
+.fx-presence--bard.fx-presence--b { color: rgba(190, 212, 246, 0.96); animation-delay: 0.1s; } /* 2번째 음표 하늘빛 변주 */
+@keyframes fx-fcp-note {
+  0%   { opacity: 0; transform: translateY(2px) scale(0.6); }
+  30%  { opacity: 1; transform: translateY(-6px) scale(1); }
+  100% { opacity: 0; transform: translateY(-20px) scale(0.9); }   /* 위로 살짝 올라가며 뾰로롱 사라짐 */
+}
+/* rogue — source 옆 짧은 암습 잔상(검성 slash보다 작고 짧게·shake 없음). 빠르게 스치고 빠지는 0.45초. */
+.fx-presence--rogue {
+  width: 9px; height: 16px; margin: -8px 0 0 -4.5px; border-radius: 42%;
+  background: linear-gradient(180deg, rgba(74, 64, 96, 0.55), rgba(40, 35, 55, 0.18));
+  box-shadow: 0 0 8px rgba(52, 42, 72, 0.5);
+  animation: fx-fcp-rogue 0.45s ease-out forwards;
+}
+.fx-presence--rogue.fx-presence--b { animation-delay: 0.07s; filter: opacity(0.7); }   /* 한 박자 늦은 스침 잔상 */
+@keyframes fx-fcp-rogue {
+  0%   { opacity: 0;   transform: translateX(2px) scaleX(1); }
+  25%  { opacity: 0.7; transform: translateX(-6px) scaleX(0.82); }
+  100% { opacity: 0;   transform: translateX(-17px) scaleX(0.5); }   /* 옆으로 짧게 스쳐 빠짐 */
+}
+/* MAX/2x에선 더 짧게(누적 완화·기존 presence 배속 문법과 동일). */
+#battle-field[data-fast="1"] .fx-presence--paladin { animation-duration: 0.64s; }
+#battle-field[data-speed="MAX"] .fx-presence--paladin { animation-duration: 0.5s; }
+#battle-field[data-speed="MAX"] .fx-presence--bard { animation-duration: 0.56s; }
+#battle-field[data-speed="MAX"] .fx-presence--rogue { animation-duration: 0.36s; }
+@media (prefers-reduced-motion: reduce) {
+  .fx-presence--paladin, .fx-presence--bard, .fx-presence--rogue { animation-duration: 0.01s; }
+}
+
 /* Combat Feedback Polish 02 — 아군 게이지 상승 마커: 오른 구간을 분홍으로 차오르듯(왼→오 성장). 새 위치(오른 끝)를 밝게 강조
    = "리듬을 받아 밀려나감". 적 게이지 감소(보라, 오른 끝에서 깎임)와 색·방향이 반대로 읽힌다. */
 .tempo-rise {
