@@ -2534,6 +2534,27 @@ export function abandonRun() {
   goTitle();
 }
 
+// Return Choice Core 01 — Carry Loot Exit Decision 01: route 선택 구간에서 "지금 들고 나온다"는 명시적 귀환.
+//   전투 없이 런을 종료하고, 들고 있던 전리품을 확보(secured)한 결과 화면으로 간다.
+//   ★보스 클리어("clear")와 구분되는 "return" 결과 — 패배 아님·대성공도 아님("적당히 챙겨 살아 돌아옴").
+//   전투 밸런스/적 수치/route pressure/band/Forest Director/loot 드랍 로직·battle event schema/payload 전부 무변경.
+//   run 종료 흐름만 추가(결과 표시는 기존 result-overlay 경로 재사용 — getRunLootSummary가 return을 secured로 본다).
+export function returnRun() {
+  // 진행 중 전투 시간 합산(route 화면에선 보통 battleStartTs=null이라 no-op — abandonRun과 동일 가드).
+  if (gameState.run.battleStartTs != null) {
+    gameState.run.combatMs = (gameState.run.combatMs || 0) + (performance.now() - gameState.run.battleStartTs);
+    gameState.run.combatNormMs = (gameState.run.combatNormMs || 0) + (gameState.battle.tick || 0) * X2_TICK_INTERVAL;
+    gameState.run.battleStartTs = null;
+  }
+  gameState.run.result = "return";    // getRunLootSummary: carried → secured
+  gameState.battle.status = "ended";  // result-overlay 표시 조건(ended)
+  gameState.screen = "battle";        // 결과 오버레이는 battle view 위에 뜬다(clear/defeat와 동일 경로)
+  recordFootprint("return");          // 발자취 "귀환" 1건(최고 심도만 갱신·사자왕 클리어 카운트 아님)
+  const n = Array.isArray(gameState.run.carriedLoot) ? gameState.run.carriedLoot.length : 0;
+  pushLog(n > 0 ? `전리품 ${n}개를 품고 숲을 빠져나왔다. ▶ 다시 시작` : "숲을 빠져나왔다. ▶ 다시 시작");
+  renderGame(gameState);
+}
+
 function pushLog(text) {
   if (labMeter || headlessRun) return; // Dev Balance Lab 01 / Auto Run Report 01 — 헤드리스 중 로그 누적 생략
   gameState.logs.push(text);

@@ -597,6 +597,29 @@ function renderRoutePanel(state) {
   } else {
     runwayLine = `<p class="route-runway route-runway--ready">파티 완성 — 숲이 본격적으로 반응합니다.</p>`;
   }
+  // Return Choice Core 01 — Carry Loot Exit Decision 01: 전리품을 들고 있으면 "지금 들고 나갈까(귀환) vs 더 깊이(계속)"를 읽힌다.
+  //   carry 요약 + 귀환 카드는 route/band/Forest Director 계산과 무관(별도 액션 — routes.js 미사용·data-return은 chooseRoute 안 거침).
+  //   전리품 0개면 둘 다 숨긴다(과노출 방지). 들고 있을 때만 노출 → "이번 전멸은 내가 욕심낸 결과"의 선택을 세운다.
+  const carried = Array.isArray(state.run.carriedLoot) ? state.run.carriedLoot : [];
+  let carryBlock = "";
+  let returnCard = "";
+  if (carried.length > 0) {
+    const shown = carried.slice(0, 3).map((l) => lootChipHTML(l, false)).join("");
+    const more = carried.length > 3 ? `<span class="rl-chip rl-chip--more">+${carried.length - 3}</span>` : "";
+    carryBlock = `
+      <div class="carry-loot" aria-label="현재 들고 있는 전리품 ${carried.length}개">
+        <div class="carry-loot-head">지금 들고 있는 전리품 <span class="rl-count">${carried.length}</span></div>
+        <div class="rl-list carry-loot-list">${shown}${more}</div>
+        <p class="carry-loot-risk">더 깊이 들어가면 더 얻지만, 전멸하면 들고 있는 것을 잃습니다 — 숲은 손에 든 것도 삼킵니다.</p>
+      </div>`;
+    returnCard = `
+      <button type="button" class="route-card route-card--return" data-return aria-label="귀환하기 — 전리품 ${carried.length}개를 품고 종료">
+        <span class="route-title">🏕 귀환하기</span>
+        <span class="route-sub">전리품 ${carried.length}개를 품고 숲을 빠져나간다 — 이번 모험은 여기서 끝.</span>
+        <span class="return-secure">지금 돌아가면 이 전리품은 너의 것이 된다.</span>
+      </button>`;
+  }
+
   document.getElementById("route-body").innerHTML = `
     <div class="flow-kicker">${BEGINNER_THEME.name} · 심도 ${state.run.depth}</div>
     <h2 class="flow-heading">다음 여정을 고르세요</h2>
@@ -609,8 +632,10 @@ function renderRoutePanel(state) {
     </div>
     ${runwayLine}
     ${atmoLine}
+    ${carryBlock}
     <p class="route-help">${PRESSURE_HELP}</p>
     <div id="route-list">${cards}</div>
+    ${returnCard}
     <button type="button" class="route-abandon" data-abandon>🏳 런 포기 (발자취 기록 후 타이틀)</button>
   `;
 }
@@ -1011,16 +1036,20 @@ function renderResultOverlay(state) {
   const ended = state.battle.status === "ended";
   const result = state.run.result;
 
-  if (ended && (result === "clear" || result === "defeat")) {
-    // Game Flow Foundation 01: Run Clear / 모험 실패
+  if (ended && (result === "clear" || result === "defeat" || result === "return")) {
+    // Game Flow Foundation 01: Run Clear / 모험 실패. Return Choice Core 01: 중도 귀환(전리품 확보 종료).
     if (result === "clear") {
       titleEl.textContent = "초보자의 길 클리어!";
+      restartBtn.textContent = "다시 시작";
+    } else if (result === "return") {
+      // 보스 클리어와 구분되는 "귀환" 감정 — 패배 아님·대성공도 아님(적당히 챙겨 살아 돌아옴).
+      titleEl.textContent = "모험 귀환";
       restartBtn.textContent = "다시 시작";
     } else {
       titleEl.textContent = "모험 실패";
       restartBtn.textContent = "다시 시작";
     }
-    // Return & Loot Core 01 — 결과 카드에 "가져온 전리품"(클리어) / "잃어버린 전리품"(전멸) 영역.
+    // Return & Loot Core 01 — 결과 카드에 "가져온/품고 나온 전리품"(클리어·귀환) / "잃어버린 전리품"(전멸) 영역.
     renderResultLoot(state, result);
     // Run Footprints 01 — 결과 카드 하단에 직전 발자취 1줄(방금 저장된 최신 기록).
     const fpEl = document.getElementById("result-footprint");
@@ -1041,13 +1070,23 @@ function renderResultLoot(state, result) {
   const el = document.getElementById("result-loot");
   if (!el) return;
   const s = getRunLootSummary(state.run);
-  if (result === "clear") {
+  if (result === "clear" || result === "return") {
+    // Return Choice Core 01 — 클리어/귀환 모두 확보(secured)지만 문구로 감정을 구분한다.
+    //   클리어=보스를 넘어 가져옴 / 귀환=중도에 품고 나옴(더 깊은 숲은 남았지만 오늘 것은 확보).
+    const isReturn = result === "return";
     const items = s.securedLoot;
+    const head = isReturn ? "품고 나온 전리품" : "가져온 전리품";
+    const note = isReturn
+      ? "전리품을 품고 숲을 빠져나왔다. 더 깊은 숲은 남았지만, 오늘의 흔적은 너의 것이 되었다."
+      : "숲 밖으로 가져왔다.";
+    const empty = isReturn
+      ? "빈손이지만 무사히 숲을 빠져나왔다."
+      : "가져온 전리품은 없지만, 숲의 길은 조금 더 선명해졌다.";
     el.innerHTML = items.length
-      ? `<div class="rl-head rl-head--won">가져온 전리품 <span class="rl-count">${items.length}</span></div>`
+      ? `<div class="rl-head rl-head--won">${head} <span class="rl-count">${items.length}</span></div>`
         + `<div class="rl-list">${items.map((l) => lootChipHTML(l, false)).join("")}</div>`
-        + `<div class="rl-note">숲 밖으로 가져왔다.</div>`
-      : `<div class="rl-empty">가져온 전리품은 없지만, 숲의 길은 조금 더 선명해졌다.</div>`;
+        + `<div class="rl-note">${note}</div>`
+      : `<div class="rl-empty">${empty}</div>`;
   } else { // defeat
     const items = s.lostLoot;
     el.innerHTML = items.length

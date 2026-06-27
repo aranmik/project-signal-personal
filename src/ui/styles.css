@@ -2880,6 +2880,28 @@ body {
 /* 4인 전 위험/정예 진입 경고 — 즉시 처벌이 아니라 "큰 피해 예고". */
 .route-card--prewarn { border-color: #b07a3a; }
 .route-prewarn { display: block; font-size: 10.5px; color: #f0b860; margin-top: 3px; line-height: 1.35; }
+
+/* Return Choice Core 01 — Carry Loot Exit Decision 01: route 선택 구간의 carry 요약 + 귀환 카드.
+   route/band/Forest Director 계산과 무관한 별도 액션(data-return). "지금 들고 나갈까 vs 더 깊이"를 모바일에서 짧게 읽힌다.
+   전리품 0개면 렌더 안 함(render.js에서 분기) — 과노출 방지. */
+.carry-loot {
+  margin: 8px 0 2px; padding: 8px 10px; border-radius: 10px;
+  background: rgba(200, 168, 110, 0.10); border: 1px solid #5c4a30;
+}
+.carry-loot-head { font-size: 12px; font-weight: 800; color: #e6c89a; text-align: center; }
+.carry-loot-head .rl-count { display: inline-block; min-width: 16px; margin-left: 4px; padding: 0 5px; font-size: 10px; border-radius: 999px; background: rgba(255, 255, 255, .08); color: #f0dcbb; }
+.carry-loot-list { margin-top: 6px; }
+.carry-loot-risk { margin: 6px 0 0; font-size: 10.5px; line-height: 1.4; color: #c9b48f; text-align: center; }
+.rl-chip--more { color: #cfe0ee; border-color: #3a4a5c; font-weight: 700; }
+/* 귀환 카드 — 보스/위험 카드와 다른 "회수/귀환"의 따뜻한 금빛. 클릭=전투 없이 결과 화면(전리품 확보). */
+.route-card--return {
+  border-color: #6e553a;
+  background: linear-gradient(180deg, rgba(200, 168, 110, 0.16), #16233a);
+  margin-top: 2px;
+}
+.route-card--return:hover { border-color: #b08a52; background: linear-gradient(180deg, rgba(200, 168, 110, 0.24), #18263e); }
+.route-card--return .route-title { color: #f0dcbb; }
+.return-secure { font-size: 11px; color: #e6c89a; margin-top: 3px; font-weight: 700; }
 /* 잠복 경계도 표시(4인 전) + 4인 전 준비 구간/파밍 예고 라인. */
 .route-latent, .hud-latent { color: #c79bff; font-weight: 700; }
 .route-runway { font-size: 11px; line-height: 1.4; margin: 6px 0 2px; padding: 5px 8px; border-radius: 8px;

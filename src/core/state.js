@@ -435,12 +435,13 @@ export const gameState = {
 };
 
 // Return & Loot Core 01 — 결과 화면/요약용 read-only 전리품 요약(상태 변경 없음).
-//   런이 클리어(귀환 성공)면 carried = secured, 전멸이면 carried = lost로 본다. 그 외엔 carried만.
+//   런이 클리어(보스)/귀환(중도 들고 나옴)이면 carried = secured, 전멸이면 carried = lost로 본다. 그 외엔 carried만.
 //   ★battle event schema/payload와 무관(런 상태 carriedLoot + run.result에서 파생). raw 로그 덤프 아님.
+//   Return Choice Core 01 — "return"(중도 귀환)도 "clear"와 동일하게 들고 있던 전리품을 확보(secured)로 본다.
 export function getRunLootSummary(run = gameState.run) {
   const carried = Array.isArray(run && run.carriedLoot) ? run.carriedLoot.slice() : [];
   const result = run && run.result;
-  const secured = result === "clear" ? carried.slice() : [];
+  const secured = (result === "clear" || result === "return") ? carried.slice() : [];
   const lost = result === "defeat" ? carried.slice() : [];
   return {
     carriedLoot: carried,

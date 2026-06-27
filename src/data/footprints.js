@@ -4,7 +4,8 @@
 export const FOOTPRINTS_KEY = "signal_personal_footprints_v1";
 export const FOOTPRINTS_MAX = 10;
 
-const RESULT_LABEL = { clear: "클리어", defeat: "실패", abort: "포기" };
+// Return Choice Core 01 — 중도 귀환(전리품 확보 후 종료)을 발자취에 "귀환"으로 구분(클리어/실패/포기와 별개).
+const RESULT_LABEL = { clear: "클리어", defeat: "실패", abort: "포기", return: "귀환" };
 
 export function resultLabel(result) {
   return RESULT_LABEL[result] || result || "?";

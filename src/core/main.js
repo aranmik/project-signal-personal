@@ -10,7 +10,7 @@ import {
   applyFusion, skipFusion, previewRecruit, confirmRecruit,
   swapFormationSlots, confirmArrange, continueAfterFusion, showCodex,
   showStageSelect, chooseRoute, continueFromRest, startLayoutPreview, showDevPreview,
-  abandonRun,
+  abandonRun, returnRun,
 } from "./battle.js";
 
 console.log("Project Signal Personal — init", gameState);
@@ -260,6 +260,8 @@ arrangePanel.addEventListener("click", (e) => {
 // Run Footprints 01: 같은 패널의 "런 포기" 버튼(data-abandon)도 위임 처리 — 발자취 기록 후 타이틀.
 document.getElementById("route-panel").addEventListener("click", (e) => {
   if (e.target.closest("[data-abandon]")) { abandonRun(); return; }
+  // Return Choice Core 01 — "귀환하기"(전리품 확보 후 종료). 전투 없이 result-overlay로(route 진행과 분리).
+  if (e.target.closest("[data-return]")) { returnRun(); return; }
   const b = e.target.closest("button[data-route]");
   if (b) chooseRoute(b.dataset.route);
 });
