@@ -3116,6 +3116,30 @@ body {
 }
 #result-footprint:empty { display: none; }
 
+/* Return Record Foundation 01 — Returned Deck Card 01: return/clear 결과의 "살아 돌아온 덱" 카드.
+   기존 loot 영역 아래 작은 카드(보스 토벌 본체 아님 — 기록 감정 + future titan hint). 390 모바일 overflow 0. */
+.deck-card {
+  width: 100%; max-width: 300px; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 10px 12px; border-radius: 10px;
+  background: rgba(200, 168, 110, 0.07); border: 1px solid #4a4330;
+}
+.deck-card[hidden] { display: none; }
+.deck-head { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.deck-title { font-size: 13px; font-weight: 800; color: #e6c89a; letter-spacing: .02em; }
+.deck-badge { font-size: 10px; font-weight: 800; padding: 1px 8px; border-radius: 999px; }
+.deck-badge--return { background: rgba(200, 168, 110, 0.20); color: #f0dcbb; }
+.deck-badge--clear { background: rgba(233, 99, 122, 0.20); color: #ffb9c3; }
+.deck-rows { display: flex; flex-direction: column; gap: 3px; }
+.deck-row { display: flex; gap: 8px; align-items: baseline; font-size: 12px; }
+.deck-row-label { flex: 0 0 30px; font-size: 10px; font-weight: 700; color: #8aa0b4; }
+.deck-row-jobs { color: #dbe6f0; font-weight: 700; word-break: keep-all; }
+.deck-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 10px; }
+.deck-stat { font-size: 10.5px; color: #9fb3c6; }
+.deck-stat b { color: #cfe0ee; font-weight: 800; }
+.deck-stat--time { color: #7f93a6; }
+.deck-hint { margin: 1px 0 0; font-size: 10px; line-height: 1.4; color: #b0a07e; text-align: center; word-break: keep-all; }
+
 /* Return & Loot Core 01 — 결과 카드 전리품 영역(가져온/잃어버린). 작은 칩 · 390px 대응 · 카드 리듬 유지 */
 #result-loot { max-width: 300px; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 #result-loot:empty { display: none; }

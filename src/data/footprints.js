@@ -29,9 +29,37 @@ export function loadFootprints() {
   }
 }
 
+// Return Record Foundation 01 — Returned Deck Card 01: 귀환/클리어 시 "살아 돌아온 덱"의 future-use 스냅샷.
+//   ★기존 footprint record에서 파생만 한다(새 storage key 없음·battle.js 무변경 — record는 recordFootprint가 이미 넘기는 값).
+//   대상 result = return/clear만(defeat/abort는 null = 귀환 덱 오염 방지). eligibleForTitan = "나중에 쓸 수 있다"는 표식
+//   (아직 실제 보스 토벌/유물/해금에는 쓰지 않는다 — 구조만 연다). 과거 footprint(이 필드 없음)도 호환되게 optional.
+//   ※loot 수치는 record에 없어 스냅샷엔 미포함 — 저장까지 넣으려면 recordFootprint(battle.js)가 loot를 넘겨야 함(후보).
+export function buildDeckSnapshot(record) {
+  if (!record) return null;
+  const result = record.result;
+  if (result !== "return" && result !== "clear") return null;
+  const party = Array.isArray(record.party) ? record.party : [];
+  const pick = (pre) => party.filter((p) => String(p.slot).startsWith(pre)).map((p) => ({ slot: p.slot, job: p.job }));
+  return {
+    eligibleForTitan: true,            // future boss raid 사용 가능 표식(아직 미사용 — hint/구조만)
+    result,                            // "return" | "clear"
+    depth: record.depth ?? 0,
+    alertness: record.alertness ?? 0,
+    combatMs: record.combatMs ?? 0,
+    combatNormMs: record.combatNormMs ?? null,
+    party: { front: pick("f"), back: pick("b") }, // future-use 최소 구조(slot/job id 보존)
+    createdAt: record.ts ?? Date.now(),
+  };
+}
+
 // 1건 추가 → 최신 10개만 유지(초과 시 가장 오래된 것부터 제거). 저장 실패는 조용히 무시(플레이 방해 X).
 export function saveFootprint(record) {
   try {
+    // Return Record Foundation 01 — return/clear면 future-use 덱 스냅샷을 같은 entry에 파생 부착(새 key 없음·defeat/abort는 null이라 미부착).
+    if (record && record.deckSnapshot === undefined) {
+      const snap = buildDeckSnapshot(record);
+      if (snap) record.deckSnapshot = snap;
+    }
     const list = loadFootprints();
     list.push(record);
     while (list.length > FOOTPRINTS_MAX) list.shift();

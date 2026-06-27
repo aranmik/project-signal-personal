@@ -1051,6 +1051,8 @@ function renderResultOverlay(state) {
     }
     // Return & Loot Core 01 — 결과 카드에 "가져온/품고 나온 전리품"(클리어·귀환) / "잃어버린 전리품"(전멸) 영역.
     renderResultLoot(state, result);
+    // Return Record Foundation 01 — return/clear에 "귀환 덱" 카드(살아 돌아온 조합 기록 + future titan hint). defeat엔 미표시.
+    renderReturnedDeckCard(state, result);
     // Run Footprints 01 — 결과 카드 하단에 직전 발자취 1줄(방금 저장된 최신 기록).
     const fpEl = document.getElementById("result-footprint");
     if (fpEl) {
@@ -1095,6 +1097,55 @@ function renderResultLoot(state, result) {
         + `<div class="rl-note rl-note--lost">들고 있던 것을 숲에 두고 왔다. 욕심은 흔적만 남겼다.</div>`
       : `<div class="rl-empty">잃어버린 전리품은 없었다. 하지만 숲은 이번 모험을 삼켜 버렸다.</div>`;
   }
+}
+
+// Return Record Foundation 01 — Returned Deck Card 01: return/clear 결과에 "살아 돌아온 덱" 카드.
+//   최종 파티(전열/후열 직업) + 심도/경계도 + 확보 전리품 수 + 전투 시간 + 약한 titan hint. defeat/abort엔 미표시(귀환 덱 오염 방지).
+//   ★실제 보스 토벌/유물/스테이지 해금/덱 소모 없음 — "기록으로 남았다"는 감정 + future-use hint만. 카드 DOM은 동적 생성(index.html 무변경).
+//   표시는 live state.run(formation/depth/alertness/combatMs) + getRunLootSummary(확보 수)에서 직접 — 저장 deckSnapshot과 별개(둘 다 read-only).
+function renderReturnedDeckCard(state, result) {
+  const host = document.getElementById("result-card");
+  if (!host) return;
+  let card = document.getElementById("returned-deck-card");
+  const eligible = result === "return" || result === "clear";
+  if (!eligible) { if (card) card.hidden = true; return; } // defeat/abort: 숨김(오염 방지)
+  if (!card) {
+    // 카드 DOM을 #result-loot 바로 아래에 1회 생성(index.html 무변경). 이후 렌더는 재사용.
+    card = document.createElement("div");
+    card.id = "returned-deck-card";
+    card.className = "deck-card";
+    const lootEl = document.getElementById("result-loot");
+    if (lootEl && lootEl.parentNode) lootEl.insertAdjacentElement("afterend", card);
+    else host.appendChild(card);
+  }
+  card.hidden = false;
+  const f = state.run.formation || {};
+  const nm = (slot) => (f[slot] ? jobName(f[slot]) : null);
+  const front = ["f0", "f1"].map(nm).filter(Boolean);
+  const back = ["b0", "b1"].map(nm).filter(Boolean);
+  const s = getRunLootSummary(state.run);
+  const isReturn = result === "return";
+  const badge = isReturn ? "귀환" : "클리어";
+  const timeText = footprintTimeText({ combatMs: state.run.combatMs || 0, combatNormMs: state.run.combatNormMs });
+  const lootLine = s.lootSecuredCount > 0
+    ? `<span class="deck-stat">확보 전리품 <b>${s.lootSecuredCount}</b></span>` : "";
+  card.innerHTML = `
+    <div class="deck-head">
+      <span class="deck-title">귀환 덱</span>
+      <span class="deck-badge deck-badge--${isReturn ? "return" : "clear"}">${badge}</span>
+    </div>
+    <div class="deck-rows">
+      <div class="deck-row"><span class="deck-row-label">전열</span><span class="deck-row-jobs">${front.length ? front.join(" · ") : "—"}</span></div>
+      <div class="deck-row"><span class="deck-row-label">후열</span><span class="deck-row-jobs">${back.length ? back.join(" · ") : "—"}</span></div>
+    </div>
+    <div class="deck-stats">
+      <span class="deck-stat">심도 <b>${state.run.depth ?? 0}</b></span>
+      <span class="deck-stat">경계도 <b>${state.run.alertness ?? 0}</b></span>
+      ${lootLine}
+      <span class="deck-stat deck-stat--time">${timeText}</span>
+    </div>
+    <p class="deck-hint">이 조합은 기록으로 남았다 — 살아 돌아온 덱은 훗날 더 큰 토벌의 씨앗이 된다.</p>
+  `;
 }
 
 // Return & Loot Core 01 — 전리품 칩 1개(이름 + tier 라벨 + 발견 심도). flavor는 title 툴팁.
