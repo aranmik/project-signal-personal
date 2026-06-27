@@ -2032,6 +2032,36 @@ export function playActionFx(event) {
   setTimeout(fire, lead + delayExtra);
 }
 
+// ── Status Presence 01 — Body Aura Foundation 01 ─────────────────────────────
+//   "효과는 로그에만 뜨는 게 아니라 몸에서 드러난다." 대상 actor 몸 주변에 효과별 짧은 presence를
+//   띄우는 공통 helper. variant별로 색·방향·형태가 다르다(poison=발밑에서 위로 피어오름 / speed=몸통 옆으로 스침).
+//   기존 fx-layer·unitPoint·animationend 정리 패턴을 그대로 재사용한다. fxSuppressed(헤드리스)·대상 없음·
+//   죽는 중/정리된 유닛·좌표 계산 실패 시 안전하게 return. 밀도 가드: apply/tick 1회당 최대 2 DOM.
+//   transform/opacity 중심(reduced-motion은 CSS에서 비활성). ★battle event/payload 무관 — 표시 전용.
+//   향후 확장 후보(이번 미구현·CSS/네이밍만 열어둠): guard/ward(감싸는 링)·regen(위로 부드럽게)·
+//   bind(아래로 감김)·mark(작은 마커)·rhythm(음표/박자 파동).
+function spawnBodyPresence(targetInstanceId, variant, opts = {}) {
+  if (fxSuppressed) return; // Dev Balance Lab 01 — 헤드리스 sim 중 생성 금지
+  if (!targetInstanceId || !variant) return;
+  if (dyingUnits.has(targetInstanceId) || cleanedDead.has(targetInstanceId)) return;
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  // poison=발밑(fy 아래)에서 피어오름 / speed 등=몸통 옆. opts.fy로 개별 조정 가능.
+  const fy = opts.fy ?? (variant === "poison" ? 0.58 : 0.46);
+  const p = unitPoint(targetInstanceId, { fx: 0.5, fy }, field.getBoundingClientRect());
+  if (!p) return;
+  const n = Math.max(1, Math.min(2, opts.count ?? 2)); // 1~2개만(MAX/다수전 누적 방지)
+  for (let i = 0; i < n; i++) {
+    const el = document.createElement("span");
+    el.className = `fx-presence fx-presence--${variant}${i > 0 ? " fx-presence--b" : ""}`;
+    el.style.left = `${p.x}px`;
+    el.style.top = `${p.y}px`;
+    el.addEventListener("animationend", () => el.remove());
+    layer.appendChild(el);
+  }
+}
+
 // Status & Effect Foundation 01 — 상태 tick FX(poison 등).
 //   행동선/펄스/리액션 없이 작은 숫자만 — 기존 숫자 상한(MAX_FX_NUMBERS)을 공유해
 //   MAX/다수전에서도 과밀해지지 않는다. 죽는 중/정리된 유닛은 생략.
@@ -2044,6 +2074,9 @@ export function playStatusTickFx({ targetInstanceId, amount, kind }) {
   const t = numberAnchor(targetInstanceId, field.getBoundingClientRect());
   if (!t) return;
   spawnNumber(layer, t, targetInstanceId, false, amount, kind);
+  // Status Presence 01 — 독/감염 틱마다 몸(발밑)에서 보라 독기가 위로 피어오른다(숫자 위치와 분리).
+  //   kind가 poison일 때만(boss roar 등 다른 tick은 제외). poison 수치/지속 로직 불변 — presentation만 추가.
+  if (kind === "poison") spawnBodyPresence(targetInstanceId, "poison");
 }
 
 // Combat Grammar Foundation 01 — 상태 적용 FX(머리 위 짧은 기호 팝). 버프/디버프가 "걸렸다"를 읽게.
@@ -2064,6 +2097,10 @@ export function playStatusApplyFx(targetInstanceId, label, variant = "") {
   el.style.top = `${p.y}px`;
   el.addEventListener("animationend", () => el.remove());
   layer.appendChild(el);
+  // Status Presence 01 — 가속 버프(속↑)가 걸리는 순간 몸 옆으로 "슝" 가속 흐름.
+  //   ★라벨 "속↑"(speedUp)일 때만 — 공↑/방↑/치↑ 등 다른 버프엔 안 붙는다(모든 buff에 speed aura 금지 준수).
+  //   현재 게임엔 speedUp을 적용하는 스킬이 없어 평소엔 발동 안 함(prepared hook) — speedUp 도입 시 즉시 라이브.
+  if (label === "속↑") spawnBodyPresence(targetInstanceId, "speed");
 }
 
 // ── Monster Identity 02 — Actor 역할 읽힘 FX ──────────────────────────────
@@ -2304,6 +2341,10 @@ function spawnFinaleFx(casterInstanceId, allyIds) {
   const field = document.getElementById("battle-field");
   if (!layer || !field) return;
   const fieldRect = field.getBoundingClientRect();
+  // Status Presence 01 — 무희 피날레로 "단숨에 나아가는" 아군 각자에게 가속 presence(몸통 옆으로 슝 스침).
+  //   ★무희 피날레 전용 라이브 연결(모든 support/buff 아님). 아군 1명당 streak 1개 — 다수전 DOM 절제.
+  //   기존 분홍 뾰로롱(.fx-finale)/파동은 그대로 두고 그 위에 가속감만 더한다.
+  (allyIds || []).forEach((id) => spawnBodyPresence(id, "speed", { count: 1 }));
   const pts = (allyIds || []).map((id) => unitPoint(id, { fx: 0.5, fy: 0.46 }, fieldRect)).filter(Boolean);
   pts.forEach((p) => {
     const el = document.createElement("span");

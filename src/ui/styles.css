@@ -1722,6 +1722,48 @@ body {
 }
 @media (prefers-reduced-motion: reduce) { .fx-aura, .fx-finale, .fx-finale-wave { animation-duration: 0.01s; } }
 
+/* Status Presence 01 — Body Aura Foundation 01:
+   효과가 "몸에서 드러나는" 공통 body presence. variant별로 색·방향·형태가 다르다.
+   투명도 낮게(HP바/피해 숫자/로그 안 가림)·짧은 duration·transform/opacity·#fx-layer 안에서만 산다.
+   ★확장 후보(이번 미구현·네이밍만 정돈): --guard/--ward(감싸는 링)·--regen(위로 부드럽게)·--bind(아래로 감김)·--mark·--rhythm. */
+.fx-presence {
+  position: absolute; pointer-events: none; z-index: 3;
+  opacity: 0;
+}
+/* Poison / Toxic — 발밑에서 보라 독기가 위로 짧게 피어오름(끈적·오염). fx-number--poison 보라와 어울림. */
+.fx-presence--poison {
+  width: 15px; height: 15px; margin: -8px 0 0 -7px;
+  border-radius: 50% 50% 48% 52% / 56% 56% 44% 44%;   /* 살짝 방울/연기진 형태 */
+  background: radial-gradient(circle at 50% 60%, rgba(180, 122, 232, 0.5) 0 40%, rgba(150, 92, 210, 0.22) 64%, transparent 80%);
+  box-shadow: 0 0 10px rgba(168, 110, 224, 0.38);
+  animation: fx-presence-poison 0.92s ease-out forwards;
+}
+.fx-presence--poison.fx-presence--b { margin-left: 1px; animation-delay: 0.16s; animation-duration: 0.82s; }
+@keyframes fx-presence-poison {
+  0%   { opacity: 0;    transform: translate(0, 5px) scale(0.5); }
+  30%  { opacity: 0.65; }
+  100% { opacity: 0;    transform: translate(-3px, -22px) scale(1.05); }   /* 위로 피어오르며 옅게 흩어짐 */
+}
+/* 독 틱은 매 턴 발동 — MAX/2x에선 더 짧게(잔상 누적 방지·기존 숫자/Hanabi 배속 override와 동일 문법). */
+#battle-field[data-fast="1"] .fx-presence--poison { animation-duration: 0.72s; }
+#battle-field[data-speed="MAX"] .fx-presence--poison { animation-duration: 0.56s; }
+/* Speed / Haste — 몸통 옆으로 "슝" 스치는 은빛·하늘빛 streak(가속/박자). 위로 피어오르는 독과 방향이 반대. */
+.fx-presence--speed {
+  width: 30px; height: 4px; margin: -2px 0 0 -15px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent 0, rgba(190, 226, 255, 0.85) 42%, rgba(214, 196, 255, 0.6) 72%, transparent 100%);
+  box-shadow: 0 0 8px rgba(170, 210, 255, 0.5);
+  animation: fx-presence-speed 0.5s cubic-bezier(.2,.7,.3,1) forwards;
+}
+.fx-presence--speed.fx-presence--b { margin-top: 6px; animation-delay: 0.08s; filter: opacity(0.7); }
+@keyframes fx-presence-speed {
+  0%   { opacity: 0;   transform: translateX(12px) scaleX(0.6); }
+  25%  { opacity: 0.9; }
+  100% { opacity: 0;   transform: translateX(-22px) scaleX(1.15); }        /* 뒤로 스치며 빠져나감 */
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-presence--poison, .fx-presence--speed { animation-duration: 0.01s; }
+}
+
 /* Combat Feedback Polish 02 — 아군 게이지 상승 마커: 오른 구간을 분홍으로 차오르듯(왼→오 성장). 새 위치(오른 끝)를 밝게 강조
    = "리듬을 받아 밀려나감". 적 게이지 감소(보라, 오른 끝에서 깎임)와 색·방향이 반대로 읽힌다. */
 .tempo-rise {
