@@ -2051,6 +2051,13 @@ function fxTierOf(jobId) {
   return ADVANCED_JOBS.includes(jobId) ? "first" : null;
 }
 
+// First Class Readability 02 — 1차 직업 개별 대표 signature 토큰. ADVANCED_JOBS의 job id를 그대로 반환(아니면 null).
+//   FCR 01 역할군 cue(.fx-first-<role>) 위에 직업별 "대표 냄새" accent를 얕게 얹는 hook(기존 sourceUnitId만 읽음·payload 무확장).
+//   ★기본직업/2차/적/미지는 null → signature 무표식(오염 0). job id는 소문자 단순 문자열이라 class/data 접미사로 안전.
+function signatureCueOf(jobId) {
+  return ADVANCED_JOBS.includes(jobId) ? jobId : null;
+}
+
 export function playActionFx(event) {
   if (fxSuppressed) return; // Dev Balance Lab 01 — 헤드리스 sim 중 표시 생략
   // Job Grammar 01: kind = 직업 행동 분류(strike/protect/snipe/heal/attack).
@@ -2072,6 +2079,7 @@ export function playActionFx(event) {
   const variant = actionLineVariant(lineType, kind);
   const fxRole = fxRoleOf(sourceUnitId); // Hit Effect Identity 01 — 역할 틴트 토큰(기존 payload만 읽음)
   const fxTier = fxTierOf(sourceUnitId); // First Class Readability 01 — 1차 직업 표식(역할군 정의 cue 강화)
+  const fxSig = signatureCueOf(sourceUnitId); // First Class Readability 02 — 1차 직업 개별 대표 cue(signature)
 
   // 좌표는 .unit wrap rect 기준 → acting scale(자식 .fig-react)에 영향받지 않음(안정)
   // Basic Action Breath 01: 시작점 = 공격자 몸통(srcFrac), 도착점 = 대상 테두리 중
@@ -2121,7 +2129,7 @@ export function playActionFx(event) {
       spawnStartPulse(layer, s, variant, fxRole);
       spawnLine(layer, s, t, lineType, kind, variant, fxRole);
     }
-    spawnPulse(layer, t, isHeal, fxRole, fxTier);
+    spawnPulse(layer, t, isHeal, fxRole, fxTier, fxSig);
     // First Class Expansion 01: 피해/회복 0(상태 부여형 스킬: 중독 등)은 숫자 생략.
     // Combat Grammar Foundation 01: numberVariant(crit 등)로 피해 숫자 규격 분기.
     if (amount > 0) spawnNumber(layer, tn, targetInstanceId, isHeal, amount, numberVariant, undefined, fxRole);
@@ -2932,7 +2940,7 @@ function makeNS(tag, attrs, innerHTML) {
   return el;
 }
 
-function spawnPulse(layer, t, isHeal, fxRole, fxTier) {
+function spawnPulse(layer, t, isHeal, fxRole, fxTier, fxSig) {
   const p = document.createElement("span");
   p.className = `fx-pulse${isHeal ? " fx-pulse--heal" : ""}`;
   if (fxRole) p.dataset.fxRole = fxRole; // Hit Effect Identity 01 — 역할 틴트(임팩트 펄스 = "터지는 모양" 주 신호. heal 펄스는 CSS에서 제외).
@@ -2943,6 +2951,9 @@ function spawnPulse(layer, t, isHeal, fxRole, fxTier) {
     p.dataset.fxTier = "first";
     p.classList.add("fx-first-class");
     if (fxRole && fxRole !== "neutral") p.classList.add(`fx-first-${fxRole}`);
+    // First Class Readability 02 — 직업 대표 signature accent. CSS는 ::before(역할링 ::after와 분리)로 얕게 더한다.
+    //   data-fx-signature + fx-sig-<job>. 역시 새 DOM/애니메이션 0(::before가 부모 펄스 애니를 탐).
+    if (fxSig) { p.dataset.fxSignature = fxSig; p.classList.add(`fx-sig-${fxSig}`); }
   }
   p.style.left = `${t.x}px`;
   p.style.top = `${t.y}px`;

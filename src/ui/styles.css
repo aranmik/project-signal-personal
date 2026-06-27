@@ -2091,6 +2091,37 @@ body {
 .fx-pulse.fx-first-support::after { --fc: rgba(232, 184, 220, 0.78); width: 24px; height: 24px; margin: -12px 0 0 -12px; opacity: 0.5; }        /* 넓고 부드러운 리듬 링 */
 .fx-pulse.fx-first-healer::after  { --fc: rgba(245, 222, 158, 0.85); }                                                                          /* 금빛 정의(회복/정화) */
 
+/* First Class Readability 02 — 1차 직업 "개별 대표" signature accent(::before).
+   FCR 01의 ::after(역할군 윤곽 링)와 분리된 ::before에 직업별 "대표 냄새"만 얕게 더한다(15종).
+   ★::before도 정적 opacity라 부모 .fx-pulse 애니메이션(opacity 0→1→0 · scale 0.7→1.15)을 그대로 타고 함께 페이드
+   = 새 DOM·새 애니메이션 0(reduced-motion에서 부모 0.01s면 같이 정리 · MAX 누적 0 · 펄스 수명 동일). heal 펄스 제외(JS 가드).
+   강도 기준: 기본직업 < 1차(이 accent) < 2차 — 작은 점/링/짧은 막대/얇은 선 수준(화면 안 덮음). */
+.fx-pulse[data-fx-signature]::before {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%;
+  background: var(--sig, rgba(240, 240, 245, 0.7)); opacity: 0.85; pointer-events: none;
+}
+/* tank — 문/방패/봉인/벽 */
+.fx-sig-gatekeeper::before { --sig: rgba(182, 206, 226, 0.95); width: 2px; height: 11px; margin: -5.5px 0 0 -4px; border-radius: 1px; box-shadow: 6px 0 0 var(--sig); } /* 세로 gate bar 2개 */
+.fx-sig-paladin::before    { --sig: rgba(246, 224, 152, 0.97); width: 2px; height: 2px; box-shadow: 0 -5px 0 var(--sig), 0 5px 0 var(--sig), -5px 0 0 var(--sig), 5px 0 0 var(--sig); } /* 금빛 십자 glint */
+.fx-sig-forbidden::before  { --sig: rgba(140, 150, 222, 0.92); width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; background: transparent; border: 1.5px solid var(--sig); } /* 봉인 ring(인디고 — 독 보라와 분리) */
+.fx-sig-wall::before       { --sig: rgba(170, 180, 192, 0.95); width: 13px; height: 3px; margin: 3px 0 0 -6.5px; border-radius: 1px; } /* 낮은 가로 plate(아래) */
+/* melee — 베기/뿌리 */
+.fx-sig-rogue::before      { --sig: rgba(255, 224, 184, 0.97); width: 14px; height: 2px; margin: -1px 0 0 -7px; border-radius: 1px; transform: rotate(-42deg); } /* 짧은 대각 slash */
+.fx-sig-warden::before     { --sig: rgba(154, 212, 124, 0.92); width: 3px; height: 7px; margin: 1px 0 0 -1.5px; border-radius: 1px; transform: rotate(12deg); } /* 발밑 짧은 root nick */
+/* ranged — 조준/마법/추적 */
+.fx-sig-watchbow::before   { --sig: rgba(204, 244, 154, 0.95); width: 1.5px; height: 2px; box-shadow: 0 -6px 0 var(--sig), 0 6px 0 var(--sig); } /* 얇은 aim tick */
+.fx-sig-mage::before       { --sig: rgba(216, 152, 236, 0.97); width: 2px; height: 2px; box-shadow: 0 -5px 0 -0.5px var(--sig), 0 5px 0 -0.5px var(--sig), -5px 0 0 -0.5px var(--sig), 5px 0 0 -0.5px var(--sig); } /* 작은 arcane flare(Hanabi와 분리) */
+.fx-sig-tracker::before    { --sig: rgba(255, 202, 150, 0.97); width: 5px; height: 5px; margin: -8px 0 0 -2.5px; background: transparent; border: 1.5px solid var(--sig); } /* 위쪽 짧은 mark blip(visual-only) */
+/* support — 선봉/덫/리듬 */
+.fx-sig-vanguard::before   { --sig: rgba(255, 198, 152, 0.95); width: 6px; height: 6px; margin: -3px 0 0 -4px; background: transparent; border-top: 2px solid var(--sig); border-right: 2px solid var(--sig); transform: rotate(45deg); } /* 앞으로 미는 chevron */
+.fx-sig-trapper::before    { --sig: rgba(234, 186, 222, 0.92); width: 11px; height: 11px; margin: 2px 0 0 -5.5px; background: transparent; border: 1.5px dashed var(--sig); } /* 발밑 dotted snare ring */
+.fx-sig-bard::before       { --sig: rgba(226, 182, 236, 0.97); width: 3px; height: 3px; box-shadow: 3px -5px 0 -0.5px var(--sig); } /* 작은 음표(머리+stem) */
+/* healer — 활/성/정화 (heal일 땐 mint 우선 → 공격성 행동에서 약하게) */
+.fx-sig-healbow::before    { --sig: rgba(196, 236, 184, 0.92); width: 2px; height: 9px; margin: -4.5px 0 0 -1px; border-radius: 1px; transform: rotate(-45deg); } /* mint-gold arrow shimmer */
+.fx-sig-saint::before      { --sig: rgba(246, 226, 162, 0.92); width: 2px; height: 8px; margin: -10px 0 0 -1px; border-radius: 1px; } /* 위 바깥 얇은 holy shimmer */
+.fx-sig-purifier::before   { --sig: rgba(190, 226, 246, 0.92); width: 2px; height: 10px; margin: -5px 0 0 -1px; border-radius: 1px; } /* 위로 맑은 wash line(독 presence 반대 결) */
+
 /* 피해/회복 숫자 — 작게, target 주변에서 떠오름 */
 /* First Loop Micro Polish 01 — 피해/치유 숫자 약 1.5배 확대(13→20px), 모바일 가독↑.
    margin도 비례 보정(중앙 정렬 유지). queue/stagger·Density Guard는 그대로. */
