@@ -162,6 +162,28 @@
     .eo-profile-help, .eo-copy-help { font-size: 10.5px; line-height: 1.55; color: #9fb3c4; background: #11161d; border: 1px solid #243039; border-radius: 8px; padding: 7px 10px; margin: 6px 0; }
     .eo-profile-help b, .eo-copy-help b { color: #e6c89a; }
     .eo-copy-help code { background: #161e26; color: #9fc4dd; padding: 1px 5px; border-radius: 4px; font-size: 10px; }
+    /* Theme & Titan Seed Index 01 — 지도·귀환덱·거신·유물 순환 설계 인덱스(dev-only 텍스트 · 전부 future seed/미구현 · gameplay/저장 무관) */
+    .eo-tt-core { font-size: 12px; line-height: 1.6; color: #ecd9bc; background: #0f141b; border-left: 3px solid #6e553a; border-radius: 6px; padding: 7px 11px; margin: 4px 0 8px; }
+    .eo-tt-core b { color: #f0dcbb; }
+    .eo-tt-core .eo-tt-aux { display: block; font-size: 11px; color: #9fb3c4; margin-top: 3px; }
+    .eo-tt-h3 { font-size: 12.5px; color: #cfe0ee; margin: 13px 0 4px; font-weight: 800; }
+    .eo-tt-badge { display: inline-block; font-size: 9px; font-weight: 800; padding: 1px 6px; border-radius: 999px; vertical-align: 1px; margin-left: 4px; white-space: nowrap; }
+    .eo-tt-badge--impl { background: rgba(127,209,168,.18); color: #7fd1a8; }
+    .eo-tt-badge--base { background: rgba(159,196,221,.16); color: #9fc4dd; }
+    .eo-tt-badge--seed { background: rgba(230,197,120,.16); color: #e6c578; }
+    .eo-tt-badge--planned { background: rgba(200,168,110,.14); color: #c8a86e; }
+    .eo-tt-badge--notimpl { background: rgba(240,160,160,.14); color: #e09a9a; }
+    .eo-tt-loop { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 6px; }
+    .eo-tt-step { font-size: 10.5px; background: #1a2433; border: 1px solid #2c3a4a; border-radius: 5px; padding: 2px 7px; color: #cfe0ee; }
+    .eo-tt-step b { color: #e6c89a; }
+    .eo-tt-found { font-size: 11px; line-height: 1.55; color: #c7d6e2; background: #0f141b; border: 1px solid #243039; border-radius: 8px; padding: 7px 10px; margin: 5px 0; }
+    .eo-tt-found b { color: #eef6ff; }
+    .eo-tt-note { font-size: 10px; color: #8aa0b4; margin: 4px 0 0; line-height: 1.5; }
+    .eo-tt-note b { color: #e6c578; }
+    .eo-tt-s { font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 999px; white-space: nowrap; }
+    .eo-tt-s--seed { background: rgba(230,197,120,.16); color: #e6c578; }
+    .eo-tt-s--planned { background: rgba(200,168,110,.14); color: #c8a86e; }
+    .eo-tt-s--base { background: rgba(159,196,221,.16); color: #9fc4dd; }
   </style>
 </head>
 <body>
@@ -193,6 +215,84 @@
       <div class="eo-sheet-row"><span class="eo-sheet-ico">🩺</span><span class="eo-sheet-body"><b>전체 건강검진 — A. Expedition Summary</b> · 맨 위 <b>100/300런 실행</b> 결과(4프로필의 clearRate · 전멸 · 보스 시도 · 전리품 지표 한눈에). <span class="eo-sheet-give">유키에게:</span> 「요약 복사」.</span></div>
       <div class="eo-sheet-row"><span class="eo-sheet-ico">🔬</span><span class="eo-sheet-body"><b>런 부검 — Timeline / Run Samples</b> · 특정 런이 어디서 왜 무너졌는지 step으로 본다 (Band Observatory ⑤ Timeline + 아래 E. Run Samples). <span class="eo-sheet-give">유키에게:</span> seed/profile + 타임라인.</span></div>
       <p class="eo-sb-lead" style="margin:8px 0 0">처음이라면 <b>💓 밴드 심전도</b>를 <code style="color:#9fc4dd">1전리품 귀환 / seed 401 / 100런 / route all / 결과 all</code>로 돌린 뒤 <b>Copy Summary</b>를 유키에게 보내면 됩니다.</p>
+    </section>
+
+    <!-- Theme & Titan Seed Index 01 — 지도·귀환덱·거신·유물 순환 설계 인덱스. dev-only 설계 씨앗 정리(텍스트/표만).
+         ★실제 boss raid·보스 HP·유물 지급/강화·테마 해금·귀환 덱 소모·진행도 unlock은 구현하지 않음(전부 Future Seed).
+         core/data/ui/gameplay·storage 무관 — 이 섹션은 정적 HTML 텍스트입니다. -->
+    <section id="eo-titan-seed-index" class="eo-sheetbook">
+      <h2>🗺 Theme &amp; Titan Seed Index <span class="eo-tt-badge eo-tt-badge--notimpl">Not Implemented</span></h2>
+      <p class="eo-sb-lead"><b>지도 · 귀환덱 · 거신 · 유물 순환 씨앗</b> — 장기 루프의 <b>방향만</b> 정리하는 dev-only 설계 인덱스입니다. 아래 표·문구는 전부 <b>Future Seed</b>이며, 실제 보스 토벌·유물·스테이지 해금은 아직 구현하지 않습니다(현재 구현된 기반은 B에 표기).</p>
+      <div class="eo-tt-core">“<b>지도는 숲을 넓히고, 귀환 덱은 거신을 깎고, 유물은 테마를 깊게 만든다.</b>”
+        <span class="eo-tt-aux">귀환은 종료가 아니라, 다음 모험을 여는 행위다.</span></div>
+
+      <div class="eo-tt-h3">A. Loop Summary <span class="eo-tt-badge eo-tt-badge--seed">Future Seed</span></div>
+      <div class="eo-tt-loop">
+        <span class="eo-tt-step">1 · <b>모험</b>한다</span>
+        <span class="eo-tt-step">2 · <b>전리품 / 지도 조각</b>을 얻는다</span>
+        <span class="eo-tt-step">3 · 살아서 <b>귀환</b>한다</span>
+        <span class="eo-tt-step">4 · <b>귀환 덱</b>이 기록된다</span>
+        <span class="eo-tt-step">5 · 귀환 덱이 훗날 <b>거신 토벌</b>에 쓰일 수 있다</span>
+        <span class="eo-tt-step">6 · 거신 보상이 <b>테마 스테이지</b>를 더 맛있게 만든다</span>
+        <span class="eo-tt-step">7 · <b>유물</b>은 반복 토벌로 강화된다</span>
+      </div>
+      <p class="eo-tt-note">★ 1~4는 <b>기반 있음</b>(아래 B)이고, 5~7은 전부 <b>Future Seed · Not Implemented</b> — 방향만 적은 것이며 실제 토벌/소비/해금 로직은 없습니다.</p>
+
+      <div class="eo-tt-h3">B. Current Foundation <span class="eo-tt-badge eo-tt-badge--impl">현재 구현됨</span></div>
+      <div class="eo-tt-found"><b>Return Choice Core 01</b> <span class="eo-tt-badge eo-tt-badge--impl">구현됨</span><br>전리품 보유 시 <b>귀환</b> 선택 가능 · 귀환은 보스 clear progression을 올리지 않음 · carried loot를 <b>secured</b> 처리.</div>
+      <div class="eo-tt-found"><b>Return Record Foundation 01</b> <span class="eo-tt-badge eo-tt-badge--impl">구현됨</span><br>return/clear 결과에 <b>귀환 덱 카드</b> 표시 · 기존 footprint entry 안 optional <b>deckSnapshot</b> 저장(eligibleForTitan, 새 storage key 없음) · defeat/abort는 저장하지 않음 · 실제 boss raid에는 <b>아직 미사용</b>.</div>
+      <p class="eo-tt-note">→ 이 둘이 5~7(거신·테마·유물)이 자연스럽게 붙을 수 있는 <b>첫 기반</b>입니다.</p>
+
+      <div class="eo-tt-h3">C. Theme Stage Seeds <span class="eo-tt-badge eo-tt-badge--seed">SEED / PLANNED</span></div>
+      <div class="eo-tablewrap"><table>
+        <thead><tr><th class="txt">스테이지</th><th class="txt">테마</th><th class="txt">pressure</th><th class="txt">favoredRoles</th><th class="txt">unlockSource</th><th>status</th></tr></thead>
+        <tbody>
+          <tr><td class="txt">새싹 숲길</td><td class="txt">초보자</td><td class="txt">균형 도입</td><td class="txt">전 역할 균형(특정 직업 비편향)</td><td class="txt">기본 제공(현재 숲)</td><td><span class="eo-tt-s eo-tt-s--base">기반</span></td></tr>
+          <tr><td class="txt">비 오는 숲길</td><td class="txt">지속전 · 회복</td><td class="txt">누적 피해 · 장기전</td><td class="txt">회복 · 정화 · 버티기(성직자 · 정화사 · 결계장)</td><td class="txt">지도 조각 · 귀환 덱</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+          <tr><td class="txt">별빛 없는 밤숲</td><td class="txt">표식 · 후열 위협</td><td class="txt">조준 · 저격 · 후열 압박</td><td class="txt">궁수 · 천궁 · 추적자 · 현자</td><td class="txt">지도 조각</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+          <tr><td class="txt">오염된 뿌리숲</td><td class="txt">독 · 감염 · 정화</td><td class="txt">상태이상 누적</td><td class="txt">역병술사 · 정화사 · 성직자</td><td class="txt">지도 조각</td><td><span class="eo-tt-s eo-tt-s--planned">PLANNED</span></td></tr>
+          <tr><td class="txt">오래된 짐승길</td><td class="txt">전열 압박 · 단일 강적</td><td class="txt">추적 · 맷집 · 단일 화력</td><td class="txt">수호자 · 성기사 · 검성 · 용창</td><td class="txt">귀환 덱 · 거신 보상</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+        </tbody>
+      </table></div>
+      <p class="eo-tt-note">favoredRoles는 <b>필수가 아니라</b> "잘 맞으면 효율이 오르는 방향". 실제 스테이지 해금/언락 로직은 없습니다.</p>
+
+      <div class="eo-tt-h3">D. Forest Titan Seeds <span class="eo-tt-badge eo-tt-badge--seed">SEED</span></div>
+      <div class="eo-tablewrap"><table>
+        <thead><tr><th class="txt">거신</th><th class="txt">fantasy</th><th class="txt">encouragedDecks (잘 맞는 방향)</th><th class="txt">rewardTheme</th><th>status</th></tr></thead>
+        <tbody>
+          <tr><td class="txt">고대의 숲 심장</td><td class="txt">숲의 근원이 뛰는 거대한 심장</td><td class="txt">검성 · 용창 · 현자</td><td class="txt">새싹 숲길 심화</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+          <tr><td class="txt">오염된 뿌리군주</td><td class="txt">썩은 뿌리를 거느린 군주</td><td class="txt">정화사 · 성직자 · 성황 · 역병술사</td><td class="txt">오염된 뿌리숲</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+          <tr><td class="txt">거울 사슴왕</td><td class="txt">공격을 되비추는 사슴 왕</td><td class="txt">무희 · 바드 · 결계장 · 수호자</td><td class="txt">별빛 없는 밤숲</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+          <tr><td class="txt">잠든 별의 문지기</td><td class="txt">별의 문을 지키는 수문장</td><td class="txt">무희 · 궁수 · 천궁 · 현자 · 마도</td><td class="txt">별빛 없는 밤숲</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+          <tr><td class="txt">굶주린 늑대 그림자</td><td class="txt">굶주림이 뭉친 그림자 무리</td><td class="txt">수호자 · 성기사 · 결계장 · 사제</td><td class="txt">오래된 짐승길</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+          <tr><td class="txt">안개 속 올빼미</td><td class="txt">안개 너머를 읽는 예언자</td><td class="txt">추적자 · 궁수 · 천궁 · 현자</td><td class="txt">별빛 없는 밤숲</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+          <tr><td class="txt">무너진 결계핵</td><td class="txt">깨진 결계가 폭주하는 핵</td><td class="txt">결계장 · 수호자 · 성직자 · 성황</td><td class="txt">비 오는 숲길</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+          <tr><td class="txt">녹슨 왕관나무</td><td class="txt">왕관을 쓴 채 굳은 고목</td><td class="txt">전사 · 검성 · 성황 · 용창 · 수호자</td><td class="txt">오래된 짐승길</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+          <tr><td class="txt">검은 샘의 아이</td><td class="txt">검은 샘에서 태어난 것</td><td class="txt">정화사 · 사제 · 성직자 · 검성 · 현자</td><td class="txt">오염된 뿌리숲</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+          <tr><td class="txt">천둥뿌리 거인</td><td class="txt">천둥을 뿌리에 품은 거인</td><td class="txt">용창 · 수호자 · 성기사 · 결계장 · 무희</td><td class="txt">오래된 짐승길</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+        </tbody>
+      </table></div>
+      <p class="eo-tt-note">★ 특정 직업 <b>필수 구조가 아닙니다</b> — encouragedDecks는 "그 조합이면 효율이 좋아지는 방향"일 뿐, 어떤 귀환 덱으로도 도전 가능한 설계 방향입니다. 실제 보스 HP · 보스 버튼 · 덱 소모는 없습니다(Future Seed).</p>
+
+      <div class="eo-tt-h3">E. Artifact Reward Seeds <span class="eo-tt-badge eo-tt-badge--seed">SEED</span></div>
+      <div class="eo-tablewrap"><table>
+        <thead><tr><th class="txt">유물 방향</th><th class="txt">효과 씨앗(예)</th><th>status</th></tr></thead>
+        <tbody>
+          <tr><td class="txt">지도 정보 증가</td><td class="txt">다음 루트 정보가 더 보인다</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+          <tr><td class="txt">위험 루트 미리보기</td><td class="txt">위험/정예 루트의 압력을 미리 예고</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+          <tr><td class="txt">테마 전리품 후보 증가</td><td class="txt">특정 테마 전리품 후보가 늘어난다</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+          <tr><td class="txt">첫 전투 완충</td><td class="txt">테마 진입 첫 인카운터 압력 완충</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+          <tr><td class="txt">상태이상 대응 힌트</td><td class="txt">독/표식 등 해당 테마 대응 힌트</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+          <tr><td class="txt">귀환 보상 보정</td><td class="txt">귀환 시 확보 전리품 표시/감정 보정</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+          <tr><td class="txt">테마별 선택지 증가</td><td class="txt">route 선택지가 한 칸 늘어난다</td><td><span class="eo-tt-s eo-tt-s--seed">SEED</span></td></tr>
+        </tbody>
+      </table></div>
+      <div class="eo-tt-found"><b>유물 강화 씨앗 (3단계)</b> <span class="eo-tt-badge eo-tt-badge--seed">SEED</span><br>
+        <b>Lv.1</b> 정보 제공 → <b>Lv.2</b> 선택지 품질 개선 → <b>Lv.3</b> 테마 전용 보상 후보 증가. <br>
+        반복 토벌로 효율이 오르는 방향만 — <b>stat 뻥튀기 · 무한 성장은 없습니다.</b></div>
+      <p class="eo-tt-note">유물은 "강해져서 압살"이 아니라 <b>테마를 깊게</b> 만드는 정보·선택지입니다. 실제 유물 지급/강화 로직은 없습니다.</p>
+
+      <p class="eo-tt-note" style="margin-top:9px; border-top:1px solid #1f2832; padding-top:7px">이 인덱스는 전부 <b>Future Seed · Not Implemented</b> — dev 관측/설계용입니다. 실제 boss raid menu · 보스 HP · 유물 획득/강화 · 스테이지 해금 · 귀환 덱 소모 · 진행도 unlock 로직은 여기에 없습니다. (현재 구현된 기반은 B의 <b>Return Choice Core 01</b> · <b>Return Record Foundation 01</b>까지.)</p>
     </section>
 
     <div class="eo-guide"><b>🎛 실험 조절판 (Nara Sandbox)</b><br><b>무엇을 보는가:</b> 영웅/몬스터/보스 수치를 임시로 바꿔 같은 seed로 A/B 비교(dev override·본게임 수치 불변). <br><b>언제 쓰는가:</b> "이 수치를 바꾸면 어떻게 될까?"를 빠르게 보고 싶을 때. <br><span class="eo-guide-give"><b>유키에게 줄 것:</b></span> 보통 줄 것 없음 — 밸런스 결론이 아니라 실험 중간값입니다.</div>
