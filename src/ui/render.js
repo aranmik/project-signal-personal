@@ -2044,6 +2044,13 @@ function fxRoleOf(jobId) {
   return (r === "tank" || r === "melee" || r === "ranged" || r === "support" || r === "healer") ? r : "neutral";
 }
 
+// First Class Readability 01 — 1차 직업 시인성 토큰. "기본직업보다 한 단계 성장한 역할"로 읽히게 하는 표식.
+//   ADVANCED_JOBS(1차 15종)만 "first" → 기본직업/2차/미지는 null(표식 없음=기존 시각 그대로·2차 자체 FX 무침범).
+//   ★battle event schema 무확장(기존 sourceUnitId만 읽음). data-fx-tier hook + 역할군 class만(색은 Role Tint 유지).
+function fxTierOf(jobId) {
+  return ADVANCED_JOBS.includes(jobId) ? "first" : null;
+}
+
 export function playActionFx(event) {
   if (fxSuppressed) return; // Dev Balance Lab 01 — 헤드리스 sim 중 표시 생략
   // Job Grammar 01: kind = 직업 행동 분류(strike/protect/snipe/heal/attack).
@@ -2064,6 +2071,7 @@ export function playActionFx(event) {
   };
   const variant = actionLineVariant(lineType, kind);
   const fxRole = fxRoleOf(sourceUnitId); // Hit Effect Identity 01 — 역할 틴트 토큰(기존 payload만 읽음)
+  const fxTier = fxTierOf(sourceUnitId); // First Class Readability 01 — 1차 직업 표식(역할군 정의 cue 강화)
 
   // 좌표는 .unit wrap rect 기준 → acting scale(자식 .fig-react)에 영향받지 않음(안정)
   // Basic Action Breath 01: 시작점 = 공격자 몸통(srcFrac), 도착점 = 대상 테두리 중
@@ -2113,7 +2121,7 @@ export function playActionFx(event) {
       spawnStartPulse(layer, s, variant, fxRole);
       spawnLine(layer, s, t, lineType, kind, variant, fxRole);
     }
-    spawnPulse(layer, t, isHeal, fxRole);
+    spawnPulse(layer, t, isHeal, fxRole, fxTier);
     // First Class Expansion 01: 피해/회복 0(상태 부여형 스킬: 중독 등)은 숫자 생략.
     // Combat Grammar Foundation 01: numberVariant(crit 등)로 피해 숫자 규격 분기.
     if (amount > 0) spawnNumber(layer, tn, targetInstanceId, isHeal, amount, numberVariant, undefined, fxRole);
@@ -2924,10 +2932,18 @@ function makeNS(tag, attrs, innerHTML) {
   return el;
 }
 
-function spawnPulse(layer, t, isHeal, fxRole) {
+function spawnPulse(layer, t, isHeal, fxRole, fxTier) {
   const p = document.createElement("span");
   p.className = `fx-pulse${isHeal ? " fx-pulse--heal" : ""}`;
   if (fxRole) p.dataset.fxRole = fxRole; // Hit Effect Identity 01 — 역할 틴트(임팩트 펄스 = "터지는 모양" 주 신호. heal 펄스는 CSS에서 제외).
+  // First Class Readability 01 — 1차 직업 임팩트: 역할군 정의 cue(heal 펄스 제외 — 회복 민트 보호).
+  //   data-fx-tier="first" + fx-first-class + fx-first-<role>. 색은 Role Tint 유지, CSS는 ::after 윤곽 링만 더한다
+  //   (새 DOM/애니메이션 0 — ::after는 부모 펄스 애니메이션을 타고 함께 페이드 → reduced-motion/MAX 자동 안전).
+  if (fxTier === "first" && !isHeal) {
+    p.dataset.fxTier = "first";
+    p.classList.add("fx-first-class");
+    if (fxRole && fxRole !== "neutral") p.classList.add(`fx-first-${fxRole}`);
+  }
   p.style.left = `${t.x}px`;
   p.style.top = `${t.y}px`;
   p.addEventListener("animationend", () => p.remove());

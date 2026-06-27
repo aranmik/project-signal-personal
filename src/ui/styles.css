@@ -2072,6 +2072,25 @@ body {
 .fx-pulse[data-fx-role="healer"]:not(.fx-pulse--heal)  { background: rgba(240, 210, 138, 0.62); box-shadow: 0 0 10px rgba(240, 210, 138, 0.4); }                                          /* 금빛 — heal 민트와 구분 */
 /* neutral(미지/null) = 기존 피해 펄스(살몬) 그대로 — override 없음 */
 
+/* First Class Readability 01 — 1차 직업 임팩트 "정의 레이어"(Role Tint 색 위에 윤곽만 더함).
+   기본직업=기존 펄스(무표식) / 1차=역할군이 한 단계 또렷한 윤곽 링 / 2차=무표식(자체 FX 보존·data-fx-tier 없음).
+   ★::after는 새 DOM/애니메이션이 아님 — 정적 opacity로 부모 .fx-pulse 애니메이션(opacity 0→1→0 · scale 0.7→1.15)을
+   그대로 타고 함께 페이드한다(reduced-motion에서 부모 animation-duration 0.01s면 같이 즉시 정리 · MAX 누적 0 · 펄스 수명과 동일).
+   색은 Role Tint(배경/글로우)를 건드리지 않고 역할색 윤곽(--fc)만 입혀 "한 단계 또렷" — 화면을 덮지 않는 작은 링. heal 펄스 제외.
+   ★base 규칙에 :not(.fx-pulse--heal)을 두지 않는다 — fx-first-class는 JS(!isHeal 가드)로 heal에 절대 안 붙으므로 중복이고,
+   두면 특이도가 올라가 아래 역할군 변주(크기/점선 등)를 덮어버린다. base와 역할군 규칙을 같은 특이도로 두고 순서로 변주가 이기게 한다. */
+.fx-pulse.fx-first-class::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 20px; height: 20px; margin: -10px 0 0 -10px;
+  border-radius: 50%; border: 1.5px solid var(--fc, rgba(230, 236, 244, 0.7));
+  opacity: 0.6; pointer-events: none;
+}
+.fx-pulse.fx-first-tank::after    { --fc: rgba(176, 200, 220, 0.85); border-width: 2px; width: 23px; height: 23px; margin: -11.5px 0 0 -11.5px; } /* 묵직한 보호 링(전열 가드) */
+.fx-pulse.fx-first-melee::after   { --fc: rgba(255, 208, 154, 0.9);  width: 17px; height: 17px; margin: -8.5px 0 0 -8.5px; }                    /* 작고 날카로운 정의(베고 찌름) */
+.fx-pulse.fx-first-ranged::after  { --fc: rgba(202, 244, 152, 0.85); border-style: dashed; }                                                   /* 점선 조준 링(후열 조준) */
+.fx-pulse.fx-first-support::after { --fc: rgba(232, 184, 220, 0.78); width: 24px; height: 24px; margin: -12px 0 0 -12px; opacity: 0.5; }        /* 넓고 부드러운 리듬 링 */
+.fx-pulse.fx-first-healer::after  { --fc: rgba(245, 222, 158, 0.85); }                                                                          /* 금빛 정의(회복/정화) */
+
 /* 피해/회복 숫자 — 작게, target 주변에서 떠오름 */
 /* First Loop Micro Polish 01 — 피해/치유 숫자 약 1.5배 확대(13→20px), 모바일 가독↑.
    margin도 비례 보정(중앙 정렬 유지). queue/stagger·Density Guard는 그대로. */
