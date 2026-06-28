@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>First Class Combat Language Preview · Dev</title>
+  <!-- 실제 게임 FX/아바타 CSS를 그대로 링크해 "진짜 cue"를 프리뷰에서 확인한다(관측용·게임 로직 무관). -->
+  <link rel="stylesheet" href="../src/ui/avatars.css" />
+  <link rel="stylesheet" href="../src/ui/styles.css" />
+  <style>
+    /* First Class Combat Language Preview 01 — dev-only 관측 장비.
+       ★게임 styles.css/avatars.css를 링크만 함(무변경). 아래는 프리뷰 레이아웃 전용(#fcl- 프리픽스)·
+       미니 stage용 #battle-field/#unit-layer 크기 override(링크 뒤 같은 ID 특이도 → 순서로 우선). */
+    :root { color-scheme: dark; }
+    body { margin: 0; background: #0b0f15; color: #dfe8f1; font: 13px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    #fcl-app { max-width: 720px; margin: 0 auto; padding: 12px 12px 40px; }
+    #fcl-app header h1 { font-size: 16px; margin: 4px 0 2px; color: #ecd9bc; }
+    #fcl-app header p { font-size: 11.5px; color: #9fb3c4; margin: 0 0 8px; line-height: 1.5; }
+    .fcl-core { font-size: 12px; color: #ecd9bc; background: #0f141b; border-left: 3px solid #6e553a; border-radius: 6px; padding: 6px 10px; margin: 6px 0 10px; }
+    .fcl-warn { color: #e6c578; }
+
+    /* 공유 stage */
+    #fcl-stage-wrap { position: sticky; top: 0; z-index: 5; background: #0b0f15; padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid #1f2832; }
+    .fcl-stage-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 6px; }
+    .fcl-cur { font-size: 12px; font-weight: 800; color: #eef6ff; }
+    .fcl-cur b { color: #f0c040; }
+    .fcl-speed { display: inline-flex; gap: 3px; margin-left: auto; }
+    .fcl-speed button { font-size: 10px; padding: 2px 7px; border-radius: 6px; border: 1px solid #2c3a4a; background: #14233b; color: #cfe0ee; cursor: pointer; }
+    .fcl-speed button.on { background: #f0c040; color: #1a1208; border-color: #f0c040; font-weight: 800; }
+    #fcl-status { font-size: 11px; color: #9fb8cc; min-height: 14px; }
+    /* 제안(proposed) 텍스트 레인 — bard note pop 개선 후보 위치(preview-only·gameplay 미반영) */
+    #fcl-textlane { position: relative; height: 24px; margin: 4px 0; border: 1px dashed #4a4330; border-radius: 6px; background: rgba(200,168,110,0.05); overflow: hidden; }
+    #fcl-textlane .fcl-lane-label { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); font-size: 9px; color: #8a98a8; pointer-events: none; }
+    .fcl-lane-note { position: absolute; top: 50%; font-size: 14px; font-weight: 700; color: #e8bae8; text-shadow: 0 0 6px rgba(214,150,235,0.6); animation: fcl-lane-note 0.9s ease-out forwards; }
+    @keyframes fcl-lane-note { 0% { opacity: 0; transform: translate(0, 4px); } 25% { opacity: 1; transform: translate(0, -2px); } 100% { opacity: 0; transform: translate(28px, -2px); } }
+
+    /* 미니 전장(공유) — 게임 #battle-field를 작게 override. data-instance-id 두 칸만(FX 좌표 기준). */
+    #battle-field { width: 100%; height: 184px; min-height: 184px; flex: none; border-radius: 10px; border: 1px solid #243039; }
+    #battle-field::before { display: none; }   /* 게임 중앙 음영 가이드 제거(프리뷰는 깔끔하게) */
+    .fcl-unit { position: absolute; }
+    .fcl-src { left: 16%; top: 50%; transform: translate(-50%, -50%); width: 56px; height: 76px; }
+    .fcl-src .av-stage, .fcl-src figure, .fcl-src svg { width: 100% !important; height: 100% !important; }
+    .fcl-tgt { left: 76%; top: 50%; transform: translate(-50%, -50%); width: 44px; height: 56px; border-radius: 10px; background: rgba(120,60,60,0.28); border: 1px solid #6e3a3a; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #e0b0b0; }
+    .fcl-label { position: absolute; bottom: 4px; font-size: 9px; color: #7f93a6; left: 0; right: 0; text-align: center; }
+
+    /* 직업 목록 */
+    .fcl-group-h { font-size: 12px; font-weight: 800; color: #cfe0ee; margin: 12px 0 4px; }
+    .fcl-card { background: #11161d; border: 1px solid #243039; border-radius: 10px; padding: 9px 11px; margin: 6px 0; }
+    .fcl-card-head { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+    .fcl-name { font-size: 14px; font-weight: 800; color: #eef6ff; }
+    .fcl-id { font-size: 10px; color: #7f93a6; }
+    .fcl-role { font-size: 10px; color: #9fc4dd; }
+    .fcl-badges { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+    .fcl-badge { font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 999px; white-space: nowrap; }
+    .fcl-badge--on { background: rgba(127,209,168,.16); color: #7fd1a8; }
+    .fcl-badge--seed { background: rgba(230,197,120,.14); color: #e6c578; }
+    .fcl-btns { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+    .fcl-btns button { font-size: 11px; padding: 4px 10px; border-radius: 7px; border: 1px solid #2c3a4a; background: #14233b; color: #e6edf5; cursor: pointer; }
+    .fcl-btns button:active { transform: translateY(1px); }
+    .fcl-btns button.fcl-na { opacity: .55; }
+    .fcl-note { font-size: 10px; color: #8aa0b4; margin: 6px 0 0; line-height: 1.5; }
+    .fcl-note b { color: #e6c578; }
+    .fcl-compare { margin-top: 6px; padding: 6px 8px; border: 1px solid #3a3460; border-radius: 8px; background: rgba(120,100,180,0.08); font-size: 10.5px; }
+    .fcl-compare .fcl-cmp-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+    .fcl-compare .fcl-cmp-k { width: 70px; color: #c0b4e0; font-weight: 700; }
+    .fcl-compare button { font-size: 10.5px; padding: 3px 9px; border-radius: 6px; border: 1px solid #5a4a8a; background: #1c1830; color: #d6c8f0; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div id="fcl-app">
+    <header>
+      <h1>🎬 First Class Combat Language Preview <span class="fcl-id">· Dev-only</span></h1>
+      <p>1차 직업 15종이 전투 중 <b>무엇을 했는지</b>를 실제 런 없이 확인하는 관측 장비입니다. 아래 카드의 버튼이 위 공유 stage에 실제 cue(행동선 + FCR01 role + FCR02 signature + FCP01 presence)를 재생합니다. <span class="fcl-warn">gameplay/밸런스 변경 없음 · 게임 FX 함수를 호출만 함.</span></p>
+      <div class="fcl-core">“1차 직업이 전투 중 무엇을 했는지 더 잘 읽히는가” — 행동선·역할·signature·presence를 한 화면에서.</div>
+    </header>
+
+    <section id="fcl-stage-wrap">
+      <div class="fcl-stage-head">
+        <span class="fcl-cur">현재: <b id="fcl-cur-name">직업을 고르세요</b></span>
+        <span class="fcl-speed">
+          <button type="button" data-speed="1x" class="on">1x</button>
+          <button type="button" data-speed="2x">2x</button>
+          <button type="button" data-speed="MAX">MAX</button>
+        </span>
+      </div>
+      <div id="fcl-status">카드의 Play line / Play presence / Play text cue 를 눌러보세요.</div>
+      <div id="fcl-textlane"><span class="fcl-lane-label">proposed text lane (preview-only)</span></div>
+      <section id="battle-field" data-speed="1x">
+        <div id="unit-layer">
+          <div class="fcl-unit fcl-src" data-instance-id="fcl-src" aria-label="source avatar"></div>
+          <div class="fcl-unit fcl-tgt" data-instance-id="fcl-tgt">적</div>
+          <div class="fcl-label">← source avatar 주변 cue / 행동선 → 대상</div>
+        </div>
+        <div id="fx-layer"></div>
+      </section>
+    </section>
+
+    <div id="fcl-list"></div>
+  </div>
+  <script type="module" src="../src/dev/firstClassCombatLanguagePreview.js"></script>
+</body>
+</html>
