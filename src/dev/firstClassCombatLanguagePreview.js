@@ -36,6 +36,38 @@ const FCL_NOTE = {
 const ROLE_ORDER = ["tank", "melee", "ranged", "support", "healer"];
 const ROLE_KO = { tank: "탱커", melee: "근접딜러", ranged: "원거리딜러", support: "서포터", healer: "힐러" };
 
+// Combat Language Grammar 01 — 공통 문법 8요소(legend). 상세: docs/17_COMBAT_LANGUAGE_GRAMMAR.md
+const FCL_GRAMMAR = [
+  ["Start", "누가 행동을 시작했는가 — source/actor"],
+  ["Line", "어디로 향하는가 — 공격/지원/회복/방해별 색·궤도·속도"],
+  ["End", "어디에 도착했는가 — 적=피격/착탄·아군=적용 (정보 과밀 금지)"],
+  ["Self", "나에게 — 자기 치유/강화/보호 = source 주변 aura/body"],
+  ["Target", "적에게 — 피격/착탄/표식/방해 = target 주변 hit/apply"],
+  ["Ally", "아군에게 — 회복/정화/보호/지원 = 아군 대상 주변"],
+  ["Delivery", "전장/아군으로 퍼지는 전달감 (지원/리듬/장판형)"],
+  ["Identity FX", "직업 개성 — 위 슬롯 중 어디에 붙는지 명확해야 함"],
+];
+// 직업별 문법 앵커(Identity FX가 붙는 슬롯) + 상태. state: success/good/issue/candidate/seed.
+//   ★문서/표시용 기준 — 실제 FX 변경 아님(이번 작업은 기준 정리). 상세는 docs/17.
+const FCL_ANCHOR = {
+  bard:       { tags: ["Body", "Delivery"], state: "success", note: "성공 사례 — body bloom(주체) + text lane flow(전달)." },
+  paladin:    { tags: ["Self", "End"], state: "good", note: "Self aura good. ⚠ End clutter(주황 X+큰 원+성기사 문양 과밀) → 후속 Impact Grammar Cleanup(이번 미수정)." },
+  rogue:      { tags: ["Line", "Identity"], state: "good", note: "Line identity good(급격히 휘어 팍 꽂힘) → 후속 Full Afterimage Probe(이번 미수정)." },
+  mage:       { tags: ["End", "Area"], state: "candidate", note: "End/Area Shockwave 후보(Hanabi는 2차/특수 AoE로 보존)." },
+  purifier:   { tags: ["Ally"], state: "candidate", note: "Ally Cleanse 후보." },
+  gatekeeper: { tags: ["Self", "End"], state: "seed", note: "" },
+  forbidden:  { tags: ["Self", "End"], state: "seed", note: "" },
+  wall:       { tags: ["End"], state: "seed", note: "" },
+  warden:     { tags: ["Line", "End"], state: "seed", note: "" },
+  watchbow:   { tags: ["Line", "End"], state: "seed", note: "" },
+  tracker:    { tags: ["Target"], state: "seed", note: "" },
+  vanguard:   { tags: ["Line", "End"], state: "seed", note: "" },
+  trapper:    { tags: ["Target"], state: "seed", note: "" },
+  healbow:    { tags: ["Ally", "Line"], state: "seed", note: "" },
+  saint:      { tags: ["Ally", "Self"], state: "seed", note: "" },
+};
+const ANCHOR_STATE_LABEL = { success: "✅ 성공 사례", good: "✅ good", issue: "⚠ 이슈", candidate: "후보", seed: "future seed" };
+
 function jobName(id) { return (UNIT_TEMPLATES.party[id] && UNIT_TEMPLATES.party[id].name) || id; }
 function jobAvatarHTML(id) {
   try {
@@ -116,6 +148,12 @@ function cardHTML(id) {
       <div class="fcl-cmp-row"><span class="fcl-cmp-k">주체 · body</span><button type="button" data-job="bard" data-act="presence">body note bloom ▶</button><span class="fcl-id">바드 본체의 개성 FX · 머리 위에서 대각선으로 피어남</span></div>
       <div class="fcl-cmp-row"><span class="fcl-cmp-k">전달 · lane</span><button type="button" data-job="bard" data-act="delivery">text lane note flow ▶</button><span class="fcl-id">리듬/음악 전달 FX · 분리된 위치에서 촤라랑(실 게임 rhythm 자동 발동)</span></div>
     </div>` : "";
+  const anc = FCL_ANCHOR[id] || { tags: [], state: "seed", note: "" };
+  const anchorRow = `<div class="fcl-anchors">
+      <span class="fcl-anchor-k">문법 앵커</span>
+      ${anc.tags.map((t) => `<span class="fcl-anchor fcl-anchor--${anc.state}">${t}</span>`).join("")}
+      <span class="fcl-anchor-state fcl-anchor-state--${anc.state}">${ANCHOR_STATE_LABEL[anc.state]}</span>
+    </div>${anc.note ? `<p class="fcl-anchor-note">${anc.note}</p>` : ""}`;
   return `<div class="fcl-card" data-card="${id}">
     <div class="fcl-card-head"><span class="fcl-name">${jobName(id)}</span><span class="fcl-id">${id}</span><span class="fcl-role">· ${ROLE_KO[role] || "—"}</span></div>
     <div class="fcl-badges">
@@ -123,6 +161,7 @@ function cardHTML(id) {
       ${badge(true, `FCR02 sig: .fx-sig-${id}`)}
       ${badge(hasPresence, hasPresence ? "FCP01 presence: body" : "FCP01: not yet · future seed")}
     </div>
+    ${anchorRow}
     <div class="fcl-btns">
       <button type="button" data-job="${id}" data-act="line">Play line ▶</button>
       <button type="button" data-job="${id}" data-act="presence"${hasPresence ? "" : ' class="fcl-na"'}>Play presence ▶</button>
@@ -138,6 +177,15 @@ function buildList() {
   if (!host) return;
   const byRole = {};
   ADVANCED_JOBS.forEach((id) => { const r = combatRoleOf(id) || "etc"; (byRole[r] = byRole[r] || []).push(id); });
+  // Combat Language Grammar 01 — 상단 grammar legend(공통 문법 8요소 + 기준 문장 + 금지 기준).
+  const legend = `<section class="fcl-grammar">
+    <div class="fcl-grammar-core">전투 시인성 강화 = <b>공통 문법 + 직업 개성의 가독화</b></div>
+    <details class="fcl-grammar-d" open>
+      <summary>🧭 Combat Language Grammar — 공통 문법 8요소 (펼치기/접기)</summary>
+      <div class="fcl-grammar-grid">${FCL_GRAMMAR.map(([k, v]) => `<div class="fcl-gr-item"><span class="fcl-gr-k">${k}</span><span class="fcl-gr-v">${v}</span></div>`).join("")}</div>
+      <p class="fcl-gr-rule"><b>금지:</b> End 정보 과밀 · 개성 FX가 어느 슬롯에도 안 붙음 · 2차급 대형 연출 1차 남발 · 모든 직업에 동일 장식. <span class="fcl-id">(상세: docs/17_COMBAT_LANGUAGE_GRAMMAR.md)</span></p>
+    </details>
+  </section>`;
   let html = "";
   ROLE_ORDER.forEach((r) => {
     const jobs = byRole[r] || [];
@@ -145,7 +193,7 @@ function buildList() {
     html += `<div class="fcl-group-h">${ROLE_KO[r]} <span class="fcl-id">(${jobs.length})</span></div>`;
     jobs.forEach((id) => { html += cardHTML(id); });
   });
-  host.innerHTML = html;
+  host.innerHTML = legend + html;
 }
 
 function wire() {
