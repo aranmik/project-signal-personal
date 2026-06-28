@@ -1974,6 +1974,8 @@ function spawnActionShout(sourceInstanceId, text, fieldRect, opts = {}) {
 //   라인 없이 "파티에 닿았다"를 표현(다수 대상은 area pulse처럼 읽힘). 과밀 상한 공유.
 export function playSupportFx({ casterInstanceId, text, kind, heals = [], guardInstanceId, buffs = [] }) {
   if (fxSuppressed) return; // Dev Balance Lab 01 — 헤드리스 sim 중 표시 생략
+  // Bard Presence 02 — 바드의 support/rhythm 순간에 "음악 전달" note flow(전달 layer). caster 형식으로만 판별(payload/battle.js 무변경).
+  if (isBardInstance(casterInstanceId)) spawnBardNoteFlow(casterInstanceId);
   const layer = document.getElementById("fx-layer");
   const field = document.getElementById("battle-field");
   if (!layer || !field) return;
@@ -2199,16 +2201,45 @@ function spawnFirstClassPresence(sourceInstanceId, jobId) {
     el.style.top = `${c.y + (dy || 0)}px`;
     el.addEventListener("animationend", () => el.remove());
     layer.appendChild(el);
+    return el;
   };
   if (jobId === "paladin") {
     mk("", 0, 0);                                  // 감싸는 금빛 오오라 shell 1개
   } else if (jobId === "bard") {
-    mk("fx-note-pop", -15, -6, "♪");          // 좌측 음표 ♪
-    mk("fx-note-pop fx-presence--b", 15, -11, "♫"); // 우측 음표 ♫(지연·하늘빛 변주)
+    // Bard Presence 02 — body note bloom(주체 "나는 음악 직업"): 아바타 "위쪽"에서 음표가 피어나 대각선으로 퍼진다.
+    //   시작 y를 머리 위로 올려 몸통에 묻히는 문제 해소(생성 순간이 보이게) + --nx로 좌상/위/우상 분산("뾰로롱").
+    [["♪", -6, -24, "-14px", ""], ["♫", 0, -32, "0px", " fx-presence--b"], ["♪", 6, -26, "14px", ""]]
+      .forEach(([g, dx, dy, nx, extra]) => { mk("fx-note-pop" + extra, dx, dy, g).style.setProperty("--nx", nx); });
   } else if (jobId === "rogue") {
     mk("fx-rogue-afterimage", -3, 0);              // 암습 잔상 1
     mk("fx-rogue-afterimage fx-presence--b", 5, 1); // 스치는 잔상 2(지연)
   }
+}
+
+// Bard Presence 02 — 음악 전달 FX(text lane note flow / 전달 layer). caster가 바드일 때, 아바타와 분리된 "위쪽 lane"에서
+//   음표 3개가 오른쪽으로 "촤라랑" 흘러나간다 — "바드의 소리가 아군·전장으로 퍼진다"는 전달감(주체=body bloom과 역할 분리).
+//   ★battle.js/event payload 무변경 — casterInstanceId 형식(hero-<jobId>-N, state.js createInitialParty)으로 바드만 판별.
+//   다른 직업의 support/heal/guard playSupportFx는 무영향(판별 실패 → 미발동). 1행동당 3 DOM·짧은 duration·animationend 정리.
+function isBardInstance(id) { return typeof id === "string" && /^hero-bard-/.test(id); }
+function spawnBardNoteFlow(casterInstanceId) {
+  if (fxSuppressed) return;
+  if (dyingUnits.has(casterInstanceId) || cleanedDead.has(casterInstanceId)) return;
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return;
+  const c = unitPoint(casterInstanceId, { fx: 0.5, fy: 0.1 }, field.getBoundingClientRect()); // 아바타 위쪽 = 분리된 lane 시작
+  if (!c) return;
+  ["♪", "♫", "♪"].forEach((g, i) => {
+    const el = document.createElement("span");
+    el.className = "fx-note-flow" + (i % 2 ? " fx-note-flow--b" : "");
+    el.dataset.fxPresence = "bard";
+    el.textContent = g;
+    el.style.left = `${c.x + i * 5}px`;
+    el.style.top = `${c.y}px`;
+    el.style.animationDelay = `${i * 110}ms`; // 시차 = 촤라랑 cascade
+    el.addEventListener("animationend", () => el.remove());
+    layer.appendChild(el);
+  });
 }
 
 // Status & Effect Foundation 01 — 상태 tick FX(poison 등).

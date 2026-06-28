@@ -1787,13 +1787,14 @@ body {
   font-size: 14px; line-height: 1; font-weight: 700;
   color: rgba(232, 186, 236, 0.96);
   text-shadow: 0 0 6px rgba(214, 150, 235, 0.6), 0 1px 2px rgba(0, 0, 0, 0.5);
-  animation: fx-fcp-note 0.7s ease-out forwards;
+  animation: fx-fcp-note 0.72s ease-out forwards;
 }
 .fx-presence--bard.fx-presence--b { color: rgba(190, 212, 246, 0.96); animation-delay: 0.1s; } /* 2번째 음표 하늘빛 변주 */
+/* Bard Presence 02 — 위로만이 아니라 대각선으로 퍼진다(--nx: 좌상/위/우상). 시작 raise는 JS가 처리(머리 위에서 생성). */
 @keyframes fx-fcp-note {
-  0%   { opacity: 0; transform: translateY(2px) scale(0.6); }
-  30%  { opacity: 1; transform: translateY(-6px) scale(1); }
-  100% { opacity: 0; transform: translateY(-20px) scale(0.9); }   /* 위로 살짝 올라가며 뾰로롱 사라짐 */
+  0%   { opacity: 0; transform: translate(0, 2px) scale(0.55); }
+  28%  { opacity: 1; transform: translate(calc(var(--nx, 0px) * 0.45), -9px) scale(1); }
+  100% { opacity: 0; transform: translate(var(--nx, 0px), -24px) scale(0.9); }   /* 머리 위에서 대각선으로 뾰로롱 흩어짐 */
 }
 /* rogue — source 옆 짧은 암습 잔상(검성 slash보다 작고 짧게·shake 없음). 빠르게 스치고 빠지는 0.45초. */
 .fx-presence--rogue {
@@ -1816,6 +1817,25 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .fx-presence--paladin, .fx-presence--bard, .fx-presence--rogue { animation-duration: 0.01s; }
 }
+
+/* Bard Presence 02 — 음악 전달 FX(text lane note flow / 전달 layer).
+   바드 위쪽(아바타와 분리된 lane)에서 음표 3개가 오른쪽으로 "촤라랑" 흘러나간다 — body bloom(주체)과 역할 분리.
+   ★body bloom(.fx-presence--bard)과 다른 클래스 — poison/speed/paladin/rogue presence와 무침범. 짧은 duration·시차 cascade. */
+.fx-note-flow {
+  position: absolute; font-size: 13px; line-height: 1; font-weight: 700;
+  color: rgba(228, 186, 236, 0.96);
+  text-shadow: 0 0 6px rgba(214, 150, 235, 0.6), 0 1px 2px rgba(0, 0, 0, 0.5);
+  opacity: 0; pointer-events: none; z-index: 4;
+  animation: fx-note-flow 0.86s ease-out forwards;
+}
+.fx-note-flow--b { color: rgba(190, 212, 246, 0.96); }
+@keyframes fx-note-flow {
+  0%   { opacity: 0; transform: translate(0, 2px) scale(0.65); }
+  22%  { opacity: 1; transform: translate(12px, -3px) scale(1); }
+  100% { opacity: 0; transform: translate(42px, -9px) scale(0.9); }   /* 오른쪽 위로 촤라랑 흘러 전장으로 퍼짐 */
+}
+#battle-field[data-speed="MAX"] .fx-note-flow { animation-duration: 0.6s; }
+@media (prefers-reduced-motion: reduce) { .fx-note-flow { animation-duration: 0.01s; } }
 
 /* Combat Feedback Polish 02 — 아군 게이지 상승 마커: 오른 구간을 분홍으로 차오르듯(왼→오 성장). 새 위치(오른 끝)를 밝게 강조
    = "리듬을 받아 밀려나감". 적 게이지 감소(보라, 오른 끝에서 깎임)와 색·방향이 반대로 읽힌다. */
