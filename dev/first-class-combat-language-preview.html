@@ -87,6 +87,141 @@
     .fcl-anchor-state--candidate { color: #e6c578; }
     .fcl-anchor-state--seed { color: #8a98a8; }
     .fcl-anchor-note { font-size: 10px; color: #b9cad8; margin: 2px 0 0; line-height: 1.5; background: #0f141b; border-left: 3px solid #3a5168; border-radius: 5px; padding: 4px 8px; }
+    /* Coverage 02 — mage Area / purifier Ally 샘플 (preview-only 후보 · gameplay 미반영). 게임 styles.css 무관. */
+    .fcl-ally { left: 30%; top: 76%; transform: translate(-50%, -50%); width: 40px; height: 48px; border-radius: 10px; background: rgba(60, 110, 90, 0.28); border: 1px solid #2f6a5a; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.2; font-size: 9px; color: #8fe0c0; }
+    .fcl-ally[hidden] { display: none; }
+    /* mage End/Area shockwave(후보): 중심 flash + outward ring(보라 arcane). 2차 현자/성황급 폭발 아님. */
+    .fcl-shock-flash { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: radial-gradient(circle, rgba(214,150,235,0.85) 0 30%, rgba(160,110,230,0.4) 55%, transparent 75%); box-shadow: 0 0 14px rgba(190,150,235,0.6); opacity: 0; pointer-events: none; z-index: 6; animation: fcl-shock-flash 0.4s ease-out forwards; }
+    @keyframes fcl-shock-flash { 0% { opacity: 0; transform: scale(0.3); } 30% { opacity: 0.95; transform: scale(1.1); } 100% { opacity: 0; transform: scale(1.4); } }
+    /* Coverage 02B — shockwave 최종 반경↑(적 진영 전역을 아우르는 느낌). 방향/색/중심은 유지, 끝 scale만 키움. 2차급 대폭발은 아님(투명 윤곽 링). */
+    .fcl-shock-ring { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; border: 2px solid rgba(190,150,235,0.82); box-shadow: 0 0 12px rgba(190,150,235,0.45); opacity: 0; pointer-events: none; z-index: 5; animation: fcl-shock-ring 0.82s ease-out forwards; }
+    .fcl-shock-ring--b { border-width: 1.5px; opacity: 0.7; }
+    .fcl-shock-ring--c { border-width: 1px; opacity: 0.55; }
+    @keyframes fcl-shock-ring { 0% { opacity: 0; transform: scale(0.5); } 16% { opacity: 1; } 100% { opacity: 0; transform: scale(8.5); } }
+    /* purifier Ally/Cleanse(후보): src→ally 맑은 정화 선 + ally 세척 ring(청록·heal mint/holy와 구분되는 투명 정화감). */
+    .fcl-cleanse-line { position: absolute; height: 3px; margin-top: -1.5px; border-radius: 2px; transform-origin: 0 50%; background: linear-gradient(90deg, rgba(170,235,255,0.2), rgba(190,245,255,0.92)); box-shadow: 0 0 8px rgba(150,225,255,0.6); opacity: 0; pointer-events: none; z-index: 5; animation: fcl-cleanse-line 0.6s ease-out forwards; }
+    @keyframes fcl-cleanse-line { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: 0; } }
+    .fcl-cleanse-ring { position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; border: 2px solid rgba(180,240,255,0.85); box-shadow: 0 0 12px rgba(150,225,255,0.5); opacity: 0; pointer-events: none; z-index: 6; animation: fcl-cleanse-ring 0.7s ease-out forwards; }
+    /* Coverage 02B — cleanse ring 최종 크기만↑(아군에게 정화가 닿아 퍼짐). 시작 scale(0.4)·속도(0.7s)·중간 pop은 유지, 끝 scale만 키움. 장판은 아님. */
+    @keyframes fcl-cleanse-ring { 0% { opacity: 0; transform: scale(0.4); } 30% { opacity: 0.95; transform: scale(1.1); } 100% { opacity: 0; transform: scale(3.8); } }
+
+    /* Guard Grammar Preview 01B — 실제 구현 능력(도발/선의 결속/악의 결속) 기반 재정렬 (preview-only · gameplay 미반영). 게임 styles.css 무관·#fx-layer 안에서만 산다.
+       ★Guard 01 관문(.fcl-gate)·돌벽(.fcl-wall)은 실제 능력과 mismatch(나라 판정)라 폐기 — CSS 제거. 봉인 링(.fcl-seal)은 금제 후보로 재사용.
+       색은 실제 게임 결속선과 정렬: 선의 결속=금빛 rgba(244,208,126)=styles.css .bond-svg--defense / 악의 결속=붉은 rgba(230,98,112)=.bond-svg--offense / 도발=노랑(.taunt-mark). */
+    /* 결속선(사슬 dash) — 두 점 사이 지속선. good=금빛(성벽 선의 결속)·evil=붉은(금제 악의 결속). 애니는 opacity만(inline rotate 보존). */
+    .fcl-bond { position: absolute; height: 3px; margin-top: -1.5px; border-radius: 2px; transform-origin: 0 50%; z-index: 5; pointer-events: none; opacity: 0; animation: fcl-bond-in 1.9s ease-out forwards; }
+    .fcl-bond--good { background: repeating-linear-gradient(90deg, rgba(244,208,126,0.95) 0 6px, transparent 6px 11px); box-shadow: 0 0 8px rgba(244,208,126,0.55); }
+    .fcl-bond--evil { background: repeating-linear-gradient(90deg, rgba(230,98,112,0.95) 0 6px, transparent 6px 11px); box-shadow: 0 0 8px rgba(230,98,112,0.55); }
+    @keyframes fcl-bond-in { 0% { opacity: 0; } 18% { opacity: 1; } 82% { opacity: 0.95; } 100% { opacity: 0; } }
+    /* 중앙 자물쇠 — 본체 + 고리(::before shackle). "결속/봉인" 모티프(게임 .bond-lock 정렬). */
+    .fcl-lock { position: absolute; width: 9px; height: 8px; margin: -4px 0 0 -4.5px; border-radius: 2px; z-index: 6; pointer-events: none; opacity: 0; animation: fcl-bond-in 1.9s ease-out forwards; }
+    .fcl-lock::before { content: ""; position: absolute; left: 50%; top: -4px; width: 6px; height: 6px; margin-left: -3px; border: 1.5px solid currentColor; border-bottom: none; border-radius: 4px 4px 0 0; }
+    .fcl-lock--good { background: rgba(244,208,126,0.95); color: rgba(244,208,126,0.95); box-shadow: 0 0 6px rgba(244,208,126,0.6); }
+    .fcl-lock--evil { background: rgba(230,98,112,0.95); color: rgba(230,98,112,0.95); box-shadow: 0 0 6px rgba(230,98,112,0.6); }
+    /* 화살(원래 의도/redirect/전가) — 점선 + 화살촉(::after currentColor). 애니는 opacity만(inline rotate 보존). */
+    .fcl-arrow { position: absolute; height: 2px; margin-top: -1px; transform-origin: 0 50%; z-index: 6; pointer-events: none; opacity: 0; animation: fcl-arrow-go 0.85s ease-out forwards; }
+    .fcl-arrow::after { content: ""; position: absolute; right: -2px; top: 50%; width: 0; height: 0; border-left: 7px solid currentColor; border-top: 4px solid transparent; border-bottom: 4px solid transparent; transform: translateY(-50%); }
+    .fcl-arrow--taunt { color: #f0c84e; background: repeating-linear-gradient(90deg, #f0c84e 0 5px, transparent 5px 9px); box-shadow: 0 0 7px rgba(240,200,80,0.6); }
+    .fcl-arrow--intent { color: rgba(150,160,175,0.65); background: repeating-linear-gradient(90deg, rgba(150,160,175,0.55) 0 4px, transparent 4px 8px); }   /* 원래 의도(흐림) */
+    .fcl-arrow--share-good { color: rgba(244,208,126,0.95); background: repeating-linear-gradient(90deg, rgba(244,208,126,0.95) 0 5px, transparent 5px 9px); box-shadow: 0 0 7px rgba(244,208,126,0.5); }
+    .fcl-arrow--share-evil { color: rgba(230,98,112,0.95); background: repeating-linear-gradient(90deg, rgba(230,98,112,0.95) 0 5px, transparent 5px 9px); box-shadow: 0 0 7px rgba(230,98,112,0.5); }
+    @keyframes fcl-arrow-go { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: 0.85; } }
+    /* floating 숫자(피해/대신맞기/전가) — preview 예시 수치(실제 수치/gameplay 아님). */
+    .fcl-dmg-num { position: absolute; font-size: 13px; font-weight: 800; transform: translate(-50%,-50%); z-index: 7; pointer-events: none; opacity: 0; text-shadow: 0 1px 2px rgba(0,0,0,0.75); animation: fcl-dmg-float 1.0s ease-out forwards; }
+    .fcl-dmg-num--hit { color: #ff9a9a; }
+    .fcl-dmg-num--share-good { color: #f4d07e; }
+    .fcl-dmg-num--share-evil { color: #f08594; }
+    @keyframes fcl-dmg-float { 0% { opacity: 0; transform: translate(-50%,-40%) scale(0.7); } 25% { opacity: 1; transform: translate(-50%,-85%) scale(1.05); } 100% { opacity: 0; transform: translate(-50%,-155%) scale(1); } }
+    /* 도발 머리 위 "!"(게임 .taunt-mark 정렬·노랑). */
+    .fcl-taunt-mark { position: absolute; font-size: 16px; font-weight: 900; color: #ffd34d; transform: translate(-50%,-50%); z-index: 7; pointer-events: none; opacity: 0; text-shadow: 0 0 6px rgba(240,200,80,0.85), 0 1px 2px rgba(0,0,0,0.7); animation: fcl-taunt-pulse 1.2s ease-out forwards; }
+    @keyframes fcl-taunt-pulse { 0% { opacity: 0; transform: translate(-50%,-20%) scale(0.5); } 30% { opacity: 1; transform: translate(-50%,-50%) scale(1.18); } 55% { transform: translate(-50%,-50%) scale(1); } 85% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%,-50%) scale(1); } }
+    /* 링 — 주목(도발 노랑)·피격(붉은)·보호(선의 결속 금빛). */
+    .fcl-ring { position: absolute; border-radius: 50%; z-index: 5; pointer-events: none; opacity: 0; }
+    .fcl-aggro-ring { width: 40px; height: 40px; margin: -20px 0 0 -20px; border: 2px solid rgba(240,200,80,0.85); box-shadow: 0 0 12px rgba(240,200,80,0.5); animation: fcl-ring-pop 0.9s ease-out forwards; }
+    .fcl-hit-ring { width: 34px; height: 34px; margin: -17px 0 0 -17px; border: 2px solid rgba(255,140,140,0.85); box-shadow: 0 0 10px rgba(255,120,120,0.5); animation: fcl-ring-pop 0.75s ease-out forwards; }
+    @keyframes fcl-ring-pop { 0% { opacity: 0; transform: scale(0.5); } 35% { opacity: 0.95; transform: scale(1); } 100% { opacity: 0; transform: scale(1.3); } }
+    .fcl-protect-ring { position: absolute; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; border: 2px solid rgba(244,208,126,0.8); box-shadow: 0 0 12px rgba(244,208,126,0.45); z-index: 5; pointer-events: none; opacity: 0; animation: fcl-protect 1.7s ease-out forwards; }
+    @keyframes fcl-protect { 0% { opacity: 0; transform: scale(1.4); } 25% { opacity: 0.9; transform: scale(1); } 80% { opacity: 0.82; transform: scale(1); } 100% { opacity: 0; transform: scale(1.05); } }
+    /* forbidden 봉인 링(.fcl-seal) — Guard 01 유지(나라 "단일 봉인 방향 PASS"). 01B에서 붉은 결속선+전가와 함께 재생. holy 금십자·cleanse 청록과 반대의 인디고 봉인(독 보라와 분리). */
+    .fcl-seal { position: absolute; width: 54px; height: 54px; margin: -27px 0 0 -27px; z-index: 6; pointer-events: none; opacity: 0; border-radius: 50%;
+      border: 2px solid rgba(150,160,225,0.92); box-shadow: 0 0 14px rgba(110,120,200,0.55), inset 0 0 11px rgba(60,55,130,0.6);
+      background: radial-gradient(circle, transparent 42%, rgba(70,60,130,0.34) 70%, transparent 78%); animation: fcl-seal 1.0s ease-out forwards; }
+    .fcl-seal::before { content: ""; position: absolute; left: 50%; top: 50%; width: 78%; height: 3px; margin: -1.5px 0 0 -39%; background: linear-gradient(90deg, transparent, rgba(175,150,240,0.95), transparent); box-shadow: 0 0 8px rgba(130,110,225,0.7); transform: rotate(45deg); }   /* 금지선(빗금) */
+    .fcl-seal::after { content: ""; position: absolute; left: 50%; top: 50%; width: 62%; height: 62%; margin: -31% 0 0 -31%; border-radius: 50%; border: 1px dashed rgba(180,165,240,0.7); }   /* 안쪽 룬 ring */
+    @keyframes fcl-seal { 0% { opacity: 0; transform: scale(1.7) rotate(-28deg); } 35% { opacity: 1; transform: scale(1.0) rotate(0deg); } 72% { opacity: 0.95; transform: scale(0.98) rotate(5deg); } 100% { opacity: 0; transform: scale(0.96) rotate(9deg); } }
+
+    /* Watchbow Riposte Preview 01 — 반응형 보복 인과(후열 아군 피격 → 파수궁 감지/반응 → 공격자 즉시 보복). preview-only · gameplay 미반영. #fx-layer 안에서만 산다.
+       색 정렬: 보복 화살=녹색 rgba(120,202,104)=실 게임 .fx-svg--ranged / 반응 마커=연두 rgba(204,244,154)=.fx-sig-watchbow / 감지(Trigger)=호박 rgba(240,185,95)(일반 지원선·tracker 표식과 구분). 아군 피격 hit·적 공격선은 기존 .fcl-hit-ring·.fcl-arrow--intent 재사용. */
+    .fcl-arrow--detect { color: rgba(240,185,95,0.92); background: repeating-linear-gradient(90deg, rgba(240,185,95,0.88) 0 4px, transparent 4px 8px); box-shadow: 0 0 7px rgba(240,185,95,0.5); }   /* 감지선(아군→파수궁·호박 Trigger) */
+    .fcl-arrow--counter { color: rgba(120,202,104,0.96); background: repeating-linear-gradient(90deg, rgba(150,224,122,0.96) 0 6px, transparent 6px 9px); box-shadow: 0 0 8px rgba(120,202,104,0.55); }   /* 보복 화살(파수궁→적·녹색 ranged) */
+    /* 파수궁 반응 마커 — 조준/반격 준비(연두 펄스 ring + 조준 십자). tracker 표식(적에 붙는 점선 ring)과 달리 '자기 자신'에 짧게(감지→반응). */
+    .fcl-aim-ring { position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; border: 2px solid rgba(204,244,154,0.9); box-shadow: 0 0 10px rgba(180,230,120,0.5); z-index: 6; pointer-events: none; opacity: 0; animation: fcl-aim 0.7s ease-out forwards; }
+    .fcl-aim-ring::before, .fcl-aim-ring::after { content: ""; position: absolute; left: 50%; top: 50%; background: rgba(204,244,154,0.95); box-shadow: 0 0 5px rgba(180,230,120,0.7); }
+    .fcl-aim-ring::before { width: 14px; height: 1.5px; margin: -0.75px 0 0 -7px; }   /* 조준 십자 가로 */
+    .fcl-aim-ring::after { width: 1.5px; height: 14px; margin: -7px 0 0 -0.75px; }    /* 조준 십자 세로 */
+    @keyframes fcl-aim { 0% { opacity: 0; transform: scale(1.5); } 35% { opacity: 1; transform: scale(1); } 70% { opacity: 0.95; transform: scale(0.95); } 100% { opacity: 0; transform: scale(0.9); } }
+    /* 적 counter End — 짧고 날카로운 녹색 보복 hit(성기사 holy/금제 seal/마도 area와 구분되게 작게). fcl-ring-pop 재사용. */
+    .fcl-counter-burst { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; border: 2px solid rgba(150,224,122,0.92); box-shadow: 0 0 10px rgba(120,202,104,0.5); z-index: 6; pointer-events: none; opacity: 0; animation: fcl-ring-pop 0.6s ease-out forwards; }
+
+    /* Vanguard / Trapper Grammar Preview 01 — 선봉 진군(전열 압박+전열 방어증가) / 덫꾼 중독(2대상 상태). preview-only · gameplay 미반영. #fx-layer 안에서만 산다.
+       색 정렬: vanguard 적 압박=주황 chevron(.fx-sig-vanguard rgba255,198,152) / 아군 brace=하늘 defUp(.fx-var--support rgba122,182,240) / trapper 독선·snare=연보라(.fx-sig-trapper rgba234,186,222)·독 wisp=보라(#c79bff poison number). 성벽 금빛/수문장 노랑/마도 보라 area와 형태로 구분. */
+    /* vanguard 전진 chevron 펄스(선봉이 앞으로 밀고 나감·돌진 과장 아님). */
+    .fcl-advance-push { position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-top: 3px solid rgba(255,198,152,0.95); border-right: 3px solid rgba(255,198,152,0.95); border-radius: 2px; box-shadow: 3px -3px 7px rgba(255,170,110,0.4); z-index: 6; pointer-events: none; opacity: 0; animation: fcl-advance 0.75s ease-out forwards; }
+    @keyframes fcl-advance { 0% { opacity: 0; transform: translateX(-7px) rotate(45deg) scale(0.7); } 35% { opacity: 1; transform: translateX(0) rotate(45deg) scale(1); } 100% { opacity: 0; transform: translateX(11px) rotate(45deg) scale(1); } }
+    .fcl-arrow--advance { color: rgba(255,190,140,0.95); background: linear-gradient(90deg, rgba(255,190,140,0.28), rgba(255,190,140,0.95)); box-shadow: 0 0 7px rgba(255,170,110,0.5); }   /* 전열 타격선(주황 짧은 pierce·광역 아님) */
+    /* 아군 전열 brace(방어증가) — 하늘 방패 호(아래 열림). 성벽 금빛 결속과 다름(여러 전열·방패 호·자물쇠 없음). */
+    .fcl-brace-ring { position: absolute; width: 38px; height: 38px; margin: -19px 0 0 -19px; border-radius: 50%; border: 2.5px solid rgba(122,182,240,0.85); border-bottom-color: transparent; box-shadow: 0 0 10px rgba(122,182,240,0.45); z-index: 5; pointer-events: none; opacity: 0; animation: fcl-brace 1.3s ease-out forwards; }
+    @keyframes fcl-brace { 0% { opacity: 0; transform: scale(0.6) rotate(-8deg); } 30% { opacity: 0.95; transform: scale(1) rotate(0deg); } 78% { opacity: 0.9; transform: scale(1) rotate(0deg); } 100% { opacity: 0; transform: scale(1.05) rotate(0deg); } }
+    /* trapper 독 적용선(낮고 짧게 깔림·보라 점선). 일반 화살/광역 아님. */
+    .fcl-arrow--venom { color: rgba(199,155,255,0.9); background: repeating-linear-gradient(90deg, rgba(199,155,255,0.85) 0 4px, transparent 4px 9px); box-shadow: 0 0 6px rgba(150,90,255,0.45); }
+    /* 적 발밑 독 snare ring(연보라 점선·signature 정렬) — tracker 조준 표식(몸통·1명)과 달리 발밑·2대상. */
+    .fcl-venom-snare { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; border: 1.5px dashed rgba(234,186,222,0.9); box-shadow: 0 0 8px rgba(199,155,255,0.4); z-index: 5; pointer-events: none; opacity: 0; animation: fcl-venom-snare 1.5s ease-out forwards; }
+    @keyframes fcl-venom-snare { 0% { opacity: 0; transform: scale(1.4) rotate(0deg); } 30% { opacity: 0.95; transform: scale(1) rotate(20deg); } 80% { opacity: 0.85; transform: scale(1) rotate(40deg); } 100% { opacity: 0; transform: scale(1) rotate(50deg); } }
+    /* 독 wisp/방울(보라·올라옴) — 중독 지속 상태 표식(poison 칩 연결). */
+    /* Trapper Venom Scale Tuning 01 — 독방울 ≈2배 확대(7→14px)·대상당 3개로 몸통 점유↑("독이 몸에 크게 남아 있다"). 올라가는 양은 줄여 몸통에 머무름(발밑 snare=적용과 역할 분리). 2대상 국소 유지(mage 광역 아님). */
+    .fcl-venom-wisp { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: radial-gradient(circle, rgba(199,155,255,0.96) 0 44%, rgba(150,90,255,0.55) 72%, transparent); box-shadow: 0 0 11px rgba(150,90,255,0.6); z-index: 6; pointer-events: none; opacity: 0; animation: fcl-venom-wisp 1.6s ease-out forwards; }
+    @keyframes fcl-venom-wisp { 0% { opacity: 0; transform: translateY(6px) scale(0.4); } 22% { opacity: 1; transform: translateY(0) scale(1); } 62% { opacity: 0.9; transform: translateY(-3px) scale(1.06); } 100% { opacity: 0; transform: translateY(-8px) scale(0.98); } }
+
+    /* Healbow / Saint Grammar Preview 01 — 치유궁(적 저격+아군1 회복) / 성직자(아군2 동시 회복). preview-only · gameplay 미반영. #fx-layer 안에서만 산다.
+       색 정렬: 저격=녹색 실선(.fx-svg--ranged·watchbow 점선 counter와 형태로 구분) / 회복=민트(heal mint rgba159,230,207·#9fe6cf·성기사 holy 금빛/정화사 cleanse 청록과 구분). */
+    /* healbow 적 저격선(녹색 실선·화살촉) — watchbow counter(점선)와 구분(자기 행동). */
+    .fcl-arrow--shot { color: rgba(120,202,104,0.96); background: linear-gradient(90deg, rgba(120,202,104,0.32), rgba(150,224,122,0.96)); box-shadow: 0 0 7px rgba(120,202,104,0.5); }
+    /* Healer Delivery Grammar Tuning 01 — 단순 치유 공통 문법: 연녹/민트 점선 + 곡선 delivery + End 치유 십자 + 대상 '뾰로롱' 수신.
+       ★Healbow(공격 후 회복)·Saint(2인 회복) 공통 사용. Purifier(직선 즉시 cleanse line+ring)·Paladin(금빛 holy self-heal)은 예외(미변경). */
+    /* 회복선 — SVG 곡선 점선(민트). 정화사 직선 즉시 cleanse와 달리 부드러운 곡선 점선 delivery. */
+    .fcl-heal-curve { position: absolute; left: 0; top: 0; overflow: visible; z-index: 5; pointer-events: none; }
+    .fcl-heal-curve path { fill: none; stroke: rgba(159,230,207,0.92); stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 3 5; opacity: 0; animation: fcl-heal-curve 0.85s ease-out forwards; }
+    @keyframes fcl-heal-curve { 0% { opacity: 0; stroke-dashoffset: 16; } 25% { opacity: 1; } 80% { opacity: 0.95; } 100% { opacity: 0; stroke-dashoffset: 0; } }
+    /* End 치유 십자 심볼(민트 +) — "회복"임을 바로 알림. 성기사 금빛 holy 십자와 달리 민트. */
+    .fcl-heal-cross { position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; z-index: 7; pointer-events: none; opacity: 0; animation: fcl-heal-cross 0.95s ease-out forwards; }
+    .fcl-heal-cross::before, .fcl-heal-cross::after { content: ""; position: absolute; left: 50%; top: 50%; background: rgba(159,230,207,0.96); box-shadow: 0 0 7px rgba(120,225,190,0.7); border-radius: 1px; }
+    .fcl-heal-cross::before { width: 14px; height: 3px; margin: -1.5px 0 0 -7px; }   /* 가로 */
+    .fcl-heal-cross::after { width: 3px; height: 14px; margin: -7px 0 0 -1.5px; }    /* 세로 */
+    @keyframes fcl-heal-cross { 0% { opacity: 0; transform: scale(0.4) rotate(-18deg); } 35% { opacity: 1; transform: scale(1.12) rotate(0deg); } 60% { transform: scale(1) rotate(0deg); } 100% { opacity: 0; transform: scale(1) rotate(0deg); } }
+    /* 대상 '뾰로롱' 수신 — 작은 밝은 민트 sparkle 3개가 톡톡 튀어오름(--sx/--sy 방향). */
+    .fcl-heal-spark { position: absolute; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 50%; background: rgba(190,245,222,0.96); box-shadow: 0 0 6px rgba(159,230,207,0.7); z-index: 7; pointer-events: none; opacity: 0; animation: fcl-heal-spark 0.85s ease-out forwards; }
+    @keyframes fcl-heal-spark { 0% { opacity: 0; transform: translate(0,0) scale(0.3); } 30% { opacity: 1; transform: translate(var(--sx), var(--sy)) scale(1); } 100% { opacity: 0; transform: translate(calc(var(--sx) * 1.4), calc(var(--sy) * 1.55)) scale(0.55); } }
+    /* 회복 숫자(민트 "+N"). */
+    .fcl-dmg-num--heal { color: #9fe6cf; }
+    /* saint 회복 준비 glow(성직자 자신·민트 부드러운) — 성기사 holy 금빛 공격이 아닌 순수 회복. */
+    .fcl-heal-glow { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; background: radial-gradient(circle, rgba(159,230,207,0.5) 0 40%, rgba(120,225,190,0.2) 65%, transparent 78%); box-shadow: 0 0 12px rgba(120,225,190,0.45); z-index: 5; pointer-events: none; opacity: 0; animation: fcl-heal-glow 0.9s ease-out forwards; }
+    @keyframes fcl-heal-glow { 0% { opacity: 0; transform: scale(0.6); } 35% { opacity: 0.9; transform: scale(1); } 100% { opacity: 0; transform: scale(1.1); } }
+
+    /* Warden Raid Preview 01 — 워든 습격(게이지 높은 적 식별 → 습격 → 게이지 드레인 + 약화). preview-only · gameplay 미반영. #fx-layer 안에서만 산다.
+       색 정렬: 게이지=파랑(tempo-bar rgba96,165,226·128,196,246·#8cc4f6) / 워든 습격=올리브그린(.fx-sig-warden rgba154,212,124) / 약화=회색(atkDown 칩). 적 hit는 기존 .fcl-hit-ring 재사용. */
+    /* 1) 높은 게이지 적 식별 — 적 위 파랑 게이지 바(거의 차오름). tracker 표식(점선 ring)과 달리 게이지 바 형태. */
+    .fcl-gauge-mark { position: absolute; width: 26px; height: 6px; margin: -3px 0 0 -13px; border-radius: 3px; background: rgba(255,255,255,0.1); border: 1px solid rgba(128,196,246,0.6); overflow: hidden; z-index: 6; pointer-events: none; opacity: 0; animation: fcl-gauge-mark 1.3s ease-out forwards; }
+    .fcl-gauge-mark::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 88%; background: linear-gradient(90deg, rgba(96,165,226,0.85), rgba(128,196,246,0.95)); box-shadow: 0 0 5px rgba(120,192,245,0.6); }
+    @keyframes fcl-gauge-mark { 0% { opacity: 0; transform: translateY(-4px) scale(0.8); } 18% { opacity: 1; transform: translateY(0) scale(1); } 60% { opacity: 1; } 100% { opacity: 0; transform: translateY(0) scale(1); } }
+    /* 2) 워든 습격선(올리브그린·날카롭고 짧게) — rogue 처형/tracker 표식과 구분. */
+    .fcl-arrow--raid { color: rgba(154,212,124,0.96); background: linear-gradient(90deg, rgba(154,212,124,0.28), rgba(174,224,142,0.96)); box-shadow: 0 0 7px rgba(154,212,124,0.5); }
+    /* 3a) 게이지 드레인 — 파랑 게이지 조각이 적 위에서 아래로 뚝뚝 떨어짐(게이지 깎임). 가장 중요한 표현. */
+    .fcl-gauge-drop { position: absolute; width: 13px; height: 5px; margin: -2.5px 0 0 -6.5px; border-radius: 2px; background: linear-gradient(90deg, rgba(96,165,226,0.9), rgba(128,196,246,0.95)); box-shadow: 0 0 6px rgba(120,192,245,0.6); z-index: 6; pointer-events: none; opacity: 0; animation: fcl-gauge-drop 0.85s ease-in forwards; }
+    @keyframes fcl-gauge-drop { 0% { opacity: 0; transform: translateY(-7px) scale(0.9); } 22% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(22px) rotate(8deg) scale(0.85); } }
+    .fcl-dmg-num--gauge { color: #8cc4f6; }   /* -40% 등 게이지 수치(파랑) */
+    /* 3b) 약화 — 적 발밑 회색 약화 마커(게이지 드레인 파랑과 구분·보조 정보). */
+    .fcl-weaken-mark { position: absolute; font-size: 11px; font-weight: 800; color: #c8c8d0; transform: translate(-50%,-50%); z-index: 7; pointer-events: none; opacity: 0; white-space: nowrap; padding: 1px 5px; border-radius: 7px; background: rgba(70,70,82,0.62); border: 1px solid rgba(150,150,165,0.5); text-shadow: 0 1px 2px rgba(0,0,0,0.7); animation: fcl-weaken 1.1s ease-out forwards; }
+    @keyframes fcl-weaken { 0% { opacity: 0; transform: translate(-50%,-30%) scale(0.6); } 30% { opacity: 1; transform: translate(-50%,-50%) scale(1); } 80% { opacity: 0.95; transform: translate(-50%,-50%) scale(1); } 100% { opacity: 0; transform: translate(-50%,-72%) scale(1); } }
   </style>
 </head>
 <body>
@@ -111,8 +246,9 @@
       <section id="battle-field" data-speed="1x">
         <div id="unit-layer">
           <div class="fcl-unit fcl-src" data-instance-id="fcl-src" aria-label="source avatar"></div>
+          <div class="fcl-unit fcl-ally" data-instance-id="fcl-ally" hidden>아군<br>샘플</div>
           <div class="fcl-unit fcl-tgt" data-instance-id="fcl-tgt">적</div>
-          <div class="fcl-label">← source avatar 주변 cue / 행동선 → 대상</div>
+          <div class="fcl-label">← source avatar 주변 cue / 행동선 → 대상 (purifier는 아군 샘플로)</div>
         </div>
         <div id="fx-layer"></div>
       </section>

@@ -1030,6 +1030,10 @@ function redirectIfTaunted(unit, intended) {
   const taunter = [...gameState.party, ...gameState.enemies].find((u) => u.instanceId === id && !u.isDead);
   unit.tauntedBy = null; // 1회 소모
   unit.statuses = (unit.statuses || []).filter((s) => s.type !== "taunted");
+  // In-Game Apply 01B — 수문장 도발 redirect 꺾임(visual-only·gatekeeper 전용). 타겟 결과는 불변.
+  if (taunter && taunter.id === "gatekeeper" && intended && intended !== taunter) {
+    playActorFx("gatekeeperRedirect", taunter.instanceId, { fromId: intended.instanceId });
+  }
   return taunter || intended;
 }
 
@@ -1461,6 +1465,7 @@ function runDataSkill(unit, meta) {
           lineType: "disrupt", kind: "disrupt", isHeal: false, amount: 0,
           shoutText: i === 0 ? meta.name + "!" : null, shoutKind: meta.kind, shoutTier: "skill",
         });
+        playActorFx("trapperVenom", unit.instanceId, { targetId: t.instanceId }); // In-Game Apply 01B — venom 적용 순간 큰 독방울 3개(visual-only·공통 poison tick 무변경)
       });
       pushLog(`${unit.name}${josa(unit.name, "이가")} ${targets.map((t) => t.name).join(", ")}${josa(targets[targets.length - 1].name, "을를")} 중독시켰다.`);
       return true;
@@ -2062,6 +2067,7 @@ function applyDamage(target, dmg) {
     if (partner) {
       dealRaw(target, dmg * 0.6);
       dealRaw(partner, dmg * 0.4);
+      playActorFx("forbiddenTransfer", target.instanceId, { toId: partner.instanceId }); // In-Game Apply 01B — 전가 순간 visual-only(피해 분배 불변)
       killIfDead(partner);
       return;
     }
@@ -2295,7 +2301,7 @@ function performAttack(attacker, target, opts = {}) {
   // First Class Expansion 01A → Batch 01A — 파수궁 보복: 적이 후열 아군에게 "실제 피해"를 입히면
   //   살아있는 파수궁이 즉시 1회 원거리 보복. opts.isCounter면 발동 안 함(반격의 반격 금지 → 무한 연쇄 차단).
   if (!opts.isCounter && tookRealDamage && attacker.team === "enemy" && gameState.party.includes(target) && target.role === "back") {
-    triggerWatchbowCounter(attacker);
+    triggerWatchbowCounter(attacker, target); // target=피격 후열 아군(감지선 출발점·In-Game Apply 01B)
   }
 
   // Job Identity Tuning 02 — 검성 간파 반격: 검성이 실제 피해를 입으면 공격자에게 즉시 1회 반격(턴당 1회). [결투] 조건 제거.
@@ -2324,12 +2330,14 @@ function triggerSwordsaintParry(enemyAttacker, victim) {
 //   - 게이지/일반 행동을 소모하지 않는다(여기서 직접 performAttack 호출 — performAction을 거치지 않음).
 //   - 일반 행동 1회 사이 최대 1번: counterReady가 false면 발동하지 않는다(초기 undefined=충전됨으로 간주).
 //   - 발동하면 counterReady=false로 소진. 재충전은 파수궁이 일반 행동(performAction)을 수행할 때.
-function triggerWatchbowCounter(enemyAttacker) {
+function triggerWatchbowCounter(enemyAttacker, victim) {
   if (!enemyAttacker || enemyAttacker.isDead) return;
   const watchbow = gameState.party.find((u) => !u.isDead && u.id === "watchbow");
   if (!watchbow) return;
   if (watchbow.counterReady === false) return; // 이번 일반 행동 주기엔 이미 1회 보복함
   watchbow.counterReady = false;
+  // In-Game Apply 01B — 아군 피격 → 파수궁 감지선(visual-only). 보복 조건/타깃/피해는 불변.
+  playActorFx("watchbowDetect", watchbow.instanceId, { fromId: (victim || enemyAttacker).instanceId });
   performAttack(watchbow, enemyAttacker, {
     mult: 0.5, lineType: "ranged", skill: skillOf("watchbow"), isCounter: true,
   });

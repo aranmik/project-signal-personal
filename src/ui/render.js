@@ -1987,15 +1987,20 @@ export function playSupportFx({ casterInstanceId, text, kind, heals = [], guardI
   //   "누가 누구에게 무엇을"이 텍스트 없이 읽힌다. 영웅/몬스터(풀양·올빼미·사슴 등) 공통.
   const s = unitPoint(casterInstanceId, BODY_MID_FRAC, fieldRect);
 
+  // First Class Combat Language In-Game Apply 01B — Purifier 예외: 공통 힐(점선 곡선+십자+뾰로롱) 대신 직선 cleanse line + ring(즉시 정화 개성).
+  const isPurifier = isPurifierInstance(casterInstanceId);
   heals.forEach((h) => {
     if (dyingUnits.has(h.targetInstanceId) || cleanedDead.has(h.targetInstanceId)) return;
     const p = unitPoint(h.targetInstanceId, { fx: 0.5, fy: 0.46 }, fieldRect);
-    // 실제 회복(amount>0)이고 자기 자신이 아닐 때만 heal 선(보호막용 더미 amount 0 / 자가 회복은 선 생략 — 과밀 방지).
-    if (s && p && h.amount > 0 && h.targetInstanceId !== casterInstanceId) {
-      spawnStartPulse(layer, s, "heal");
-      spawnLine(layer, s, p, "heal", kind, "heal");
+    // 실제 회복(amount>0)이고 자기 자신이 아닐 때만 선(보호막용 더미 amount 0 / 자가 회복은 선 생략 — 과밀 방지).
+    const toOther = s && p && h.amount > 0 && h.targetInstanceId !== casterInstanceId;
+    if (isPurifier) {
+      if (toOther) spawnCleanseDelivery(layer, s, p); // 직선 청록 cleanse line + ring
+      else if (p) spawnCleanseRing(layer, p);
+    } else {
+      if (toOther) { spawnStartPulse(layer, s, "heal"); spawnLine(layer, s, p, "heal", kind, "heal"); }
+      if (p) spawnPulse(layer, p, true); // heal end — 민트 펄스(뾰로롱)
     }
-    if (p) spawnPulse(layer, p, true); // heal end — 민트 펄스(뾰로롱)
     if (h.amount > 0 && p) spawnNumber(layer, { x: p.x, y: Math.max(24, p.y - 16) }, h.targetInstanceId, true, h.amount);
     reactUnit(h.targetInstanceId, true);
   });
@@ -2003,16 +2008,23 @@ export function playSupportFx({ casterInstanceId, text, kind, heals = [], guardI
   if (guardInstanceId && !dyingUnits.has(guardInstanceId) && !cleanedDead.has(guardInstanceId)) {
     const g = unitPoint(guardInstanceId, { fx: 0.5, fy: 0.46 }, fieldRect);
     if (g) {
-      // Combat Visibility Polish 01 — 보호(guard/ward)=방패 end / 그 외(buff/support/command)=능력치 상승 end.
-      const isGuardKind = kind === "guard" || kind === "ward";
-      const variant = isGuardKind ? "guard" : "support";
-      // 아군 대상이면 시전자→대상 지원선(자기 자신 대상이면 0길이라 선 생략).
-      if (s && guardInstanceId !== casterInstanceId) {
-        spawnStartPulse(layer, s, variant);
-        spawnLine(layer, s, g, "support", kind, variant);
+      if (isPurifier) {
+        // Purifier 정화(상태 제거)도 직선 cleanse line + ring(+보호막 guard 펄스는 유지 — 정화/보호 동시).
+        if (s && guardInstanceId !== casterInstanceId) spawnCleanseDelivery(layer, s, g);
+        else spawnCleanseRing(layer, g);
+        spawnGuardEndPulse(layer, g);
+      } else {
+        // Combat Visibility Polish 01 — 보호(guard/ward)=방패 end / 그 외(buff/support/command)=능력치 상승 end.
+        const isGuardKind = kind === "guard" || kind === "ward";
+        const variant = isGuardKind ? "guard" : "support";
+        // 아군 대상이면 시전자→대상 지원선(자기 자신 대상이면 0길이라 선 생략).
+        if (s && guardInstanceId !== casterInstanceId) {
+          spawnStartPulse(layer, s, variant);
+          spawnLine(layer, s, g, "support", kind, variant);
+        }
+        if (isGuardKind) spawnGuardEndPulse(layer, g);
+        else spawnBuffPulse(layer, g);
       }
-      if (isGuardKind) spawnGuardEndPulse(layer, g);
-      else spawnBuffPulse(layer, g);
     }
   }
 
@@ -2129,7 +2141,7 @@ export function playActionFx(event) {
     //   Combat Grammar Follow-up 01 — noLine(광역 폭발 등)은 선/시작펄스 생략하고 도착 hit(펄스/숫자/반응)만 남긴다.
     if (!noLine) {
       spawnStartPulse(layer, s, variant, fxRole);
-      spawnLine(layer, s, t, lineType, kind, variant, fxRole);
+      spawnLine(layer, s, t, lineType, kind, variant, fxRole, fxSig);
     }
     spawnPulse(layer, t, isHeal, fxRole, fxTier, fxSig);
     // First Class Expansion 01: 피해/회복 0(상태 부여형 스킬: 중독 등)은 숫자 생략.
@@ -2584,6 +2596,75 @@ function spawnMarkBurst(targetInstanceId) {
   layer.appendChild(el);
 }
 
+// First Class Combat Language In-Game Apply 01B — Runtime Signal Parity.
+//   preview에서 승인된 5개 문법(전가/감지/redirect/cleanse/venom body)을 실제 전투 FX로 보강.
+//   ★전부 visual-only — battle.js는 발동 지점에서 playActorFx로 신호만 보낸다(gameplay/payload/수치/타깃 무변경).
+//   span 기반 짧은 선/마커 helper(preview .fcl-* 문법을 게임 .fx-* 로 이식). animationend로 정리(누적 0).
+function fxSignalLine(layer, p1, p2, cls) {
+  const el = document.createElement("span"); el.className = cls;
+  const dx = p2.x - p1.x, dy = p2.y - p1.y, len = Math.hypot(dx, dy), ang = Math.atan2(dy, dx) * 180 / Math.PI;
+  el.style.left = `${p1.x}px`; el.style.top = `${p1.y}px`; el.style.width = `${len}px`; el.style.transform = `rotate(${ang}deg)`;
+  el.addEventListener("animationend", () => el.remove()); layer.appendChild(el); return el;
+}
+function fxSignalAt(layer, p, cls) {
+  const el = document.createElement("span"); el.className = cls;
+  el.style.left = `${p.x}px`; el.style.top = `${p.y}px`;
+  el.addEventListener("animationend", () => el.remove()); layer.appendChild(el); return el;
+}
+function fxSignalCtx() {
+  const layer = document.getElementById("fx-layer");
+  const field = document.getElementById("battle-field");
+  if (!layer || !field) return null;
+  return { layer, fr: field.getBoundingClientRect() };
+}
+
+// Forbidden 악의 결속 전가 순간: 금제(from) 피격 → 결속 적(to)으로 붉은 튕김선 + 적에 작은 전가 hit.
+//   ★결속선(.bond-svg--offense)과 같은 붉은 톤. applyDamage의 기존 전가 분배 지점에서 호출(피해 계산 무변경·시각만).
+function spawnTransferFx(fromId, toId) {
+  const c = fxSignalCtx(); if (!c) return;
+  const a = unitPoint(fromId, BODY_MID_FRAC, c.fr), b = unitPoint(toId, BODY_MID_FRAC, c.fr);
+  if (!a || !b) return;
+  fxSignalLine(c.layer, a, b, "fx-transfer-line");
+  setTimeout(() => fxSignalAt(c.layer, b, "fx-transfer-hit"), 120);
+}
+
+// Watchbow 보복 감지: 후열 아군(from) 피격 → 파수궁(to)으로 호박 점선 감지선 + 파수궁 반응 pulse.
+//   기존 보복 공격선(performAttack ranged)은 그대로. "아군 피격 → 파수궁 전달" 인과만 보강.
+function spawnDetectLine(fromId, toId) {
+  const c = fxSignalCtx(); if (!c) return;
+  const a = unitPoint(fromId, BODY_MID_FRAC, c.fr), b = unitPoint(toId, BODY_MID_FRAC, c.fr);
+  if (!a || !b) return;
+  fxSignalLine(c.layer, a, b, "fx-detect-line");
+  fxSignalAt(c.layer, b, "fx-detect-pulse");
+}
+
+// Gatekeeper 도발 redirect: 원래 노리던 대상(from) → 수문장(to)으로 노랑 꺾임선 + 수문장 focus pulse.
+//   redirectIfTaunted가 타겟을 바꾸는 지점에서 호출(redirect 결과 불변·시각만). gatekeeper 전용(다른 도발자 무오염).
+function spawnRedirectFx(fromId, toId) {
+  const c = fxSignalCtx(); if (!c) return;
+  const a = unitPoint(fromId, BODY_MID_FRAC, c.fr), b = unitPoint(toId, BODY_MID_FRAC, c.fr);
+  if (!a || !b) return;
+  fxSignalLine(c.layer, a, b, "fx-redirect-line");
+  fxSignalAt(c.layer, b, "fx-redirect-pulse");
+}
+
+// Trapper venom 적용 순간: 대상 적 몸통에 큰 보라 독방울 3개(중독 상태가 몸에 크게 남음).
+//   ★venom 적용(trapper 전용 case)에서만 호출 — 공통 poison tick(spawnBodyPresence)은 무변경(다른 직업 무오염).
+function spawnVenomBody(targetId) {
+  const c = fxSignalCtx(); if (!c) return;
+  const p = unitPoint(targetId, BODY_MID_FRAC, c.fr); if (!p) return;
+  [[-3, -11, 0], [9, 0, 90], [-8, 9, 170]].forEach(([dx, dy, delay]) => {
+    const orb = () => fxSignalAt(c.layer, { x: p.x + dx, y: p.y + dy }, "fx-venom-orb");
+    if (delay) setTimeout(orb, delay); else orb();
+  });
+}
+
+// Purifier 정화 delivery: 정화사→대상 직선 청록 cleanse line + 대상 cleanse ring(공통 힐 점선곡선+십자+뾰로롱과 구분=직선·즉시).
+//   playSupportFx 내부에서 purifier(hero-purifier-N)일 때 heal/guard 선·펄스 대신 호출(payload/회복량 무관·시각만).
+function spawnCleanseRing(layer, p) { fxSignalAt(layer, p, "fx-cleanse-ring"); }
+function spawnCleanseDelivery(layer, s, p) { if (s) fxSignalLine(layer, s, p, "fx-cleanse-line"); spawnCleanseRing(layer, p); }
+function isPurifierInstance(id) { return typeof id === "string" && /^hero-purifier-/.test(id); }
+
 // Job Identity Tuning 02 — 성기사 자가 회복: 본인 머리 위 노란 성휘 뾰로롱 + 노란 회복 숫자(일반 민트 치유와 구분).
 function spawnSelfHealFx(casterInstanceId, amount) {
   const layer = document.getElementById("fx-layer");
@@ -2683,6 +2764,11 @@ export function playActorFx(kind, casterId, opts = {}) {
     case "wardSplash":   spawnWardSplash(opts.allyIds || []); break;
     case "mark":         spawnMarkFx(casterId, opts.targetId); break;
     case "markBurst":    spawnMarkBurst(opts.targetId); break;
+    // First Class Combat Language In-Game Apply 01B — Runtime Signal Parity (visual-only signal bridge).
+    case "forbiddenTransfer":  spawnTransferFx(casterId, opts.toId); break;        // 금제 피격(caster)→결속 적(toId) 전가
+    case "watchbowDetect":     spawnDetectLine(opts.fromId, casterId); break;       // 피격 아군(fromId)→파수궁(caster) 감지선
+    case "gatekeeperRedirect": spawnRedirectFx(opts.fromId, casterId); break;       // 원래 타겟(fromId)→수문장(caster) 꺾임
+    case "trapperVenom":       spawnVenomBody(opts.targetId); break;                // 적(targetId) 몸통 큰 독방울
   }
 }
 
@@ -2848,7 +2934,7 @@ function spawnStartPulse(layer, s, variant, fxRole) {
   layer.appendChild(el);
 }
 
-function spawnLine(layer, s, t, lineType, kind, variant, fxRole) {
+function spawnLine(layer, s, t, lineType, kind, variant, fxRole, fxSig) {
   // 상한 초과 시 가장 오래된 선 제거(읽힘 우선, 화면이 무너지지 않게)
   const lines = layer.querySelectorAll(".fx-svg");
   if (lines.length >= MAX_FX_LINES) lines[0].remove();
@@ -2877,6 +2963,7 @@ function spawnLine(layer, s, t, lineType, kind, variant, fxRole) {
   svg.setAttribute("class", `fx-svg fx-svg--${lineType} fx-var--${v}`);
   if (kind) svg.dataset.kind = kind; // Job Grammar 01 — 직업 행동 분류 hook(시각 변화 없음)
   if (fxRole) svg.dataset.fxRole = fxRole; // Hit Effect Identity 01 — 역할 hook(선 색은 lineType 유지, role은 미래 확장용)
+  if (fxSig) svg.dataset.fxSignature = fxSig; // Impact Grammar Cleanup 01 — 행동선 직업 signature hook(paladin End X 정리 등 직업별 CSS 분기·시각 기본 변화 없음)
   svg.setAttribute("width", w);
   svg.setAttribute("height", h);
   svg.setAttribute("viewBox", `0 0 ${w} ${h}`);

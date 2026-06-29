@@ -2176,7 +2176,11 @@ body {
 }
 /* tank — 문/방패/봉인/벽 */
 .fx-sig-gatekeeper::before { --sig: rgba(182, 206, 226, 0.95); width: 2px; height: 11px; margin: -5.5px 0 0 -4px; border-radius: 1px; box-shadow: 6px 0 0 var(--sig); } /* 세로 gate bar 2개 */
-.fx-sig-paladin::before    { --sig: rgba(246, 224, 152, 0.97); width: 2px; height: 2px; box-shadow: 0 -5px 0 var(--sig), 0 5px 0 var(--sig), -5px 0 0 var(--sig), 5px 0 0 var(--sig); } /* 금빛 십자 glint */
+/* Impact Grammar Cleanup 01 — 성기사 End holy mark 약간 키움(X 제거 후 "성기사 착탄"이 읽히게). 2px→2.4px·±5→±6.5px·중심 soft glow. 2차 성황급은 아님. */
+.fx-sig-paladin::before    { --sig: rgba(248, 228, 158, 0.98); width: 2.4px; height: 2.4px; box-shadow: 0 -6.5px 0 var(--sig), 0 6.5px 0 var(--sig), -6.5px 0 0 var(--sig), 6.5px 0 0 var(--sig), 0 0 5px rgba(246, 212, 130, 0.5); } /* 금빛 십자(holy impact mark) */
+/* Impact Grammar Cleanup 01 — paladin End 정리: 성기사 행동선(주황 pierce)의 도착 X 제거 → hit ring(.fx-target) + holy mark(::before 십자) 중심으로 단순화.
+   ★paladin signature 행동선에만(data-fx-signature=paladin) — 용창/vanguard 등 다른 pierce 선의 X는 유지(공통 hit grammar 불변). */
+.fx-svg[data-fx-signature="paladin"] .fx-head--x { display: none; }
 .fx-sig-forbidden::before  { --sig: rgba(140, 150, 222, 0.92); width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; background: transparent; border: 1.5px solid var(--sig); } /* 봉인 ring(인디고 — 독 보라와 분리) */
 .fx-sig-wall::before       { --sig: rgba(170, 180, 192, 0.95); width: 13px; height: 3px; margin: 3px 0 0 -6.5px; border-radius: 1px; } /* 낮은 가로 plate(아래) */
 /* melee — 베기/뿌리 */
@@ -3558,3 +3562,28 @@ body {
 #job-select #formation-grid { gap: 6px; }
 #job-select .form-slot-box { padding: 7px 6px; }
 #job-start { margin-top: 10px; }
+
+/* ===================================================================
+   First Class Combat Language In-Game Apply 01B — Runtime Signal Parity
+   -------------------------------------------------------------------
+   preview 승인 5문법(전가/감지/redirect/cleanse/venom body)을 실 전투 FX로.
+   전부 visual-only(battle.js는 playActorFx 신호만)·#fx-layer 안·animationend 정리.
+   색: 전가=붉은(.bond-svg--offense) / 감지=호박 / redirect=노랑(taunt) / cleanse=청록 / venom=보라(poison).
+   =================================================================== */
+.fx-transfer-line { position: absolute; height: 2px; margin-top: -1px; border-radius: 2px; transform-origin: 0 50%; background: linear-gradient(90deg, rgba(230,98,112,0.25), rgba(230,98,112,0.95)); box-shadow: 0 0 7px rgba(230,98,112,0.55); pointer-events: none; opacity: 0; animation: fx-signal-shoot 0.5s ease-out forwards; }
+.fx-transfer-hit { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; border: 2px solid rgba(230,98,112,0.9); box-shadow: 0 0 9px rgba(230,98,112,0.5); pointer-events: none; opacity: 0; animation: fx-signal-pop 0.5s ease-out forwards; }
+.fx-detect-line { position: absolute; height: 2px; margin-top: -1px; transform-origin: 0 50%; background: repeating-linear-gradient(90deg, rgba(240,185,95,0.9) 0 4px, transparent 4px 8px); box-shadow: 0 0 6px rgba(240,185,95,0.5); pointer-events: none; opacity: 0; animation: fx-signal-shoot 0.55s ease-out forwards; }
+.fx-detect-pulse { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; border: 2px solid rgba(240,200,120,0.85); box-shadow: 0 0 9px rgba(240,185,95,0.45); pointer-events: none; opacity: 0; animation: fx-signal-pop 0.6s ease-out forwards; }
+.fx-redirect-line { position: absolute; height: 2px; margin-top: -1px; transform-origin: 0 50%; background: repeating-linear-gradient(90deg, #f0c84e 0 5px, transparent 5px 9px); box-shadow: 0 0 7px rgba(240,200,80,0.55); pointer-events: none; opacity: 0; animation: fx-signal-shoot 0.5s ease-out forwards; }
+.fx-redirect-pulse { position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; border: 2px solid rgba(240,200,80,0.85); box-shadow: 0 0 10px rgba(240,200,80,0.5); pointer-events: none; opacity: 0; animation: fx-signal-pop 0.65s ease-out forwards; }
+.fx-cleanse-line { position: absolute; height: 3px; margin-top: -1.5px; border-radius: 2px; transform-origin: 0 50%; background: linear-gradient(90deg, rgba(170,235,255,0.2), rgba(190,245,255,0.92)); box-shadow: 0 0 8px rgba(150,225,255,0.6); pointer-events: none; opacity: 0; animation: fx-signal-shoot 0.45s ease-out forwards; }
+.fx-cleanse-ring { position: absolute; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%; border: 2px solid rgba(180,240,255,0.88); box-shadow: 0 0 11px rgba(150,225,255,0.5); pointer-events: none; opacity: 0; animation: fx-signal-cleansering 0.7s ease-out forwards; }
+.fx-venom-orb { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: radial-gradient(circle, rgba(199,155,255,0.96) 0 44%, rgba(150,90,255,0.55) 72%, transparent); box-shadow: 0 0 10px rgba(150,90,255,0.6); pointer-events: none; opacity: 0; animation: fx-venom-orb 1.4s ease-out forwards; }
+@keyframes fx-signal-shoot { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes fx-signal-pop { 0% { opacity: 0; transform: scale(0.5); } 35% { opacity: 0.95; transform: scale(1); } 100% { opacity: 0; transform: scale(1.3); } }
+@keyframes fx-signal-cleansering { 0% { opacity: 0; transform: scale(0.4); } 30% { opacity: 0.95; transform: scale(1); } 100% { opacity: 0; transform: scale(1.5); } }
+@keyframes fx-venom-orb { 0% { opacity: 0; transform: translateY(5px) scale(0.4); } 22% { opacity: 1; transform: translateY(0) scale(1); } 62% { opacity: 0.9; transform: translateY(-3px) scale(1.05); } 100% { opacity: 0; transform: translateY(-7px) scale(0.95); } }
+@media (prefers-reduced-motion: reduce) {
+  .fx-transfer-line, .fx-transfer-hit, .fx-detect-line, .fx-detect-pulse, .fx-redirect-line, .fx-redirect-pulse,
+  .fx-cleanse-line, .fx-cleanse-ring, .fx-venom-orb { animation-duration: 0.01s; }
+}
