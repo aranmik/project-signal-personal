@@ -245,6 +245,19 @@ Preview에서 승인된 active 13종 문법을 **실제 전투 FX**에 반영하
 - **헤드리스 안전:** `playActorFx`는 `fxSuppressed` 가드 + spawn 함수는 fx-layer 없으면 return → sim 무영향.
 - **회귀 보호:** redirect는 gatekeeper 전용(guardian 등 base 도발 무오염), venom body는 trapper venom 적용 순간만(공통 poison tick 무변경), purifier는 hero-purifier-N만(다른 healer 공통 힐 유지·paladin 자가회복 금빛 예외 유지).
 
+### 4-A.2 Runtime Parity Hotfix 02 — Main Battle Visibility
+
+릴리즈(`7d9762e`) 후 나라 본게임 핸드폰 QA에서 9종 "안 보임" 보고. **PASS 기준 = direct import/Preview/CSS 존재가 아니라, 본게임 실제 전투 경로(stepCombat)에서 발동 시 보이는가.**
+
+- **검증 도구(dev-only):** `battle.js devFxStep(n)` — `window.signalDev.testParty([advanced jobs])`로 구성한 전투를 **수동 N틱(stepCombat) 진행**(rAF가 멈추는 hidden-tab/headless에서 실제 스킬 경로 FX 관측·전투 로직/수치/타깃/storage 무변경·관측용 revive). 동적 import로 같은 모듈 인스턴스(싱글톤) 호출 → 본게임 gameState 진행 → 본게임 render DOM에 FX.
+- **진단 결과(devFxStep 실측):** 9종 중 **7종은 실제 본게임 스킬 경로에서 FX 발동·표시됨**(코드 작동) — mage `fx-aoe-spread/dome/hanabi`·purifier `fx-cleanse-line/ring`(isPurifierInstance 정상·instanceId=`hero-purifier-1`)·wall `bond-svg--defense`·forbidden `bond-svg--offense`+`fx-transfer-line`(금제 피격 시)·healbow `fx-svg--ranged`+`fx-svg--heal`+head cross·saint `fx-svg--heal`·vanguard `fx-sig-vanguard`+`fx-svg--attack`·warden `fx-sig-warden`+`fx-status-pop--down`(약화). → 나라 "안 보임"은 **코드 미작동이 아니라 발동 빈도/시각 강도 체감 갭**.
+- **이번 수정:** **forbidden 봉인 링 추가**(`evilbond` 적용 순간 → `playActorFx("forbiddenSeal", 금제, {toId:대상})` → `spawnForbiddenSeal` 붉은 봉인 링 `.fx-forbidden-seal`·결속선과 정렬). 나라 "대상을 봉한다 원형 FX 안 보임" 충족. devFxStep 실측 `fx-forbidden-seal`×15 발동 확인.
+- **PARTIAL/WATCH:** ①**watchbow 감지선**: `triggerWatchbowCounter` 경로는 연결돼 있으나 **후열 아군 피격이 자연 전투에서 드물어** 보복/감지 자체가 드물게 발동(gameplay 조건·FX 수정으로 빈도 못 올림). ②**나머지 7종 "체감" 갭**: FX는 뜨나 핸드폰 빠른 자동전투에서 짧거나 묻힘 → 직업별 시각 강도/지속 강화는 나라 우선순위 확인 후 별도 작업(일괄 강화 시 회귀/과밀 위험).
+
+### 4-A.3 Runtime Parity Hotfix 03 — Phone Visibility Strengthening
+
+Hotfix 02 진단으로 "코드는 작동·체감 약함"이 확인됨 → **390 모바일 가시성 강화**(크기/지속/대비/타이밍·gameplay 무변경·CSS+타이밍 위주). styles.css 위주: mage `fx-aoe-spread`(border 5→6px·0.82→1.05s·종점 /6→/5)+`fx-aoe-dome`(0.95→1.2s·/8→/6.5) / purifier `fx-cleanse-line`(3→4.5px·0.45→0.7s 더 굵고 곧게)+`fx-cleanse-ring`(28→42px·종점 1.5→2.0) / watchbow `fx-detect-line/pulse`(2→3px·26→34px·지속↑) / forbidden `fx-forbidden-seal`(40→52px·0.95→1.25s)+`fx-transfer-line/hit`(굵게·크게) / wall·forbidden `bond-svg`(색 alpha 0.62/0.66→0.85/0.88·chain 2.6→3.4px) / warden `tempo-drop`(border 2→3px·0.55→0.9s). battle.js: healbow snipeHeal **치유 FX만 setTimeout 240ms 지연**(공격선→치유선 2단 순서감·회복 수치/타깃 즉시 불변). **검증 devFxStep computed style 실측**: forbidden-seal 52px/1.25s·aoe 6px/1.05s·cleanse-line 4.5px/cleanse-ring 42px 전부 적용+발동. **saint·vanguard 완성**(직전 보류분): saint=`isSaintInstance`(hero-saint-N) 판별로 2인 회복 대상별 **민트 강조 ring**(`.fx-saint-heal-ring`·공통 heal 선/십자/뾰로롱 위에 saint만 추가·검증 ring×2+공통 heal 유지·healbow 등 비-saint ring 0=회귀0) / vanguard=advance `lineType:"pierce"` 명시(**주황 전진 직선**·preview FCL_LINE vanguard 일치·★시각만·피해/타깃/수치 불변·검증 `fx-svg--pierce`×17). ★dualheal 자연 발동은 저체력 아군 2명 조건부(발동 시 ring 강조). 회귀: bard/trapper/paladin/gatekeeper/common heal 미변경. PARTIAL·커밋 안 함.
+
 ---
 
 ## 5. 금지 기준 (Anti-patterns)

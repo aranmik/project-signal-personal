@@ -2,7 +2,7 @@
 //   1차 직업 15종의 전투 언어(행동선 + FCR01 role cue + FCR02 signature + FCP01 presence)를 실제 런 없이 확인한다.
 //   ★게임 FX 함수(playActionFx/clearFxLayer)를 "호출만" 한다 — gameplay/밸런스/route/loot/storage/event 무관.
 //   battle.js/render.js/styles.css 무변경(이 파일 + dev html만 신설). 새 storage key 없음.
-import { playActionFx, playSupportFx, clearFxLayer } from "../ui/render.js";
+import { playActionFx, playSupportFx, playActorFx, clearFxLayer } from "../ui/render.js";
 import { avatarSpec, avatarFigureHTML } from "../data/avatars.js";
 import { UNIT_TEMPLATES } from "../data/units.js";
 import { combatRoleOf, combatRoleLabelOf, ADVANCED_JOBS } from "../data/jobs.js";
@@ -500,6 +500,38 @@ function cardHTML(id) {
   </div>`;
 }
 
+// Runtime Parity — 본게임 강화 FX 시연(★preview .fcl-* 후보가 아니라 실제 게임 render 함수[playActorFx/playSupportFx/playActionFx]를 호출 → 게임 .fx-* FX·Hotfix 03 강화 반영).
+//   본게임 instanceId 형태(hero-<job>-N)로 잠깐 세팅해 isPurifier/isSaint 등 실제 판별 경로를 그대로 탄다(전투 로직/수치 무관·관측만).
+const INGAME_DEMO = [
+  ["mage", "마도 — 적 진영 광역 shockwave"],
+  ["purifier", "정화사 — 직선 cleanse line+ring"],
+  ["saint", "성직자 — 2인 회복 강조 ring"],
+  ["healbow", "치유궁 — 공격선→치유선 2단"],
+  ["vanguard", "선봉 — 주황 전진 pierce"],
+  ["forbidden", "금제 — 봉인 링+전가"],
+  ["watchbow", "파수궁 — 감지선+보복"],
+  ["warden", "워든 — 습격선"],
+  ["wall", "성벽 — 보호 결속(guard)"],
+];
+function ingameDemo(job) {
+  setStageJob(job); clearFxLayer();
+  const src = $(".fcl-src"), ally = $(".fcl-ally");
+  const setId = (id) => { if (src) src.dataset.instanceId = id; };
+  const restore = () => { if (src) src.dataset.instanceId = "fcl-src"; };
+  if (ally && ["purifier", "saint", "watchbow", "healbow", "wall"].includes(job)) ally.hidden = false;
+  if (job === "mage") playActorFx("aoeSpread", "fcl-src", { enemyIds: ["fcl-tgt"] });
+  else if (job === "purifier") { setId("hero-purifier-1"); playSupportFx({ casterInstanceId: "hero-purifier-1", kind: "heal", heals: [{ targetInstanceId: "fcl-ally", amount: 6 }] }); restore(); }
+  else if (job === "saint") { setId("hero-saint-1"); playSupportFx({ casterInstanceId: "hero-saint-1", kind: "heal", heals: [{ targetInstanceId: "fcl-ally", amount: 6 }] }); restore(); }
+  else if (job === "vanguard") playActionFx({ sourceInstanceId: "fcl-src", sourceUnitId: "vanguard", targetInstanceId: "fcl-tgt", lineType: "pierce", kind: "attack", isHeal: false, amount: 5 });
+  else if (job === "forbidden") { playActorFx("forbiddenSeal", "fcl-src", { toId: "fcl-tgt" }); setTimeout(() => playActorFx("forbiddenTransfer", "fcl-src", { toId: "fcl-tgt" }), 380); }
+  else if (job === "watchbow") { playActorFx("watchbowDetect", "fcl-src", { fromId: "fcl-ally" }); setTimeout(() => playActionFx({ sourceInstanceId: "fcl-src", sourceUnitId: "watchbow", targetInstanceId: "fcl-tgt", lineType: "ranged", kind: "attack", isHeal: false, amount: 5 }), 320); }
+  else if (job === "healbow") { playActionFx({ sourceInstanceId: "fcl-src", sourceUnitId: "healbow", targetInstanceId: "fcl-tgt", lineType: "ranged", kind: "attack", isHeal: false, amount: 5 }); setTimeout(() => { setId("hero-healbow-1"); playSupportFx({ casterInstanceId: "hero-healbow-1", kind: "heal", heals: [{ targetInstanceId: "fcl-ally", amount: 6 }] }); restore(); }, 260); }
+  else if (job === "warden") playActionFx({ sourceInstanceId: "fcl-src", sourceUnitId: "warden", targetInstanceId: "fcl-tgt", lineType: "slash", kind: "attack", isHeal: false, amount: 5 });
+  else if (job === "wall") { setId("hero-wall-1"); playSupportFx({ casterInstanceId: "hero-wall-1", text: "선의 결속!", kind: "support", guardInstanceId: "fcl-ally" }); restore(); }
+  const note = (job === "warden") ? " ※게이지 드레인 마커(파랑 조각)는 HP/게이지 바가 있는 본게임 전투에서만 보임." : (job === "wall") ? " ※금빛 결속선(사슬+자물쇠)은 결속 대상 지속선이라 본게임 전투에서 보임 — 여기선 보호(guard) 펄스만." : "";
+  setStatus(`🎮 본게임 강화 FX 시연: ${jobName(job)} — 실제 게임 FX(.fx-*·Hotfix 03 강화). preview 후보(.fcl-*)와 별개.${note}`);
+}
+
 function buildList() {
   const host = $("#fcl-list");
   if (!host) return;
@@ -521,12 +553,19 @@ function buildList() {
     html += `<div class="fcl-group-h">${ROLE_KO[r]} <span class="fcl-id">(${jobs.length})</span></div>`;
     jobs.forEach((id) => { html += cardHTML(id); });
   });
-  host.innerHTML = legend + html;
+  // Runtime Parity — 본게임 강화 FX 시연 섹션(상단). 실제 게임 .fx-* FX를 mini stage에서 발동.
+  const demo = `<section class="fcl-grammar" style="border-color:#3a5a46;">
+    <div class="fcl-grammar-core">🎮 <b>본게임 강화 FX 시연</b> <span class="fcl-id">— 실제 게임 FX(.fx-*·Hotfix 03 강화). preview 후보(.fcl-*)와 별개, 본게임 전투에서 보이는 그것.</span></div>
+    <div class="fcl-btns" style="margin-top:6px;">${INGAME_DEMO.map(([j, label]) => `<button type="button" data-ingame="${j}" title="${label}">${label} ▶</button>`).join("")}</div>
+  </section>`;
+  host.innerHTML = demo + legend + html;
 }
 
 function wire() {
   // 카드 버튼 위임
   $("#fcl-list").addEventListener("click", (e) => {
+    const demoBtn = e.target.closest("button[data-ingame]"); // Runtime Parity — 본게임 강화 FX 시연
+    if (demoBtn) { ingameDemo(demoBtn.dataset.ingame); return; }
     const b = e.target.closest("button[data-job][data-act]");
     if (!b) return;
     const id = b.dataset.job, act = b.dataset.act;

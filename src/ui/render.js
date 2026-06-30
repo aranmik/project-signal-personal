@@ -1989,6 +1989,7 @@ export function playSupportFx({ casterInstanceId, text, kind, heals = [], guardI
 
   // First Class Combat Language In-Game Apply 01B — Purifier 예외: 공통 힐(점선 곡선+십자+뾰로롱) 대신 직선 cleanse line + ring(즉시 정화 개성).
   const isPurifier = isPurifierInstance(casterInstanceId);
+  const isSaint = isSaintInstance(casterInstanceId); // Hotfix 03 — saint 2인 회복 대상별 강조 ring
   heals.forEach((h) => {
     if (dyingUnits.has(h.targetInstanceId) || cleanedDead.has(h.targetInstanceId)) return;
     const p = unitPoint(h.targetInstanceId, { fx: 0.5, fy: 0.46 }, fieldRect);
@@ -2000,6 +2001,7 @@ export function playSupportFx({ casterInstanceId, text, kind, heals = [], guardI
     } else {
       if (toOther) { spawnStartPulse(layer, s, "heal"); spawnLine(layer, s, p, "heal", kind, "heal"); }
       if (p) spawnPulse(layer, p, true); // heal end — 민트 펄스(뾰로롱)
+      if (isSaint && p) fxSignalAt(layer, p, "fx-saint-heal-ring"); // Hotfix 03 — 2인 동시 회복 대상별 민트 강조 ring
     }
     if (h.amount > 0 && p) spawnNumber(layer, { x: p.x, y: Math.max(24, p.y - 16) }, h.targetInstanceId, true, h.amount);
     reactUnit(h.targetInstanceId, true);
@@ -2628,6 +2630,13 @@ function spawnTransferFx(fromId, toId) {
   setTimeout(() => fxSignalAt(c.layer, b, "fx-transfer-hit"), 120);
 }
 
+// Runtime Parity Hotfix 02 — 악의 결속 적용 순간 대상에 붉은 봉인 링(preview .fcl-seal의 게임판·"대상을 봉한다").
+function spawnForbiddenSeal(targetId) {
+  const c = fxSignalCtx(); if (!c) return;
+  const p = unitPoint(targetId, BODY_MID_FRAC, c.fr); if (!p) return;
+  fxSignalAt(c.layer, p, "fx-forbidden-seal");
+}
+
 // Watchbow 보복 감지: 후열 아군(from) 피격 → 파수궁(to)으로 호박 점선 감지선 + 파수궁 반응 pulse.
 //   기존 보복 공격선(performAttack ranged)은 그대로. "아군 피격 → 파수궁 전달" 인과만 보강.
 function spawnDetectLine(fromId, toId) {
@@ -2664,6 +2673,8 @@ function spawnVenomBody(targetId) {
 function spawnCleanseRing(layer, p) { fxSignalAt(layer, p, "fx-cleanse-ring"); }
 function spawnCleanseDelivery(layer, s, p) { if (s) fxSignalLine(layer, s, p, "fx-cleanse-line"); spawnCleanseRing(layer, p); }
 function isPurifierInstance(id) { return typeof id === "string" && /^hero-purifier-/.test(id); }
+// Hotfix 03 — saint 2인 동시 회복 대상별 강조(공통 heal 선/십자/뾰로롱은 유지·priest/cleric/healbow 무영향).
+function isSaintInstance(id) { return typeof id === "string" && /^hero-saint-/.test(id); }
 
 // Job Identity Tuning 02 — 성기사 자가 회복: 본인 머리 위 노란 성휘 뾰로롱 + 노란 회복 숫자(일반 민트 치유와 구분).
 function spawnSelfHealFx(casterInstanceId, amount) {
@@ -2766,6 +2777,7 @@ export function playActorFx(kind, casterId, opts = {}) {
     case "markBurst":    spawnMarkBurst(opts.targetId); break;
     // First Class Combat Language In-Game Apply 01B — Runtime Signal Parity (visual-only signal bridge).
     case "forbiddenTransfer":  spawnTransferFx(casterId, opts.toId); break;        // 금제 피격(caster)→결속 적(toId) 전가
+    case "forbiddenSeal":      spawnForbiddenSeal(opts.toId); break;                // 악의 결속 적용 순간 대상(toId)에 봉인 링 (Hotfix 02)
     case "watchbowDetect":     spawnDetectLine(opts.fromId, casterId); break;       // 피격 아군(fromId)→파수궁(caster) 감지선
     case "gatekeeperRedirect": spawnRedirectFx(opts.fromId, casterId); break;       // 원래 타겟(fromId)→수문장(caster) 꺾임
     case "trapperVenom":       spawnVenomBody(opts.targetId); break;                // 적(targetId) 몸통 큰 독방울

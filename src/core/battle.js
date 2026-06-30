@@ -1484,8 +1484,9 @@ function runDataSkill(unit, meta) {
       const targets = L.scope === "front" ? frontEnemies() : aliveEnemies();
       if (targets.length === 0) return false;
       // 전열 적 전체에 낮은 피해(mult는 데이터 유지 — 수치 조정 아님).
+      //   Hotfix 03 — 폰 가시성: 전열 타격선을 주황 pierce(전진 직선·preview FCL_LINE vanguard와 일치)로 명시. ★lineType은 시각만(피해/타깃/수치 불변).
       targets.forEach((t, i) =>
-        performAttack(unit, t, { mult: L.mult, skill: i === 0 ? meta : undefined, noShout: i !== 0 })
+        performAttack(unit, t, { mult: L.mult, skill: i === 0 ? meta : undefined, noShout: i !== 0, lineType: "pierce" })
       );
       // Batch 01B Hotfix — 방어 증가 대상은 "선봉의 위치와 무관하게" 항상 아군 전열(슬롯 f0/f1) 생존자.
       //   선봉이 후열에 있어도 전열 아군에게 적용 / 전열 아군이 없으면 생략(후열 fallback 없음).
@@ -1504,6 +1505,8 @@ function runDataSkill(unit, meta) {
       // 대상 생존 시 결속 링크 갱신(다음 행동까지). 사망이면 해제.
       //   Combat Visibility — 결속 대상엔 [표식] 칩을 붙이지 않는다(추적자/천궁 mark와 중복 방지). 대상은 지속 결속선으로 인지.
       unit.bondOffenseTarget = t.isDead ? null : t.instanceId;
+      // Runtime Parity Hotfix 02 — 악의 결속 적용 순간 대상에 붉은 봉인 링(visual-only·"대상을 봉한다" 가시화). 결속/전가 로직 무변경.
+      if (!t.isDead) playActorFx("forbiddenSeal", unit.instanceId, { toId: t.instanceId });
       return true;
     }
     case "bondDefense": { // 성벽 선의 결속 — 최저 아군에 결속(그 아군 피격 시 50/50 분담: applyDamage)
@@ -1523,8 +1526,9 @@ function runDataSkill(unit, meta) {
       performAttack(unit, t, { mult: L.mult, lineType: "ranged", skill: meta });
       const ally = lowestRatioAllyHurt(0.95);
       if (ally) {
-        const amt = healUnit(ally, Math.round(unit.atk * L.healFactor));
-        if (amt > 0) playSupportFx({ casterInstanceId: unit.instanceId, text: null, kind: "heal", heals: [{ targetInstanceId: ally.instanceId, amount: amt }] });
+        const amt = healUnit(ally, Math.round(unit.atk * L.healFactor)); // 회복은 즉시(gameplay 불변)
+        // Hotfix 03 — "적 공격선 → 아군 치유선" 2단 순서감(폰 가시성): 치유 FX만 살짝 지연(회복 수치/타깃 불변).
+        if (amt > 0) { const aid = ally.instanceId; setTimeout(() => playSupportFx({ casterInstanceId: unit.instanceId, text: null, kind: "heal", heals: [{ targetInstanceId: aid, amount: amt }] }), 240); }
       }
       return true;
     }
@@ -2822,4 +2826,20 @@ export function runHeadlessBattle(maxTicks = 6000) {
     n += 1;
   }
   return n < maxTicks;
+}
+
+// Runtime Parity Hotfix 02 — Dev-only FX 관측 harness.
+//   rAF 기반 전투 루프가 멈추는 hidden-tab/headless 환경에서 "실제 본게임 스킬 처리 경로"의 render FX를 관측하기 위해,
+//   현재 진행 중인 전투(window.signalDev.testParty로 구성)를 수동으로 N틱 진행한다.
+//   ★stepCombat(본게임 전투 1틱)을 그대로 호출 — 전투 로직/피해/회복/타깃/게이지/storage/event 전부 무변경.
+//   관측이 끊기지 않게 죽은 유닛은 매 틱 되살린다(dev 전용·state 저장 안 함·sim용 reviveForSim 재사용).
+//   main game flow에 미노출(signalDev에 안 붙임) — dev preview/콘솔에서 import로만 호출하는 검증 도구.
+export function devFxStep(n = 60, revive = true) {
+  const count = Math.max(1, n | 0);
+  for (let i = 0; i < count; i++) {
+    stepCombat();
+    if (revive) { gameState.party.forEach(reviveForSim); gameState.enemies.forEach(reviveForSim); }
+  }
+  renderGame(gameState);
+  return { party: gameState.party.map((u) => u.instanceId), enemies: gameState.enemies.map((u) => u.instanceId) };
 }
