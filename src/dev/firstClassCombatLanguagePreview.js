@@ -81,6 +81,7 @@ const $ = (sel) => document.querySelector(sel);
 const stage = () => $("#battle-field");
 function setStatus(msg) { const el = $("#fcl-status"); if (el) el.textContent = msg; }
 function setStageJob(id) {
+  resetStealthPreview(); // Rogue Stealth Preview 01 — 직업 전환 시 이전 은신 veil/chip/타이머 정리(누적 방지).
   const src = $(".fcl-src");
   if (src) src.innerHTML = jobAvatarHTML(id);
   const ally = $(".fcl-ally");
@@ -151,6 +152,12 @@ function bardDelivery() {
 
 // Coverage 02 — 직업별 추가 샘플 버튼(End/Area·Ally/Cleanse 등). preview-only 후보 vs 실 FX 구분.
 const FCL_EXTRA = {
+  // Rogue Stealth Preview 01 — 은신 진입→유지→공격→reveal 체감(이 버튼은 전투 언어 시연). ★Phase C 이후 Rogue 급습 후 은신 + 공격 시 reveal은 실제 전투(core)에 최소 연결됨.
+  rogue: { act: "rogue-stealth", label: "Play stealth → ambush → reveal ▶", tag: "시연 · Phase C 실전투 연결됨", tags: "Stealth / Ambush / Reveal",
+    desc: "Stealth 체감(Rogue Stealth Preview 01) — ①은신 진입(슥 사라짐: 아바타 흐려지는 veil + 은신 chip) → ②은신 유지(완전히 사라지지 않고 '여기 숨어있음' 위치감 · HP/게이지/레이아웃 불변) → ③공격 순간 은신 해제(reveal shimmer). ★이 버튼/시퀀스는 전투 언어 시연입니다. 단, Phase C 이후 Rogue의 급습 후 은신 및 공격 시 reveal은 실제 전투(core)에 최소 연결되어 있습니다. 재사용: reveal=실 게임 shimmer(playActorFx)·chip 팔레트=.status-chip--hidden·veil=게임 .unit.hidden-veil 값 미러. storage/event/route/reward/loot 변경 없음 · 암살 완성 FX 아님·최소 표현." },
+  // Tracker Reveal / Mark Preview 01 — 은신 대상 탐지→표식→reveal 체감(이 버튼은 전투 언어 시연). ★Phase C 이후 Tracker의 '은신 적 reveal' rider는 실제 core에 연결(현행 적 은신 소스 없어 dormant) · 신규 mark status 없음.
+  tracker: { act: "tracker-track", label: "Play track → mark → reveal ▶", tag: "시연 · Phase C rider 연결(dormant)", tags: "Track / Mark / Reveal",
+    desc: "Stealth 탐지 체감(Tracker Reveal / Mark Preview 01) — ①탐지 준비(추적자가 흔적을 읽는 집중 reticle + tracker→대상 발자국 점·전역 스캔 아님) → ②표식(실 게임 mark FX: 점선 조준선 + 대상 스코프 + 추적 mark chip) → ③드러남(대상 은신 veil/chip 해제 + mark burst + reveal shimmer가 '대상' 위에). ★이 버튼/시퀀스는 시연입니다. Phase C 이후 Tracker의 '은신 적 reveal' rider는 실제 core(aim 조준)에 연결되어 있으나, 현행 일반 플레이엔 적 은신 소스가 없어 dormant(은신한 적이 있을 때만 작동)입니다. Tracker는 아군 Rogue 은신을 해제하지 않습니다. 신규 mark status 추가 없음(mark 표현은 상태 추가 아님) · storage/event/route/reward/loot 변경 없음. 재사용: mark/markBurst/revealShimmer=실 게임 playActorFx · 은신 chip=게임 .status-chip--hidden. Rogue '공격하며 self reveal'과 달리 '탐지해서 대상을 reveal'." },
   mage: { act: "mage-area", label: "Play area / shockwave ▶", tag: "preview-only 후보",
     desc: "End/Area 후보 — 적 진영을 아우르는 쇼크웨이브. End 착탄(실 FX) 후 중심 flash + outward ring 3겹이 적 진영 전역으로 넓게 퍼짐(preview-only). ※기존 마도/현자 충전 AoE(Mage Hanabi)는 별개 2차/특수 연출." },
   purifier: { act: "purifier-cleanse", label: "Play ally cleanse ▶", tag: "preview-only 후보",
@@ -459,6 +466,95 @@ function wardenRaid() {
   setStatus("warden Target/Gauge/Weaken 후보(01): 게이지 높은 적 식별(파랑 게이지 바·차오름) → 워든 습격선(올리브그린·날카롭게)+hit → 적 게이지 드레인(파랑 조각 아래로 뚝·-40%) + 약화 마커(회색)(preview-only · gameplay 미반영). 게이지 높은 적을 제어. Rogue 처형/Tracker 표식추적/Watchbow counter/Trapper 독/Gatekeeper 도발과 구분. 수치는 예시.");
 }
 
+// ── Rogue Stealth Preview 01 — 은신 진입 → 유지 → 공격 → reveal 체감(이 버튼/시퀀스는 전투 언어 시연) ──
+//   ★Phase C 이후 Rogue의 급습 후 은신/공격 시 reveal은 실제 전투(core)에 최소 연결됨(이 preview는 그 체감을 stage에서 시연). Foundation 계약(hidden veil/은신 chip/reveal shimmer) 재현.
+//   재사용: reveal 순간=실 게임 render 함수 playActorFx("revealShimmer")(진짜 게임 shimmer) · veil=게임 .unit.hidden-veil 값을 .fcl-src에 미러 · chip=게임 .status-chip--hidden 팔레트. storage/event/route/reward/loot 변경 없음.
+let stealthTimers = [];
+function resetStealthPreview() {
+  stealthTimers.forEach((t) => clearTimeout(t));
+  stealthTimers = [];
+  const src = document.querySelector(".fcl-src");
+  if (src) src.classList.remove("hidden-veil");
+  const tgt = document.querySelector(".fcl-tgt"); // Tracker Reveal / Mark Preview 01 — 은신 대상(target) 상태도 정리.
+  if (tgt) tgt.classList.remove("fcl-hidden-tgt");
+  document.querySelectorAll(".fcl-stealth-in, .fcl-stealth-here, .fcl-stealth-chip, .fcl-track-focus, .fcl-track-step, .fcl-track-chip").forEach((el) => el.remove());
+}
+function laterStealth(fn, ms) { stealthTimers.push(setTimeout(fn, ms)); }
+function rogueStealth() {
+  setStageJob("rogue"); // 내부에서 resetStealthPreview()로 이전 은신 상태 정리 + clearFxLayer
+  const src = $(".fcl-src"); const layer = $("#fx-layer"); const p = fclPoint("fcl-src");
+  // ① 은신 진입 — 슥 사라짐(잿빛 연무 퍼프) + veil(아바타 흐려짐·게임 값) + 은신 chip + "여기 숨어있음" 발밑 마커.
+  if (layer && p) {
+    fclAppend(layer, fclAt("fcl-stealth-in", p));
+    fclAppend(layer, fclAt("fcl-stealth-here", { x: p.x, y: p.y + 22 }));
+  }
+  if (src) {
+    src.classList.add("hidden-veil"); // 게임 hidden veil과 동일 값(0.25s 페이드 = '슥 사라짐')
+    const chip = document.createElement("span");
+    chip.className = "fcl-stealth-chip status-chip--hidden"; // 게임 은신 chip 팔레트 재사용
+    chip.textContent = "은신";
+    src.appendChild(chip);
+  }
+  const cur = $("#fcl-cur-name"); if (cur) cur.textContent = `${jobName("rogue")} (rogue) · ${ROLE_KO[combatRoleOf("rogue")] || "—"}`;
+  setStatus("① 은신 진입 — 슥 사라짐(아바타 흐려지는 veil + 은신 chip). 암살 완성 FX 아님·최소 표현.");
+  // ② 은신 유지 — 완전히 사라지지 않고 '여기 있긴 한데 숨어 있다'(veil+chip+발밑 마커·레이아웃 불변).
+  laterStealth(() => setStatus("② 은신 유지 — 흐릿하지만 위치는 보임(veil+chip+발밑 마커). 완전히 사라지지 않음 · HP/게이지/레이아웃 불변."), 950);
+  // ③ 공격 — preview 시연 행동선(rogue slash) 재생(이 stage 위 FX만).
+  laterStealth(() => { playActionFx(baseEvent("rogue")); setStatus("③ 공격! — 기습 행동선(rogue slash)."); }, 1750);
+  // ③ 공격 순간 은신 해제 — veil/chip 제거(0.25s 페이드백) + 실 게임 reveal shimmer.
+  laterStealth(() => {
+    if (src) src.classList.remove("hidden-veil");
+    document.querySelectorAll(".fcl-stealth-chip, .fcl-stealth-here, .fcl-stealth-in").forEach((el) => el.remove());
+    playActorFx("revealShimmer", "fcl-src"); // 실 게임 reveal shimmer 재사용(preview stage 위)
+    setStatus("③ 공격 순간 은신 해제 — reveal shimmer(실 게임 FX). '은신 → 공격 → reveal' 순서. ★이 버튼은 시연이지만, Phase C 이후 실 전투에선 은신 Rogue가 공격하면 core가 자동으로 reveal합니다.");
+  }, 1900);
+}
+
+// ── Tracker Reveal / Mark Preview 01 — 은신 대상 탐지 → 표식 → reveal 체감(이 버튼/시퀀스는 전투 언어 시연) ──
+//   ★Phase C 이후 Tracker의 '은신 적 reveal' rider는 실제 core(aim 조준)에 연결됨. 단 현행 적 은신 소스가 없어 dormant(은신한 적이 있을 때만 작동)·아군 Rogue 은신은 해제 안 함·신규 상태 시스템 mark 미추가. 이 preview의 은신 대상은 시연용 DOM 표현(대상 박스 흐림 + 은신 chip).
+//   재사용: mark(점선 조준선+대상 스코프)/markBurst/revealShimmer=실 게임 render 함수 playActorFx · 은신 chip=게임 .status-chip--hidden.
+//   Rogue와 구분: Rogue=은신 진입(잿빛 연무·self)→공격하며 self reveal / Tracker=흔적 읽기(호박 reticle+올리브 발자국)→대상 표식→탐지해서 '대상' reveal. 전역 레이더/암살 느낌 아님.
+function trackerTrack() {
+  setStageJob("tracker"); // 내부에서 resetStealthPreview()로 이전 상태 정리 + clearFxLayer + tracker 아바타 마운트
+  const src = $(".fcl-src"); const tgt = $(".fcl-tgt"); const layer = $("#fx-layer");
+  const s = fclPoint("fcl-src"); const t = fclPoint("fcl-tgt");
+  // 은신 대상 구성(preview DOM only) — 대상 박스 흐림 + 은신 chip(게임 팔레트).
+  if (tgt) {
+    tgt.classList.add("fcl-hidden-tgt");
+    const hchip = document.createElement("span");
+    hchip.className = "fcl-stealth-chip status-chip--hidden";
+    hchip.textContent = "은신";
+    tgt.appendChild(hchip);
+  }
+  const cur = $("#fcl-cur-name"); if (cur) cur.textContent = `${jobName("tracker")} (tracker) · ${ROLE_KO[combatRoleOf("tracker")] || "—"}`;
+  // ① 탐지 준비 — 추적자 집중 reticle + tracker→대상 경로 발자국 점(흔적 읽기). 전역 스캔 아님.
+  if (layer && s) fclAppend(layer, fclAt("fcl-track-focus", s));
+  if (layer && s && t) [0.34, 0.55, 0.76].forEach((f, i) => {
+    const p = { x: s.x + (t.x - s.x) * f, y: s.y + (t.y - s.y) * f };
+    laterStealth(() => { if (layer) fclAppend(layer, fclAt("fcl-track-step", p)); }, 120 + i * 130);
+  });
+  setStatus("① 탐지 준비 — 추적자가 흔적을 읽는다(집중 reticle + 대상으로 향하는 발자국). 전역 스캔 아님 · Rogue 은신 진입(잿빛 연무)과 다름.");
+  // ② 표식 — 실 게임 Tracker mark(점선 조준선 + 대상 스코프) + 추적 mark chip(preview DOM · 상태 미추가).
+  laterStealth(() => {
+    playActorFx("mark", "fcl-src", { targetId: "fcl-tgt" }); // 실 게임 mark FX 재사용
+    if (tgt) {
+      const mchip = document.createElement("span");
+      mchip.className = "fcl-track-chip"; mchip.textContent = "추적";
+      tgt.appendChild(mchip);
+    }
+    setStatus("② 표식 — 실 게임 mark(점선 조준선 + 대상 스코프) + 추적 표식 chip. Rogue reveal shimmer와 형태·색이 다른 Tracker 전용 표현(호박).");
+  }, 820);
+  // ③ 드러남 — 대상 은신 해제(veil/chip) + mark burst + reveal shimmer(대상 위). Rogue self reveal과 달리 '탐지해서 대상을' 드러냄.
+  laterStealth(() => {
+    if (tgt) tgt.classList.remove("fcl-hidden-tgt");
+    document.querySelectorAll(".fcl-stealth-chip").forEach((el) => el.remove()); // 대상 은신 chip 해제
+    playActorFx("markBurst", "fcl-src", { targetId: "fcl-tgt" }); // 실 게임 표식 추적 hit
+    playActorFx("revealShimmer", "fcl-tgt");                       // 실 게임 reveal shimmer(대상 위)
+    setStatus("③ 드러남 — 탐지 reveal(mark burst + shimmer가 '대상' 위에). Rogue '공격하며 self reveal'과 달리 Tracker는 '탐지해서 대상을 드러냄'. ★이 버튼은 시연이며, Phase C 이후 Tracker의 은신 적 reveal rider는 실 core에 연결(단 적 은신 소스 없어 dormant).");
+  }, 1650);
+  laterStealth(() => { document.querySelectorAll(".fcl-track-chip").forEach((el) => el.remove()); }, 2200); // 추적 chip 정리(누적 방지)
+}
+
 function badge(on, text) { return `<span class="fcl-badge fcl-badge--${on ? "on" : "seed"}">${text}</span>`; }
 function cardHTML(id) {
   const role = combatRoleOf(id);
@@ -472,7 +568,7 @@ function cardHTML(id) {
   const ex = FCL_EXTRA[id];
   const extra = ex ? `
     <div class="fcl-compare">
-      <div class="fcl-cmp-row"><span class="fcl-cmp-k">${(FCL_ANCHOR[id] && FCL_ANCHOR[id].tags.join(" / ")) || ""}</span><button type="button" data-job="${id}" data-act="${ex.act}">${ex.label}</button><span class="fcl-id">${ex.tag}</span></div>
+      <div class="fcl-cmp-row"><span class="fcl-cmp-k">${ex.tags || (FCL_ANCHOR[id] && FCL_ANCHOR[id].tags.join(" / ")) || ""}</span><button type="button" data-job="${id}" data-act="${ex.act}">${ex.label}</button><span class="fcl-id">${ex.tag}</span></div>
       <div class="fcl-cmp-row"><span class="fcl-id">${ex.desc}</span></div>
     </div>` : "";
   const anc = FCL_ANCHOR[id] || { tags: [], state: "seed", note: "" };
@@ -573,6 +669,8 @@ function wire() {
     else if (act === "presence") playPresence(id);
     else if (act === "text") playTextCue(id);
     else if (act === "delivery") bardDelivery();
+    else if (act === "rogue-stealth") rogueStealth();
+    else if (act === "tracker-track") trackerTrack();
     else if (act === "mage-area") mageArea();
     else if (act === "purifier-cleanse") purifierCleanse();
     else if (act === "gatekeeper-taunt") gatekeeperTaunt();

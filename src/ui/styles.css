@@ -3605,7 +3605,11 @@ body {
    ★foundation·화려한 잔상/암살 느낌 아님·기존 unit 레이아웃/전투 언어 무영향. normal gameplay엔 hidden 미부여.
    =================================================================== */
 .status-chip--hidden { background: rgba(90, 100, 120, 0.5); color: #cdd6e2; border: 1px solid rgba(150, 160, 180, 0.5); }
-/* 아바타(fig/figure/svg)만 흐리게 — HP바/게이지/status chip은 그대로 읽히게(레이아웃 불변). */
+/* Stealth In-Game Apply 01 (선행 FIX) — 아바타만 흐리게(HP바/게이지/status chip/레이아웃 불변).
+   ★실제 SR 아군 아바타 마운트는 .av-fit>.sig-av, 적 몬스터는 .monster(또는 .av-fit>.monster) → 이 둘을 포함해야 실 전투에서 은신 아바타가 실제로 흐려진다.
+   (기존 figure/.av-stage/svg는 도감/카드 등 다른 컨텍스트 호환용으로 유지.) 전부 .unit.hidden-veil 스코프 안 = 비은신 유닛엔 영향 0. */
+#battle-field .unit.hidden-veil .av-fit,
+#battle-field .unit.hidden-veil .monster,
 #battle-field .unit.hidden-veil figure,
 #battle-field .unit.hidden-veil .av-stage,
 #battle-field .unit.hidden-veil svg { opacity: 0.42; filter: grayscale(0.3) drop-shadow(0 0 3px rgba(120, 140, 170, 0.5)); transition: opacity 0.25s ease, filter 0.25s ease; }

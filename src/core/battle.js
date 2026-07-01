@@ -1298,6 +1298,9 @@ function trySkill(unit) {
       const low = lowestRatioEnemy(enemies, 0.4);
       if (!low) return false;
       performAttack(unit, low, { mult: 1.6, lineType: "ranged", skill: meta });
+      // Stealth In-Game Apply 01 (C-1) — 급습(마무리) 직후 짧게 은신("치고 사라진다"). ambush 정체성 유지·duration 짧게(2턴)·
+      //   다음 공격 시 performAttack에서 reveal(C-2)로 해제 → 무한/상시 은신 아님. 발동은 마무리 성공 시에만(조건부·저빈도).
+      applyHidden(unit, 2, "ambush");
       return true;
     }
     case "archer": {
@@ -1650,6 +1653,15 @@ function runDataSkill(unit, meta) {
     }
     case "aim": { // 추적자 조준 → 추격 (2행동)
       if (!unit.aimTarget) {
+        // Stealth In-Game Apply 01 (C-3) — 조준으로 '은신한 적'을 짚어낸다(최소·조건부·저빈도).
+        //   ★대상은 gameState.enemies뿐 → 아군 rogue 은신은 절대 건드리지 않음(rogue 은신 맛 보존). aimshot 정체성/로그 유지(짚어내기는 조준 앞의 짧은 rider).
+        //   ★현행엔 적 은신 소스가 없어 사실상 dormant(적이 hidden일 때만 발동 · devStealth로 검증). "찾아낼 수 있음"이지 은신 삭제 시스템 아님(대상 1명·표식+shimmer만).
+        const hiddenFoe = aliveEnemies().find((e) => isHidden(e));
+        if (hiddenFoe) {
+          playActorFx("mark", unit.instanceId, { targetId: hiddenFoe.instanceId }); // 탐지 표식(Phase B 언어: 점선 조준선 + 스코프)
+          clearHidden(hiddenFoe, "tracker"); // reveal(내부 revealShimmer) → 이후 타깃 필터에 다시 잡힘(visible 우선 규칙과 충돌 없음)
+          pushLog(`${unit.name}${josa(unit.name, "이가")} 은신한 ${hiddenFoe.name}${josa(hiddenFoe.name, "을를")} 짚어냈다.`);
+        }
         const t = highHpEnemy();
         if (!t) return false;
         unit.aimTarget = t.instanceId;
@@ -2242,6 +2254,9 @@ function attackLineType(attacker) {
 //   mult = 피해 배수(스킬), skill = { name, kind }(스킬 텍스트), lineType 강제(급습/저격=ranged),
 //   noShout = 외침 생략(수호 후 동반 공격 등). 미지정이면 기본 공격 "공격!".
 function performAttack(attacker, target, opts = {}) {
+  // Stealth In-Game Apply 01 (C-2) — 은신 유닛이 공격 계열 행동을 시작하면 은신 해제(Foundation shouldRevealOnAction 계약).
+  //   clearHidden이 상태 제거 + reveal shimmer 재생(공격 순간에 맞춰 드러남). event/payload/피해 계산 무관·시각+상태만.
+  if (shouldRevealOnAction(attacker, "attack")) clearHidden(attacker, "attack");
   // Status & Effect Foundation 01: guard — 받는 피해 최소 보정(음수/0 방지, 최소 1).
   // First Class Expansion 01: atkDown(워든 습격) — 공격자의 공격력 일시 감소.
   let atk = attacker.atk;
