@@ -2155,8 +2155,38 @@ function performSanctuary(saint, meta) {
   });
 }
 
+// ── Stealth Foundation 01 — Minimal Hidden State Contract ──────────────────
+//   은신은 멋진 잔상 FX가 아니라 도적/추적자 전투 정체성을 위한 "최소 상태 계약"이다.
+//   ★hidden을 부여하는 스킬이 아직 없다(Rogue/Tracker HOLD·normal gameplay 미연결) → 일반 플레이에선 어떤 유닛도 hidden이 아니므로
+//     타깃/밸런스 영향 0. 기존 status 구조(unit.statuses[{type,duration,...}])를 그대로 재사용. reveal 규칙은 future Rogue/Tracker에서 확장.
+function isHidden(unit) { return !!unit && !unit.isDead && hasStatus(unit, "hidden"); }
+function applyHidden(unit, turns = 2, source = null) {
+  if (!unit || unit.isDead) return false;
+  applyStatus(unit, { type: "hidden", duration: Math.max(1, turns | 0), source: source || null });
+  return true;
+}
+function clearHidden(unit, reason = "manual") {
+  if (!unit || !Array.isArray(unit.statuses)) return false;
+  const had = unit.statuses.some((s) => s.type === "hidden");
+  if (had) {
+    unit.statuses = unit.statuses.filter((s) => s.type !== "hidden");
+    playActorFx("revealShimmer", unit.instanceId, { reason }); // reveal visual hook(짧은 shimmer). playActorFx가 내부에서 fxSuppressed 가드(헤드리스 안전).
+  }
+  return had;
+}
+// 계약: 은신 유닛이 "공격 계열" 행동을 시작하면 reveal 후보(판정만 제공 — 실제 자동 reveal 연결은 future Rogue/Tracker).
+function shouldRevealOnAction(unit, actionKind) {
+  return isHidden(unit) && (actionKind === "attack" || actionKind === "ranged" || actionKind === "disrupt");
+}
+// 적대 단일 타깃 계약: visible(비은신) 후보가 있으면 은신 후보 제외 / 전부 은신이면 fallback으로 전체(타깃 없어짐 방지).
+function filterHiddenTargets(candidates) {
+  const arr = Array.isArray(candidates) ? candidates : [];
+  const visible = arr.filter((u) => !isHidden(u));
+  return visible.length > 0 ? visible : arr;
+}
+
 function selectAttackTarget(pool) {
-  const alive = pool.filter((u) => !u.isDead);
+  const alive = filterHiddenTargets(pool.filter((u) => !u.isDead)); // Stealth Foundation 01 — 은신 제외(visible 있으면·전부 은신이면 fallback). ★normal gameplay엔 hidden 부여 스킬이 없어 영향 0.
   // First Class Expansion 01: 도발(taunt) 대상이 있으면 우선 공격(수문장/성황). 적은 taunt를 안 가짐.
   const taunting = alive.filter((u) => hasStatus(u, "taunt"));
   if (taunting.length > 0) return taunting[0];
@@ -2165,7 +2195,7 @@ function selectAttackTarget(pool) {
 }
 
 function selectArcherTarget(pool) {
-  const alive = pool.filter((u) => !u.isDead);
+  const alive = filterHiddenTargets(pool.filter((u) => !u.isDead)); // Stealth Foundation 01 — 은신 제외(위와 동일 계약)
   if (alive.length === 0) return null;
   return alive.reduce((lowest, u) => u.hp < lowest.hp ? u : lowest);
 }
@@ -2842,4 +2872,21 @@ export function devFxStep(n = 60, revive = true) {
   }
   renderGame(gameState);
   return { party: gameState.party.map((u) => u.instanceId), enemies: gameState.enemies.map((u) => u.instanceId) };
+}
+
+// Stealth Foundation 01 — Dev-only 검증 helper(★main gameplay 미노출·storage 무관·상태만 조작).
+//   instanceId로 hidden 부여/해제/조회 + 타깃 필터 계약 확인. dev preview/콘솔에서 import로만 호출.
+export function devStealth(cmd, instanceId, turns) {
+  const all = [...gameState.party, ...gameState.enemies];
+  const u = instanceId ? all.find((x) => x.instanceId === instanceId) : null;
+  switch (cmd) {
+    case "apply":   { const ok = applyHidden(u, turns || 2, "dev"); renderGame(gameState); return ok; }
+    case "clear":   { const ok = clearHidden(u, "dev"); renderGame(gameState); return ok; }
+    case "isHidden": return isHidden(u);
+    case "list":    return all.filter(isHidden).map((x) => x.instanceId);           // 현재 은신 중인 유닛 목록
+    case "reveal":  return shouldRevealOnAction(u, "attack");                         // 공격 시 reveal 후보인지
+    // 적이 아군(party)을 공격할 때 고를 타깃 — hidden 제외 계약/all-hidden fallback 검증용.
+    case "pickPartyTarget": { const t = selectAttackTarget(gameState.party); return t ? t.instanceId : null; }
+    default: return null;
+  }
 }

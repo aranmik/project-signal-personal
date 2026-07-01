@@ -1400,6 +1400,9 @@ function updateFieldUnit(el, unit) {
   // Job Identity Tuning 02 — 결계장 지속 오오라: 결계장 생존 + 결속(wardlink) 활성 중이면 본체에 청록 오오라 글로우(발동 중 계속 노출).
   el.classList.toggle("has-ward-aura",
     unit.id === "wardkeeper" && !unit.isDead && Array.isArray(unit.statuses) && unit.statuses.some((s) => s.type === "wardlink"));
+  // Stealth Foundation 01 — 은신 유닛 최소 표현(아바타 살짝 투명 veil). ★foundation·화려한 잔상 아님·normal gameplay엔 hidden 미부여.
+  el.classList.toggle("hidden-veil",
+    !unit.isDead && Array.isArray(unit.statuses) && unit.statuses.some((s) => s.type === "hidden"));
 
   const hpFill = el.querySelector(".hp-bar-fill");
   if (hpFill) {
@@ -1640,6 +1643,7 @@ const STATUS_CHIP = {
   critUp: { t: "치↑", c: "up" }, critDown: { t: "치↓", c: "down" },
   speedUp: { t: "속↑", c: "up" }, speedDown: { t: "속↓", c: "down" },
   taunted: { t: "도발", c: "taunt" },
+  hidden: { t: "은신", c: "hidden" }, // Stealth Foundation 01 — 최소 은신 chip(dev·normal gameplay 미부여)
   // Hero Readability Polish 01A — 덫꾼 독 표식(중독 상태 가시화) / 파수궁 보복 준비(합성 칩).
   poison: { t: "독", c: "poison" },
   counterReady: { t: "보복 준비", c: "ready" },
@@ -2637,6 +2641,13 @@ function spawnForbiddenSeal(targetId) {
   fxSignalAt(c.layer, p, "fx-forbidden-seal");
 }
 
+// Stealth Foundation 01 — 은신 해제(reveal) 순간 짧은 shimmer(최소 표현·잔상 아님).
+function spawnRevealShimmer(instanceId) {
+  const c = fxSignalCtx(); if (!c) return;
+  const p = unitPoint(instanceId, BODY_MID_FRAC, c.fr); if (!p) return;
+  fxSignalAt(c.layer, p, "fx-reveal-shimmer");
+}
+
 // Watchbow 보복 감지: 후열 아군(from) 피격 → 파수궁(to)으로 호박 점선 감지선 + 파수궁 반응 pulse.
 //   기존 보복 공격선(performAttack ranged)은 그대로. "아군 피격 → 파수궁 전달" 인과만 보강.
 function spawnDetectLine(fromId, toId) {
@@ -2778,6 +2789,7 @@ export function playActorFx(kind, casterId, opts = {}) {
     // First Class Combat Language In-Game Apply 01B — Runtime Signal Parity (visual-only signal bridge).
     case "forbiddenTransfer":  spawnTransferFx(casterId, opts.toId); break;        // 금제 피격(caster)→결속 적(toId) 전가
     case "forbiddenSeal":      spawnForbiddenSeal(opts.toId); break;                // 악의 결속 적용 순간 대상(toId)에 봉인 링 (Hotfix 02)
+    case "revealShimmer":      spawnRevealShimmer(casterId); break;                 // Stealth Foundation 01 — 은신 해제 순간 짧은 shimmer
     case "watchbowDetect":     spawnDetectLine(opts.fromId, casterId); break;       // 피격 아군(fromId)→파수궁(caster) 감지선
     case "gatekeeperRedirect": spawnRedirectFx(opts.fromId, casterId); break;       // 원래 타겟(fromId)→수문장(caster) 꺾임
     case "trapperVenom":       spawnVenomBody(opts.targetId); break;                // 적(targetId) 몸통 큰 독방울
