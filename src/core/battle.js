@@ -1671,6 +1671,9 @@ function runDataSkill(unit, meta) {
         // Combat Visibility Job Grammar 01 — 표식 부여 행동선(점선 mark/aim) + 대상 몸통 스코프 표식(item 6).
         playActorFx("mark", unit.instanceId, { targetId: t.instanceId });
         pushLog(`${unit.name}${josa(unit.name, "이가")} ${t.name}${josa(t.name, "을를")} 조준했다.`);
+        // Stealth Polish 02 (작업 B) — Tracker aim stealth: 조준 진입 시 숨을 죽인다(집중/잠복). source "aim" · duration 2(다음 추격 공격까지 유지) ·
+        //   다음 aimshot(추격=performAttack)에서 shouldRevealOnAction→clearHidden으로 reveal(shimmer). Rogue "급습 후 은신"(source "ambush")과 리듬/소스 구분 · 무한/상시 아님(추격마다 해제).
+        applyHidden(unit, 2, "aim");
         return true;
       }
       const t = aliveEnemies().find((e) => e.instanceId === unit.aimTarget);
@@ -2256,7 +2259,13 @@ function attackLineType(attacker) {
 function performAttack(attacker, target, opts = {}) {
   // Stealth In-Game Apply 01 (C-2) — 은신 유닛이 공격 계열 행동을 시작하면 은신 해제(Foundation shouldRevealOnAction 계약).
   //   clearHidden이 상태 제거 + reveal shimmer 재생(공격 순간에 맞춰 드러남). event/payload/피해 계산 무관·시각+상태만.
-  if (shouldRevealOnAction(attacker, "attack")) clearHidden(attacker, "attack");
+  if (shouldRevealOnAction(attacker, "attack")) {
+    // Stealth Polish 02 (작업 A) — Rogue 급습 은신(source "ambush") 해제 시에만 전신 등장 연기("나타났다!!") 보강.
+    //   ★source "ambush" 한정 → Tracker aim 은신(source "aim") reveal엔 안 붙음(shimmer만). clearHidden이 기존 reveal shimmer 재생, smoke는 보조.
+    const ambushReveal = Array.isArray(attacker.statuses) && attacker.statuses.some((s) => s.type === "hidden" && s.source === "ambush");
+    clearHidden(attacker, "attack");
+    if (ambushReveal) playActorFx("revealSmoke", attacker.instanceId);
+  }
   // Status & Effect Foundation 01: guard — 받는 피해 최소 보정(음수/0 방지, 최소 1).
   // First Class Expansion 01: atkDown(워든 습격) — 공격자의 공격력 일시 감소.
   let atk = attacker.atk;

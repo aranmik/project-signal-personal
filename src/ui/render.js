@@ -2648,6 +2648,14 @@ function spawnRevealShimmer(instanceId) {
   fxSignalAt(c.layer, p, "fx-reveal-shimmer");
 }
 
+// Stealth Polish 02 (작업 A) — Rogue 급습 은신 해제 순간 아바타 전신 등장 연기("나타났다!!"). shimmer 보조·짧게(0.6s)·회색보라·전장 안 덮음·폭발/암살 느낌 아님.
+//   battle.js가 source "ambush" reveal에서만 playActorFx("revealSmoke")로 호출(Rogue 한정). fxSuppressed(헤드리스) 가드는 playActorFx 진입에서 처리.
+function spawnRevealSmoke(instanceId) {
+  const c = fxSignalCtx(); if (!c) return;
+  const p = unitPoint(instanceId, BODY_MID_FRAC, c.fr); if (!p) return;
+  fxSignalAt(c.layer, p, "fx-reveal-smoke");
+}
+
 // Watchbow 보복 감지: 후열 아군(from) 피격 → 파수궁(to)으로 호박 점선 감지선 + 파수궁 반응 pulse.
 //   기존 보복 공격선(performAttack ranged)은 그대로. "아군 피격 → 파수궁 전달" 인과만 보강.
 function spawnDetectLine(fromId, toId) {
@@ -2790,6 +2798,7 @@ export function playActorFx(kind, casterId, opts = {}) {
     case "forbiddenTransfer":  spawnTransferFx(casterId, opts.toId); break;        // 금제 피격(caster)→결속 적(toId) 전가
     case "forbiddenSeal":      spawnForbiddenSeal(opts.toId); break;                // 악의 결속 적용 순간 대상(toId)에 봉인 링 (Hotfix 02)
     case "revealShimmer":      spawnRevealShimmer(casterId); break;                 // Stealth Foundation 01 — 은신 해제 순간 짧은 shimmer
+    case "revealSmoke":        spawnRevealSmoke(casterId); break;                   // Stealth Polish 02 — Rogue 급습 은신 해제 등장 연기(shimmer 보조·Rogue 한정)
     case "watchbowDetect":     spawnDetectLine(opts.fromId, casterId); break;       // 피격 아군(fromId)→파수궁(caster) 감지선
     case "gatekeeperRedirect": spawnRedirectFx(opts.fromId, casterId); break;       // 원래 타겟(fromId)→수문장(caster) 꺾임
     case "trapperVenom":       spawnVenomBody(opts.targetId); break;                // 적(targetId) 몸통 큰 독방울

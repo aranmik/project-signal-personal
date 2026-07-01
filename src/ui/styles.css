@@ -3616,6 +3616,10 @@ body {
 .fx-reveal-shimmer { position: absolute; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: radial-gradient(circle, rgba(205, 218, 238, 0.5) 0 30%, rgba(160, 180, 210, 0.2) 60%, transparent 78%); box-shadow: 0 0 12px rgba(180, 200, 225, 0.5); pointer-events: none; opacity: 0; animation: fx-reveal-shimmer 0.6s ease-out forwards; }
 @keyframes fx-reveal-shimmer { 0% { opacity: 0; transform: scale(0.6); } 35% { opacity: 0.9; transform: scale(1); } 100% { opacity: 0; transform: scale(1.3); } }
 @media (prefers-reduced-motion: reduce) { .fx-reveal-shimmer { animation-duration: 0.01s; } }
+/* Stealth Polish 02 (작업 A) — Rogue 급습 은신 해제 등장 연기("나타났다!!"). shimmer 보조 · 회색보라 그림자 연무 · 아바타 전신 범위(전장 안 덮음) · 0.6s 짧게 · 폭발/암살/궁극기 느낌 아님. */
+.fx-reveal-smoke { position: absolute; width: 52px; height: 64px; margin: -38px 0 0 -26px; border-radius: 50%; background: radial-gradient(ellipse 52% 56% at 50% 56%, rgba(150,140,172,0.5) 0 34%, rgba(112,102,138,0.32) 60%, rgba(92,86,122,0.13) 78%, transparent 88%); filter: blur(1.5px); pointer-events: none; opacity: 0; z-index: 6; animation: fx-reveal-smoke 0.6s ease-out forwards; }
+@keyframes fx-reveal-smoke { 0% { opacity: 0; transform: translateY(6px) scale(0.7); } 30% { opacity: 0.9; transform: translateY(0) scale(1); } 65% { opacity: 0.66; transform: translateY(-3px) scale(1.06); } 100% { opacity: 0; transform: translateY(-9px) scale(1.12); } }
+@media (prefers-reduced-motion: reduce) { .fx-reveal-smoke { animation-duration: 0.01s; } }
 @media (prefers-reduced-motion: reduce) {
   .fx-transfer-line, .fx-transfer-hit, .fx-detect-line, .fx-detect-pulse, .fx-redirect-line, .fx-redirect-pulse,
   .fx-cleanse-line, .fx-cleanse-ring, .fx-venom-orb, .fx-forbidden-seal { animation-duration: 0.01s; }

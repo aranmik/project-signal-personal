@@ -77,3 +77,18 @@
 - **C-5 Preview 보존:** Phase A/B preview(rogue-stealth·tracker-track 버튼/시퀀스) **무삭제·무회귀**. preview 파일 3종 그대로.
 - **변경 파일:** `src/ui/styles.css`(veil selector) + `src/core/battle.js`(C-1/2/3) + 본 문서. **★skills.js/main.js/state.js/index.html/render.js 무변경 · event/payload/storage/route/reward/loot 변경 0 · 신규 status 타입 0 · 타 직업/base/2차 오염 0.**
 - **남은 WATCH:** ①Tracker 적-은신 reveal은 dormant(적 은신 소스 생기면 활성) — 유키 판단 필요. ②나라 폰에서 실 전투 rogue 은신 veil/chip·급습→은신→공격 reveal 체감 확인. ③밸런스: 급습 후 은신으로 적이 rogue를 1회 스킵하는 방어 이득 — 보수적이나 장기 관측 권장.
+
+---
+
+## Stealth Polish 02 — Reveal Smoke & Tracker Aim Stealth
+
+> Stealth Interaction Batch 01 릴리즈 후 나라 폰 체감 반영. 핵심 문법 — **Rogue: "급습 후 몸을 숨긴다" / Tracker: "조준하며 숨을 죽인다".**
+
+- **작업 A — Rogue Reveal Smoke:** 은신 상태 Rogue가 다음 공격으로 reveal되는 순간, 아바타 전신 등장 연기("나타났다!!")를 shimmer에 **보조로** 얹어 해제 시인성 강화.
+  - 발동 조건: `performAttack` 진입부 reveal 훅에서 **해제되는 hidden의 source가 `"ambush"`일 때만** `playActorFx("revealSmoke", attacker.instanceId)`. → **Rogue 급습 은신 한정** · Tracker aim 은신(source `"aim"`)이나 dev 은신엔 안 붙음.
+  - FX: `render.js` `spawnRevealSmoke` + `case "revealSmoke"` / `styles.css` `.fx-reveal-smoke`(회색보라 그림자 연무 · 아바타 전신 범위 · 0.6s · blur · z-index 6). **폭발/암살 완성/궁극기 느낌 아님 · 전장 전체 안 덮음 · 잔상 아님.** 기존 `reveal shimmer`는 그대로 유지(대체 아님).
+- **작업 B — Tracker Aim Stealth:** Tracker가 **조준(aim 1행동) 진입 시** `applyHidden(unit, 2, "aim")` — "조준하며 숨을 죽인다". 다음 추격(aimshot 2행동=`performAttack`)에서 기존 `shouldRevealOnAction`→`clearHidden`로 reveal(shimmer). aimshot id/name/log/수치·2행동 구조 무변경(applyHidden 한 줄 추가). duration 2(조준→추격까지 유지·추격에서 해제) → **무한/상시 은신 아님**(추격마다 reveal).
+- **Rogue vs Tracker 은신 문법 차이:** Rogue = 급습 성공 후 은신(source `"ambush"`, 등장 연기 smoke+shimmer, 공격적/회피 리듬) / Tracker = 조준 진입 시 은신(source `"aim"`, shimmer만, 집중/잠복/숨죽임 리듬).
+- **불변/안전:** 기존 hidden enemy reveal rider(C-3) 유지 · Tracker는 **아군 Rogue 은신 미해제**(rider 대상=적만) · target filter(visible 우선/all-hidden fallback) 무변경 · **신규 mark status 없음** · event schema/payload 변경 없음 · storage key 없음 · route/reward/loot 변경 없음 · main/state/index 무변경 · Rogue/Tracker 외 직업·base/2차 무오염.
+- **변경 파일:** `src/core/battle.js`(aim applyHidden + reveal 훅 smoke 게이팅) · `src/ui/render.js`(revealSmoke FX) · `src/ui/styles.css`(`.fx-reveal-smoke`) · 본 문서.
+- **남은 WATCH:** ①나라 폰에서 Rogue 등장 연기 체감(너무 옅음/과함) · Tracker 조준 잠복감 확인. ②밸런스: Tracker가 조준→추격 사이 은신으로 적 타겟에서 빠지는 빈도(잠복 리듬) — 보수적(추격마다 해제)이나 장기 관측 권장. ③Tracker 적-은신 reveal rider는 여전히 dormant(적 은신 소스 없음).
