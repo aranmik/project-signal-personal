@@ -223,7 +223,8 @@
     .fcl-weaken-mark { position: absolute; font-size: 11px; font-weight: 800; color: #c8c8d0; transform: translate(-50%,-50%); z-index: 7; pointer-events: none; opacity: 0; white-space: nowrap; padding: 1px 5px; border-radius: 7px; background: rgba(70,70,82,0.62); border: 1px solid rgba(150,150,165,0.5); text-shadow: 0 1px 2px rgba(0,0,0,0.7); animation: fcl-weaken 1.1s ease-out forwards; }
     @keyframes fcl-weaken { 0% { opacity: 0; transform: translate(-50%,-30%) scale(0.6); } 30% { opacity: 1; transform: translate(-50%,-50%) scale(1); } 80% { opacity: 0.95; transform: translate(-50%,-50%) scale(1); } 100% { opacity: 0; transform: translate(-50%,-72%) scale(1); } }
 
-    /* Rogue Stealth Preview 01 — 은신 진입/유지/reveal 체감(preview-only · gameplay 미반영). #fx-layer/.fcl-src 안에서만 산다.
+    /* Rogue Stealth Preview 01 — 은신 진입/유지/reveal 체감(이 preview CSS는 전투 언어 시연용). #fx-layer/.fcl-src 안에서만 산다.
+       ★Phase C 이후 Rogue 급습 후 은신/공격 reveal은 실제 전투(core)에 연결됨(이 CSS는 그 체감을 preview stage에서 재현). Close 01 기준 HOLD 해제·적용 완료.
        ★재사용: reveal 순간=실 게임 .fx-reveal-shimmer(playActorFx) / chip 팔레트=게임 .status-chip--hidden / veil=게임 .unit.hidden-veil 값을 .fcl-src(.unit 아님)에 동일 미러(아래). 암살 완성 FX 아님·최소. */
     /* 게임 hidden veil(.unit.hidden-veil) 값을 preview src(.fcl-src)에 동일 미러 — 아바타만 흐려지고 chip/레이아웃은 유지.
        ★SR 아바타 실제 마운트는 .av-fit>.sig-av(figure/svg/.av-stage 아님)라 .av-fit을 대상으로 흐림 → preview에서 '슥 사라짐'이 실제로 보인다.
@@ -242,7 +243,8 @@
     @keyframes fcl-stealth-here { 0% { opacity: 0; transform: scale(0.8); } 22% { opacity: 0.7; transform: scale(1); } 70% { opacity: 0.5; transform: scale(1.02); } 100% { opacity: 0; transform: scale(1.05); } }
     @media (prefers-reduced-motion: reduce) { .fcl-stealth-in, .fcl-stealth-here { animation-duration: 0.01s; } }
 
-    /* Tracker Reveal / Mark Preview 01 — 은신 대상 탐지→표식→reveal 체감(preview-only · gameplay 미반영). #fx-layer/.fcl-tgt 안에서만 산다.
+    /* Tracker Reveal / Mark Preview 01 — 은신 대상 탐지→표식→reveal 체감(이 preview CSS는 전투 언어 시연용). #fx-layer/.fcl-tgt 안에서만 산다.
+       ★Phase C 이후 Tracker의 '은신 적 reveal' rider는 실제 core(aim 조준)에 연결됨(현행 적 은신 소스 없어 dormant) + Polish 02에서 Tracker aim 진입 시 hidden(조준하며 숨을 죽인다)도 실 전투 연결. Close 01 기준 HOLD 해제.
        ★재사용: mark(점선 조준선+대상 스코프)/markBurst/revealShimmer=실 게임 playActorFx · 은신 chip=게임 .status-chip--hidden.
        Rogue와 구분: Rogue 은신=잿빛 연무(self) / Tracker 탐지=호박 reticle+올리브 발자국(흔적 읽기)→대상 표식. 전역 레이더/암살 느낌 아님. */
     /* 은신 대상(preview DOM) — 대상 박스 흐림(SR 아바타 아닌 박스라 opacity 직접). reveal 시 클래스 제거로 복원. */

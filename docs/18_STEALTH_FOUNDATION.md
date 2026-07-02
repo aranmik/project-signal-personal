@@ -92,3 +92,13 @@
 - **불변/안전:** 기존 hidden enemy reveal rider(C-3) 유지 · Tracker는 **아군 Rogue 은신 미해제**(rider 대상=적만) · target filter(visible 우선/all-hidden fallback) 무변경 · **신규 mark status 없음** · event schema/payload 변경 없음 · storage key 없음 · route/reward/loot 변경 없음 · main/state/index 무변경 · Rogue/Tracker 외 직업·base/2차 무오염.
 - **변경 파일:** `src/core/battle.js`(aim applyHidden + reveal 훅 smoke 게이팅) · `src/ui/render.js`(revealSmoke FX) · `src/ui/styles.css`(`.fx-reveal-smoke`) · 본 문서.
 - **남은 WATCH:** ①나라 폰에서 Rogue 등장 연기 체감(너무 옅음/과함) · Tracker 조준 잠복감 확인. ②밸런스: Tracker가 조준→추격 사이 은신으로 적 타겟에서 빠지는 빈도(잠복 리듬) — 보수적(추격마다 해제)이나 장기 관측 권장. ③Tracker 적-은신 reveal rider는 여전히 dormant(적 은신 소스 없음).
+
+---
+
+## Close 01 정리 (First Class Combat Language Close 01)
+
+> 15종 1차 직업 전투 언어 마감 시점의 stealth 상태 요약. 상세 마감·15종 WATCH 표는 `docs/17_COMBAT_LANGUAGE_GRAMMAR.md` 4-B.
+
+- **Rogue/Tracker HOLD 해제 완료** — Rogue(급습 후 은신 source `"ambush"`·공격 reveal+smoke) / Tracker(조준 시 은신 source `"aim"`·추격 reveal) 실 전투 적용. hidden veil(.av-fit/.monster)·target filter(visible 우선/all-hidden fallback)·hidden enemy reveal rider(dormant·아군 Rogue 미해제) 유지.
+- **stealth 장기 WATCH:** ①Rogue 은신 빈도(급습 성공 시에만·상시 아님)·smoke 강도. ②Tracker 조준 은신 빈도(Rogue보다 잦음·추격마다 reveal로 무한 아님) 밸런스. ③적-은신 reveal rider dormant(적 은신 소스 생기면 활성). **모두 릴리즈 차단 아님·장기 관측.**
+- Close 01 자체는 문서/preview 주석 정합성 + WATCH 정리만 — **gameplay/event/storage/route/reward/loot/신규 status 변경 없음 · base/2차 오염 없음.**

@@ -81,7 +81,7 @@
 - **실제 게임 시각 언어와 정렬:** 게임엔 이미 결속선이 구현돼 있음 — `bond-svg--defense`(금빛 사슬+자물쇠=선의 결속)·`bond-svg--offense`(붉은 사슬+자물쇠=악의 결속)·`taunt` 노랑 점선+머리위 '!'. 01B preview는 이 색/모티프(금빛/붉은/노랑·자물쇠)를 그대로 차용해 "실제로 전투에서 보이는 것"을 재현.
 - **폐기:** Guard 01 관문(`.fcl-gate`)·돌벽(`.fcl-wall`) CSS/버튼/FX 제거. 봉인 링(`.fcl-seal`)은 금제 결속과 함께 유지(나라 "단일 봉인 방향 PASS").
 - **구현 위치:** `dev/first-class-combat-language-preview.html`(CSS), `src/dev/firstClassCombatLanguagePreview.js`(버튼/FX) 만. **render.js/styles.css/battle.js 무변경 · gameplay 미반영 · 수치는 preview 예시.**
-- **Rogue / Tracker:** 실제 [은신] 메커니즘 미구현 → **Stealth Foundation 전까지 HOLD**(잔상/표식 FX 추가 금지).
+- **Rogue / Tracker:** 실제 [은신] 메커니즘 미구현 → **Stealth Foundation 전까지 HOLD**(잔상/표식 FX 추가 금지). *(★현재: 4-B Close 01에서 HOLD 해제·실 전투 적용 완료 — 이 줄은 당시 기록.)*
 - **상태:** Preview Iteration Mode (커밋 전 나라 프리뷰 확인 대기).
 
 ---
@@ -95,7 +95,7 @@
 - **색 정렬:** 보복 화살 = 녹색(실 게임 `.fx-svg--ranged`)·반응 = 연두(`.fx-sig-watchbow`)·감지 Trigger = 호박(일반 지원선/표식과 구분).
 - **Tracker 표식/추적과 구분:** Tracker는 "적에 점선 mark를 붙이고 → 추격 저격"(표식이 적에 붙음). Watchbow는 "**아군 피격을 감지 → 파수궁 자신이 반응 → 공격자에게 counter**"(반응 마커가 파수궁 자신에게, 표식 아님). 은신/표식 톤 회피.
 - **구현 위치:** `dev/...preview.html`(CSS), `firstClassCombatLanguagePreview.js`(버튼/FX) 만. **render.js/styles.css/battle.js 무변경 · gameplay 미반영 · 보복 로직/반응 조건/수치 불변.**
-- **Rogue / Tracker:** 여전히 **Stealth Foundation 전까지 HOLD**(이번 작업 미접촉).
+- **Rogue / Tracker:** 여전히 **Stealth Foundation 전까지 HOLD**(이번 작업 미접촉). *(★현재: 4-B Close 01에서 HOLD 해제·실 전투 적용 완료 — 이 줄은 당시 기록.)*
 - **상태:** Preview Iteration Mode (커밋 전 나라 프리뷰 확인 대기).
 
 ---
@@ -118,7 +118,7 @@
 - **구분:** Tracker 1명 조준/추적 표식(몸통) ✗ / Mage 적 전역 광역 ✗ / Forbidden 결속·전가(src↔적 사슬+자물쇠) ✗ → 덫꾼은 **정확히 2대상 발밑 적용+몸통 상태**. 색: 보라 poison(`#c79bff`)·연보라 snare(`.fx-sig-trapper`). Rogue/Stealth 톤 회피.
 
 - **구현 위치:** `dev/...preview.html`(CSS), `firstClassCombatLanguagePreview.js`(버튼/FX) 만. **render.js/styles.css/battle.js 무변경 · gameplay 미반영 · 스킬/수치/중독 턴 불변.**
-- **Rogue / Tracker:** 여전히 **Stealth Foundation 전까지 HOLD**(이번 작업 미접촉).
+- **Rogue / Tracker:** 여전히 **Stealth Foundation 전까지 HOLD**(이번 작업 미접촉). *(★현재: 4-B Close 01에서 HOLD 해제·실 전투 적용 완료 — 이 줄은 당시 기록.)*
 - **상태:** Preview Iteration Mode (커밋 전 나라 프리뷰 확인 대기).
 
 ---
@@ -153,7 +153,7 @@
 - **Paladin / 성기사:** 금빛 holy mark + 자가회복(self-heal) 개성 — **유지**.
 
 - **구현 위치:** `dev/...preview.html`(CSS: `.fcl-heal-curve`/`.fcl-heal-cross`/`.fcl-heal-spark`·기존 `.fcl-heal-line`/`.fcl-heal-ring` 폐기), `firstClassCombatLanguagePreview.js`(`fclHealCurve`/`fclHealSparkle` 헬퍼) 만. **render.js/styles.css/battle.js 무변경 · gameplay 미반영 · 회복량/타깃 수 불변.**
-- **Rogue / Tracker:** 여전히 **Stealth Foundation 전까지 HOLD**(이번 작업 미접촉).
+- **Rogue / Tracker:** 여전히 **Stealth Foundation 전까지 HOLD**(이번 작업 미접촉). *(★현재: 4-B Close 01에서 HOLD 해제·실 전투 적용 완료 — 이 줄은 당시 기록.)*
 - **상태:** Preview Iteration Mode (커밋 전 나라 프리뷰 확인 대기).
 
 ---
@@ -167,7 +167,7 @@
 - **색 정렬:** 게이지 = 파랑(`tempo-bar` rgba96,165,226·#8cc4f6, **가장 중요한 표현**) / 습격 = 올리브그린(`.fx-sig-warden`) / 약화 = 회색(`atkDown` 칩). 게이지 드레인(파랑)과 약화(회색)가 서로 다르게 읽힘.
 - **구분:** Rogue 처형(저체력 마무리) ✗ / Tracker 표식→추적(몸통 점선 오래) ✗ / Watchbow 노랑 정보→녹색 counter ✗ / Trapper 보라 독방울 ✗ / Gatekeeper 도발 redirect ✗ → 워든은 **게이지 높은 적 즉시 제어**(게이지 바+드레인이 핵심·은신/처형 아님).
 - **구현 위치:** `dev/...preview.html`(CSS), `firstClassCombatLanguagePreview.js`(버튼/FX) 만. **render.js/styles.css/battle.js 무변경 · gameplay 미반영 · 드레인 수치/약화 턴 불변.**
-- **Rogue / Tracker:** 여전히 **Stealth Foundation 전까지 HOLD**(이번 작업 미접촉).
+- **Rogue / Tracker:** 여전히 **Stealth Foundation 전까지 HOLD**(이번 작업 미접촉). *(★현재: 4-B Close 01에서 HOLD 해제·실 전투 적용 완료 — 이 줄은 당시 기록.)*
 - **상태:** Preview Iteration Mode (커밋 전 나라 프리뷰 확인 대기).
 
 ---
@@ -257,6 +257,28 @@ Preview에서 승인된 active 13종 문법을 **실제 전투 FX**에 반영하
 ### 4-A.3 Runtime Parity Hotfix 03 — Phone Visibility Strengthening
 
 Hotfix 02 진단으로 "코드는 작동·체감 약함"이 확인됨 → **390 모바일 가시성 강화**(크기/지속/대비/타이밍·gameplay 무변경·CSS+타이밍 위주). styles.css 위주: mage `fx-aoe-spread`(border 5→6px·0.82→1.05s·종점 /6→/5)+`fx-aoe-dome`(0.95→1.2s·/8→/6.5) / purifier `fx-cleanse-line`(3→4.5px·0.45→0.7s 더 굵고 곧게)+`fx-cleanse-ring`(28→42px·종점 1.5→2.0) / watchbow `fx-detect-line/pulse`(2→3px·26→34px·지속↑) / forbidden `fx-forbidden-seal`(40→52px·0.95→1.25s)+`fx-transfer-line/hit`(굵게·크게) / wall·forbidden `bond-svg`(색 alpha 0.62/0.66→0.85/0.88·chain 2.6→3.4px) / warden `tempo-drop`(border 2→3px·0.55→0.9s). battle.js: healbow snipeHeal **치유 FX만 setTimeout 240ms 지연**(공격선→치유선 2단 순서감·회복 수치/타깃 즉시 불변). **검증 devFxStep computed style 실측**: forbidden-seal 52px/1.25s·aoe 6px/1.05s·cleanse-line 4.5px/cleanse-ring 42px 전부 적용+발동. **saint·vanguard 완성**(직전 보류분): saint=`isSaintInstance`(hero-saint-N) 판별로 2인 회복 대상별 **민트 강조 ring**(`.fx-saint-heal-ring`·공통 heal 선/십자/뾰로롱 위에 saint만 추가·검증 ring×2+공통 heal 유지·healbow 등 비-saint ring 0=회귀0) / vanguard=advance `lineType:"pierce"` 명시(**주황 전진 직선**·preview FCL_LINE vanguard 일치·★시각만·피해/타깃/수치 불변·검증 `fx-svg--pierce`×17). ★dualheal 자연 발동은 저체력 아군 2명 조건부(발동 시 ring 강조). 회귀: bard/trapper/paladin/gatekeeper/common heal 미변경. PARTIAL·커밋 안 함.
+
+---
+
+## 4-B. First Class Combat Language Close 01 — 15-Class Pass & Watch Cleanup
+
+1차 직업 **15종 전투 언어 마감 검수**. 새 시스템 추가 아님 — 회귀 확인 + 문서 정리 + 최소 polish + WATCH 정리. (기준 릴리즈 `7bc7cfa` = Stealth Polish 02 위.)
+
+- **15종 닫힘:** active 13종 + Rogue + Tracker = **15종이 한 세트로 닫힘.** First Class Combat Language Preview에 15 카드·직업별 버튼 전부 유지(회귀 없음), Rogue stealth / Tracker track-mark-reveal preview 정상, 기존 13종 preview 무회귀.
+- **★Rogue / Tracker HOLD 해제:** 본 문서 3-B/3-C/3-D의 "Stealth Foundation 전까지 HOLD" 표기는 **이 시점에 해제됨**(Stealth Foundation 01 → Interaction Batch 01 → Polish 02로 실 전투 적용 완료).
+  - **Rogue** — `ambush`(급습·HP≤40% 마무리) 성공 직후 `applyHidden(source "ambush", dur 2)` → 다음 공격에서 `shouldRevealOnAction`→`clearHidden` reveal + **등장 연기 smoke**(`.fx-reveal-smoke`·source "ambush" 한정). "급습 후 몸을 숨긴다."
+  - **Tracker** — `aim` 조준(1행동) 진입 시 `applyHidden(source "aim", dur 2)` → 다음 추격(aimshot)에서 reveal(shimmer). + 은신 **적** reveal rider(aim 앞·`gameState.enemies`만·아군 Rogue 미해제·현행 적 은신 소스 없어 dormant). "조준하며 숨을 죽인다."
+  - 상세: `docs/18_STEALTH_FOUNDATION.md`(Foundation 01 / Interaction Batch 01 Phase A~C / Polish 02).
+- **WATCH 정리 (릴리즈 차단 vs 장기):**
+  | WATCH | 상태 | 판정 |
+  |------|------|------|
+  | Mage full-AoE 폰 체감 | preview 3-ring shockwave + in-game `spawnAoeSpread`(Hotfix 03 6px/1.05s 강화) 구조 완비 | **장기 WATCH**(폰 체감 주관·FX 대개편 금지) · 릴리즈 차단 아님 |
+  | Wall ally-protection | preview 금빛 결속선+자물쇠+보호 링 + in-game `bond-svg--defense`(Hotfix 03 alpha 강화) | **장기 WATCH** · 릴리즈 차단 아님 |
+  | Healbow shot→heal 2단 | preview 저격선→공통 힐(곡선+십자+뾰로롱) + in-game 240ms 2단 지연(Hotfix 03) | **장기 WATCH** · 릴리즈 차단 아님 |
+  | Rogue 은신 빈도/smoke | 급습 성공 시에만·다음 공격 reveal(상시 아님)·smoke 짧게(0.6s·source ambush 한정) | **장기 WATCH**(밸런스 장기 관찰) · 릴리즈 차단 아님 |
+  | Tracker 조준 은신 빈도 | 조준마다 hidden(Rogue보다 잦음)이나 **추격마다 reveal**(무한 아님·hidden streak 유한) | **장기 WATCH**(잠복 리듬 밸런스 장기 관찰) · 릴리즈 차단 아님 |
+- **이번 Close 변경 = 최소 polish + 문서만:** preview CSS-block 주석 정합성(Rogue/Tracker "gameplay 미반영" → "Phase C 이후 실 전투 연결/Close 01 HOLD 해제") + 본 4-B 섹션 + docs/18 WATCH. **battle.js/render.js/styles.css 기능 코드·gameplay 무변경 · event/payload/storage/route/reward/loot 0 · 신규 status 0 · main/state/index 0 · base/2차 오염 0.**
+- **릴리즈 차단 WATCH: 없음** (5건 전부 장기 WATCH).
 
 ---
 
