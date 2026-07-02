@@ -11,7 +11,7 @@ import { saveFootprint } from "../data/footprints.js";
 // Return & Loot Core 01 — 런 중 "들고 있는" 전리품 후보(감정 코어 · 전투 스탯 효과 없음 · 영구 경제 아님).
 import { rollLootCandidate } from "../data/loot.js";
 // Discovery Codex Foundation 01 — 안전한 진행도 기록 훅(headless 주회 중엔 호출 안 함). 전투 계산/수치 불변.
-import { recordRunResult, recordMonstersDefeated } from "./progression.js";
+import { recordRunResult, recordMonstersDefeated, recordReturnDeck } from "./progression.js";
 import { renderGame, playActionFx, playStatusTickFx, playSupportFx, playStatusApplyFx, playActorFx, clearFxLayer, setFxSuppressed, setRenderSuppressed } from "../ui/render.js";
 import { skillOf } from "../data/skills.js";
 
@@ -2581,6 +2581,15 @@ function recordFootprint(result) {
   // Discovery Codex Foundation 01 — 진행도(사자왕 클리어/최고 심도) 안전 반영. headless는 위에서 이미 return됨.
   //   try/catch는 progression 내부에 있음(실패해도 플레이 방해 X). 전투 계산/수치 불변.
   recordRunResult({ result, depth: gameState.run.depth, themeId: "beginner" });
+  // Return Deck Foundation 01 — 귀환/클리어만 returnDeck에 누적(defeat/abort 제외 = 귀환 덱 오염 방지).
+  //   return/clear에선 carriedLoot == secured(getRunLootSummary 규칙)라 그대로 전달. 이번 기여(prep)는 결과 카드 표시용으로 run에 잠시 보관.
+  if (result === "return" || result === "clear") {
+    const secured = Array.isArray(gameState.run.carriedLoot) ? gameState.run.carriedLoot : [];
+    gameState.run.returnDeckContrib = recordReturnDeck({
+      result, depth: gameState.run.depth, alertness: gameState.run.alertness || 0,
+      bossKeys: gameState.run.bossKeys || 0, securedLoot: secured,
+    });
+  }
 }
 
 // Discovery Codex Foundation 01 — 전투에 등장한 적의 도감 id(=템플릿 type) 목록. id 파싱(`prefix-key-i`)은 fallback.

@@ -7,6 +7,20 @@
 export const PROGRESS_KEY = "signal_personal_progress_v1";
 export const PROGRESS_VERSION = 1;
 
+// Return Deck Foundation 01 — "들고 돌아온 전리품이 다음 토벌 준비가 된다."
+//   귀환/클리어 결과를 progress 안의 작은 하위 필드(returnDeck)로 누적한다. ★영구 전투 버프/재화/상점 아님 —
+//   "다음 토벌 준비도(huntPrep) + 최근 귀환 기록"만 쌓는 감정/표시 레이어. 기존 세이브엔 없어도 안전 기본값(migrate).
+export const RETURN_DECK_RECENT_CAP = 3; // 최근 귀환 기록 보존 수(작게)
+export function defaultReturnDeck() {
+  return {
+    huntPrep: 0,     // 누적 토벌 준비도(귀환/클리어로 쌓임)
+    returns: 0,      // 귀환/클리어 누적 횟수
+    lootSecured: 0,  // 누적 확보 전리품 수
+    bestDepth: 0,    // 귀환 덱 기준 최고 도달 심도
+    recent: [],      // 최근 귀환 기록(최신 우선, 최대 RETURN_DECK_RECENT_CAP)
+  };
+}
+
 // 기본 진행도(빈 상태). 배열/객체는 매 호출 새로 생성(공유 참조 방지).
 export function defaultProgress() {
   return {
@@ -20,6 +34,7 @@ export function defaultProgress() {
     themeClears: {},        // { themeId: count }
     bestDepthByTheme: {},   // { themeId: depth }
     kingClears: 0,          // 사자왕 클리어 누적(초보자 테마 보스)
+    returnDeck: defaultReturnDeck(), // Return Deck Foundation 01 — 다음 토벌 준비 누적
   };
 }
 
@@ -36,6 +51,14 @@ function migrate(raw) {
   if (raw.themeClears && typeof raw.themeClears === "object") out.themeClears = { ...raw.themeClears };
   if (raw.bestDepthByTheme && typeof raw.bestDepthByTheme === "object") out.bestDepthByTheme = { ...raw.bestDepthByTheme };
   if (Number.isFinite(raw.kingClears)) out.kingClears = raw.kingClears;
+  // Return Deck Foundation 01 — 구세이브(필드 없음)/깨진 값은 기본값 유지. 숫자/배열 타입이 맞을 때만 채택(안전 병합).
+  if (raw.returnDeck && typeof raw.returnDeck === "object") {
+    const rd = out.returnDeck; const src = raw.returnDeck;
+    for (const k of ["huntPrep", "returns", "lootSecured", "bestDepth"]) {
+      if (Number.isFinite(src[k]) && src[k] >= 0) rd[k] = src[k];
+    }
+    if (Array.isArray(src.recent)) rd.recent = src.recent.filter((r) => r && typeof r === "object").slice(0, RETURN_DECK_RECENT_CAP);
+  }
   out.version = PROGRESS_VERSION; // 항상 현재 버전으로 정규화
   return out;
 }
@@ -87,6 +110,66 @@ export function recordRunResult({ result, depth = 0, themeId = "beginner" } = {}
     if (depth > best) p.bestDepthByTheme[themeId] = depth;
     saveProgress(p);
   } catch (e) { /* noop */ }
+}
+
+/* =========================================================
+   Return Deck Foundation 01 — "들고 돌아온 전리품이 다음 토벌 준비가 된다."
+   귀환(return)/클리어(clear) 1건을 returnDeck에 접어 넣는다. defeat/abort는 호출부에서 제외(귀환 덱 오염 방지).
+   ★준비도(huntPrep)는 표시/감정용 누적 점수 — 전투 수치/입장권/소모 시스템이 아니다(밸런스 영향 0).
+   ========================================================= */
+
+// 이번 귀환 1건의 준비도 기여(순수 계산·저장 안 함). 아주 단순한 공식(대개편 금지):
+//   전리품 tier 가중(흔함1/드묾2/귀함3) + 심도 ⌊depth/5⌋ + 보스키 ×2 + 클리어 보너스 3.
+const LOOT_PREP_WEIGHT = { common: 1, uncommon: 2, rare: 3 };
+export function computeReturnPrep({ result = "return", depth = 0, bossKeys = 0, securedLoot = [] } = {}) {
+  const lootPrep = (Array.isArray(securedLoot) ? securedLoot : [])
+    .reduce((s, l) => s + (LOOT_PREP_WEIGHT[l && l.tier] || 1), 0);
+  const depthPrep = Math.floor(Math.max(0, depth) / 5);
+  const keyPrep = Math.max(0, bossKeys) * 2;
+  const clearBonus = result === "clear" ? 3 : 0;
+  return { prep: lootPrep + depthPrep + keyPrep + clearBonus, lootPrep, depthPrep, keyPrep, clearBonus };
+}
+
+// 귀환/클리어 1건을 returnDeck에 누적(비throw·자기 완결 load→수정→save). 반환값 = 이번 기여(prep 등·UI 표시용).
+export function recordReturnDeck({ result = "return", depth = 0, alertness = 0, bossKeys = 0, securedLoot = [] } = {}) {
+  try {
+    const contrib = computeReturnPrep({ result, depth, bossKeys, securedLoot });
+    const p = loadProgress();
+    const rd = p.returnDeck || (p.returnDeck = defaultReturnDeck());
+    rd.huntPrep = (rd.huntPrep || 0) + contrib.prep;
+    rd.returns = (rd.returns || 0) + 1;
+    rd.lootSecured = (rd.lootSecured || 0) + (Array.isArray(securedLoot) ? securedLoot.length : 0);
+    if (depth > (rd.bestDepth || 0)) rd.bestDepth = depth;
+    rd.recent.unshift({
+      result, depth, alertness: alertness || 0, bossKeys: bossKeys || 0,
+      loot: (Array.isArray(securedLoot) ? securedLoot : []).map((l) => l && l.id).filter(Boolean), // id만(저장 최소)
+      prep: contrib.prep, ts: Date.now(),
+    });
+    rd.recent = rd.recent.slice(0, RETURN_DECK_RECENT_CAP);
+    saveProgress(p);
+    return contrib;
+  } catch (e) { return null; }
+}
+
+// ── Boss Hunt future contract (dormant) ─────────────────────────────────────
+//   Boss Challenge / Hunt Contract 01이 이 단계 문구/threshold를 이어받는다 — 이번 단계에선 "표시만"(게이트/소모/입장 없음).
+//   단계는 사자왕 톤: 준비도 0=아직 흔적 없음 → 낮음 → 모임 → 충분(토벌의 단서가 손에 잡힌다).
+export const HUNT_PREP_STAGES = [
+  { min: 0,  label: "아직 흔적이 없다" },
+  { min: 1,  label: "흔적이 조금 모였다" },
+  { min: 8,  label: "토벌의 단서가 모이고 있다" },
+  { min: 20, label: "사자왕 토벌 준비가 무르익었다" },
+];
+export function bossHuntReadiness(huntPrep = 0) {
+  let stage = HUNT_PREP_STAGES[0], idx = 0;
+  HUNT_PREP_STAGES.forEach((s, i) => { if (huntPrep >= s.min) { stage = s; idx = i; } });
+  return { huntPrep, stageIndex: idx, stageCount: HUNT_PREP_STAGES.length, label: stage.label };
+}
+
+// 귀환 덱 요약(읽기 전용 파생값 — dev/콘솔/표시 공용). 표시는 render가 담당.
+export function returnDeckSummary(p = loadProgress()) {
+  const rd = (p && p.returnDeck) || defaultReturnDeck();
+  return { ...rd, readiness: bossHuntReadiness(rd.huntPrep || 0) };
 }
 
 // 몬스터 마주침/처치 1건 반영(처치는 발견을 함의). ids = monsterId[] 또는 단일.

@@ -12,7 +12,7 @@ import { avatarSpec, avatarFigureHTML, CODEX_ENTRIES, CODEX_STATUS_LABEL } from 
 import { loadFootprints, footprintLine, footprintTimeText, footprintsToTSV, resultLabel } from "../data/footprints.js";
 // Discovery Codex Foundation 01 — 도감(유물/몬스터/발견현황) 정적 데이터 + 플레이어 진행도(읽기 전용 표시).
 import { CODEX_STATUS, MONSTER_CODEX, MONSTER_KIND_LABEL, RELIC_CODEX, MAP_FRAGMENT_CODEX, monstersByTheme, relicsByTheme } from "../data/codex.js";
-import { loadProgress, progressSummary } from "../core/progression.js";
+import { loadProgress, progressSummary, returnDeckSummary } from "../core/progression.js";
 
 function jobName(id) {
   return UNIT_TEMPLATES.party[id]?.name || id;
@@ -1129,6 +1129,22 @@ function renderReturnedDeckCard(state, result) {
   const timeText = footprintTimeText({ combatMs: state.run.combatMs || 0, combatNormMs: state.run.combatNormMs });
   const lootLine = s.lootSecuredCount > 0
     ? `<span class="deck-stat">확보 전리품 <b>${s.lootSecuredCount}</b></span>` : "";
+  // Return Deck Foundation 01 — 이번 귀환이 다음 토벌 준비로 쌓였음을 읽힌다.
+  //   contrib = 이번 런 기여(recordFootprint가 run에 보관·headless/저장실패면 null) / deck = 누적(progress.returnDeck·읽기 전용).
+  //   ★표시만 — 게이트/소모/전투 효과 없음(Boss Hunt Contract 01이 이어받는 dormant 표현).
+  const contrib = state.run.returnDeckContrib || null;
+  const deck = returnDeckSummary();
+  const prepBlock = `
+    <div class="deck-prep">
+      <div class="deck-prep-row">
+        <span class="deck-prep-label">귀환 덱에 기록됨</span>
+        ${contrib && contrib.prep > 0 ? `<span class="deck-prep-gain">토벌 준비 +${contrib.prep}</span>` : ""}
+      </div>
+      <div class="deck-prep-row deck-prep-row--total">
+        <span class="deck-prep-total">사자왕 토벌 준비 <b>${deck.huntPrep}</b> · 귀환 <b>${deck.returns}</b>회 · 누적 전리품 <b>${deck.lootSecured}</b></span>
+      </div>
+      <p class="deck-prep-stage">${deck.readiness.label}</p>
+    </div>`;
   card.innerHTML = `
     <div class="deck-head">
       <span class="deck-title">귀환 덱</span>
@@ -1144,7 +1160,8 @@ function renderReturnedDeckCard(state, result) {
       ${lootLine}
       <span class="deck-stat deck-stat--time">${timeText}</span>
     </div>
-    <p class="deck-hint">이 조합은 기록으로 남았다 — 살아 돌아온 덱은 훗날 더 큰 토벌의 씨앗이 된다.</p>
+    ${prepBlock}
+    <p class="deck-hint">전리품이 다음 토벌의 단서가 되었다 — 살아 돌아온 덱은 훗날 더 큰 토벌의 씨앗이 된다.</p>
   `;
 }
 
